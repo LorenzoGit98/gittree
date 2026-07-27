@@ -17,7 +17,7 @@ class WelcomeScreen {
       const dir = await window.gitTree.selectDirectory();
       if (!dir) return;
       const isRepo = await window.gitTree.checkIsGitRepo(dir);
-      if (!isRepo) { this.app.showToast('Not a Git repository', 'error'); return; }
+      if (!isRepo) { this.app.showToast(t('feedback.notRepo'), 'error'); return; }
       await this.app.repoTabs.addRepo(dir);
     } catch (e) { this.app.showToast('Error: ' + e.message, 'error'); }
   }
@@ -25,14 +25,14 @@ class WelcomeScreen {
   async cloneRepo() {
     const url = prompt('Repository URL to clone:');
     if (!url) return;
-    this.app.showToast('Clone coming soon', 'warning');
+    this.app.showToast(t('feedback.cloneSoon'), 'warning');
   }
 
   async loadRecent() {
     try {
       const repos = await window.gitTree.getRepos();
       if (!repos || !repos.length) { this.recentList.innerHTML = ''; return; }
-      this.recentList.innerHTML = '<div class="welcome-recent-title">Recent</div>';
+      this.recentList.innerHTML = `<div class="welcome-recent-title">${t('welcome.recent')}</div>`;
       repos.slice(0, 5).forEach(repo => {
         const el = document.createElement('div');
         el.className = 'welcome-recent-item';
@@ -46,15 +46,13 @@ class WelcomeScreen {
   }
 
   show() {
-    this.screen.style.display = 'flex';
-    document.getElementById('workspace').style.display = 'none';
-    document.getElementById('status-bar').style.display = 'none';
+    this.screen.classList.remove('is-hidden');
+    document.getElementById('workspace').classList.add('is-hidden');
   }
 
   hide() {
-    this.screen.style.display = 'none';
-    document.getElementById('workspace').style.display = 'flex';
-    document.getElementById('status-bar').style.display = 'flex';
+    this.screen.classList.add('is-hidden');
+    document.getElementById('workspace').classList.remove('is-hidden');
   }
 
   esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }

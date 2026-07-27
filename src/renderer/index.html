@@ -1,9 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; font-src 'self'; script-src 'self'">
   <title>GitTree</title>
+  <link rel="stylesheet" href="../../node_modules/@phosphor-icons/web/src/regular/style.css">
   <link rel="stylesheet" href="styles/variables.css">
   <link rel="stylesheet" href="styles/layout.css">
   <link rel="stylesheet" href="styles/components.css">
@@ -20,73 +22,136 @@
 <body>
 <div id="app">
   <div id="welcome-screen" class="welcome">
-    <div class="welcome-content">
-      <h1>GitTree</h1>
-      <p>Lightweight Git client — clear, fast, safe.</p>
-      <div class="welcome-actions">
-        <button id="btn-open-repo" class="btn btn-primary">Open Repository</button>
-        <button id="btn-clone-repo" class="btn">Clone Repository</button>
+    <div class="welcome-card">
+      <div class="welcome-brand" aria-hidden="true">
+        <i class="ph ph-git-branch"></i>
       </div>
-      <div class="welcome-recent" id="recent-repos"></div>
+      <div class="welcome-content">
+        <span class="eyebrow" data-i18n="welcome.eyebrow">Git workspace</span>
+        <h1>GitTree</h1>
+        <p data-i18n="welcome.subtitle">A focused desktop client for branches, commits and code review.</p>
+        <div class="welcome-actions">
+          <button id="btn-open-repo" class="btn btn-primary">
+            <i class="ph ph-folder-open"></i>
+            <span data-i18n="welcome.open">Open repository</span>
+          </button>
+          <button id="btn-clone-repo" class="btn">
+            <i class="ph ph-download-simple"></i>
+            <span data-i18n="welcome.clone">Clone repository</span>
+          </button>
+        </div>
+        <div class="welcome-recent" id="recent-repos"></div>
+      </div>
+      <div class="welcome-settings">
+        <button class="btn-icon theme-toggle" type="button" title="Toggle theme" data-i18n-title="common.toggleTheme">
+          <i class="ph ph-moon"></i>
+        </button>
+        <button class="btn btn-quiet language-toggle" type="button" title="Change language" data-i18n-title="common.changeLanguage">
+          <i class="ph ph-translate"></i>
+          <span class="language-code">EN</span>
+        </button>
+      </div>
     </div>
   </div>
 
-  <div id="workspace" class="workspace" style="display:none">
-    <div id="repo-tabs-bar" class="repo-tabs-bar">
-      <div id="repo-tab-list" class="repo-tab-container"></div>
-      <button id="btn-add-repo-tab" class="btn-icon tab-add-btn" title="Add Repository">+</button>
-    </div>
+  <div id="workspace" class="workspace is-hidden">
+    <header class="app-header">
+      <div class="app-identity">
+        <span class="app-mark"><i class="ph ph-git-branch"></i></span>
+        <strong>GitTree</strong>
+      </div>
+      <div id="repo-tabs-bar" class="repo-tabs-bar">
+        <div id="repo-tab-list" class="repo-tab-container"></div>
+        <button id="btn-add-repo-tab" class="btn-icon tab-add-btn" title="Add repository" data-i18n-title="tabs.add">
+          <i class="ph ph-plus"></i>
+        </button>
+      </div>
+      <div class="app-header-actions">
+        <button class="btn-icon theme-toggle" type="button" title="Toggle theme" data-i18n-title="common.toggleTheme">
+          <i class="ph ph-moon"></i>
+        </button>
+        <button class="btn btn-quiet language-toggle" type="button" title="Change language" data-i18n-title="common.changeLanguage">
+          <i class="ph ph-translate"></i>
+          <span class="language-code">EN</span>
+        </button>
+      </div>
+    </header>
 
-    <div class="workspace-body">
-      <aside id="sidebar" class="sidebar">
-        <div class="sidebar-section" data-section="branches">
-          <div class="sidebar-section-header collapsible">
-            <span class="collapse-arrow">&#x25BE;</span>
-            <span>Branches</span>
-            <button id="btn-new-branch" class="btn-icon" title="New Branch">+</button>
+    <div class="workspace-body" id="workspace-body">
+      <aside id="sidebar" class="bento-panel sidebar">
+        <div class="panel-heading">
+          <div>
+            <span class="eyebrow" data-i18n="sidebar.workspace">Workspace</span>
+            <h2 data-i18n="sidebar.branches">Branches</h2>
           </div>
-          <div class="sidebar-section-body" id="branch-section-body">
-            <div class="branch-search-wrapper">
-              <input type="text" id="branch-search" class="branch-search-input" placeholder="Filter branches...">
+          <button id="btn-new-branch" class="btn-icon" title="New branch" data-i18n-title="sidebar.newBranch">
+            <i class="ph ph-plus"></i>
+          </button>
+        </div>
+
+        <div class="branch-search-wrapper">
+          <i class="ph ph-magnifying-glass"></i>
+          <input type="text" id="branch-search" class="branch-search-input" placeholder="Filter branches" data-i18n-placeholder="sidebar.filter">
+        </div>
+
+        <div class="sidebar-scroll" id="sidebar-scroll">
+          <div id="branch-list" class="branch-list"></div>
+        </div>
+
+        <div class="sidebar-pinned-bottom">
+          <button id="branch-create-row" class="create-branch-row">
+            <i class="ph ph-git-branch"></i>
+            <span data-i18n="sidebar.createBranch">Create branch</span>
+          </button>
+
+          <div class="sidebar-section" data-section="stashes">
+            <button class="sidebar-section-header collapsible collapsed" type="button">
+              <i class="ph ph-caret-down collapse-arrow collapsed"></i>
+              <span data-i18n="sidebar.stashes">Stashes</span>
+            </button>
+            <div class="sidebar-section-body collapsed" id="stash-section-body">
+              <div id="stash-list" class="branch-list"></div>
             </div>
-            <div id="branch-list" class="branch-list"></div>
           </div>
-        </div>
 
-        <div class="sidebar-section" data-section="stashes">
-          <div class="sidebar-section-header collapsible collapsed">
-            <span class="collapse-arrow collapsed">&#x25BE;</span>
-            <span>Stashes</span>
-          </div>
-          <div class="sidebar-section-body collapsed" id="stash-section-body">
-            <div id="stash-list" class="branch-list"></div>
-          </div>
-        </div>
-
-        <div class="sidebar-section" data-section="tags">
-          <div class="sidebar-section-header collapsible">
-            <span class="collapse-arrow">&#x25BE;</span>
-            <span>Tags</span>
-          </div>
-          <div class="sidebar-section-body" id="tag-section-body">
-            <div id="tag-list" class="branch-list"></div>
+          <div class="sidebar-section" data-section="tags">
+            <button class="sidebar-section-header collapsible" type="button">
+              <i class="ph ph-caret-down collapse-arrow"></i>
+              <span data-i18n="sidebar.tags">Tags</span>
+            </button>
+            <div class="sidebar-section-body" id="tag-section-body">
+              <div id="tag-list" class="branch-list"></div>
+            </div>
           </div>
         </div>
       </aside>
 
-      <main class="main">
+      <div class="resize-handle-v" id="resize-handle-left" role="separator" aria-orientation="vertical"></div>
+
+      <main class="bento-panel main">
         <div id="toolbar" class="toolbar">
-          <div class="toolbar-center">
-            <div class="search-wrapper">
-              <span class="search-icon">&#x1F50D;</span>
-              <input type="text" id="global-search" class="search-input" placeholder="Search branches, commits, files... (Ctrl+P)">
-            </div>
+          <div class="toolbar-title">
+            <span class="eyebrow" data-i18n="history.eyebrow">Repository activity</span>
+            <h2 data-i18n="history.title">Commit history</h2>
           </div>
+          <button class="search-trigger" id="global-search">
+            <i class="ph ph-magnifying-glass"></i>
+            <span data-i18n="search.trigger">Search commits, branches and files</span>
+            <kbd>Ctrl P</kbd>
+          </button>
           <div class="toolbar-right">
-            <button id="btn-fetch" class="btn btn-toolbar">Fetch</button>
-            <button id="btn-pull" class="btn btn-toolbar">Pull</button>
-            <button id="btn-push" class="btn btn-toolbar">Push</button>
-            <button id="btn-refresh" class="btn btn-toolbar">&#x21bb;</button>
+            <button id="btn-fetch" class="btn btn-toolbar">
+              <i class="ph ph-cloud-arrow-down"></i><span data-i18n="actions.fetch">Fetch</span>
+            </button>
+            <button id="btn-pull" class="btn btn-toolbar">
+              <i class="ph ph-download-simple"></i><span data-i18n="actions.pull">Pull</span>
+            </button>
+            <button id="btn-push" class="btn btn-toolbar">
+              <i class="ph ph-upload-simple"></i><span data-i18n="actions.push">Push</span>
+            </button>
+            <button id="btn-refresh" class="btn-icon" title="Refresh" data-i18n-title="actions.refresh">
+              <i class="ph ph-arrows-clockwise"></i>
+            </button>
           </div>
         </div>
 
@@ -95,65 +160,72 @@
             <div class="graph-view" id="graph-view">
               <div class="graph-header">
                 <div class="gh-graph"></div>
-                <div class="gh-message">Message</div>
-                <div class="gh-author">Author</div>
-                <div class="gh-date">Date</div>
-                <div class="gh-hash">Hash</div>
+                <div class="gh-message" data-i18n="history.message">Message</div>
+                <div class="gh-author" data-i18n="history.author">Author</div>
+                <div class="gh-date" data-i18n="history.date">Date</div>
+                <div class="gh-hash" data-i18n="history.hash">Hash</div>
               </div>
               <div id="graph-body" class="graph-canvas"></div>
             </div>
           </div>
-
-          <div class="resize-handle-h" id="resize-handle-h"></div>
-
-          <div id="detail-panel" class="detail-panel">
-            <div class="detail-panel-header">
-              <span id="detail-title">Details</span>
-              <div style="display:flex;gap:4px">
-                <button id="btn-diff-unified" class="btn btn-small active">Unified</button>
-                <button id="btn-diff-split" class="btn btn-small">Split</button>
-              </div>
-            </div>
-            <div id="detail-body" class="detail-panel-body">
-              <div class="diff-placeholder">Select a commit to view changes</div>
-            </div>
-          </div>
         </div>
       </main>
+
+      <div class="resize-handle-v" id="resize-handle-right" role="separator" aria-orientation="vertical"></div>
+
+      <aside id="detail-panel" class="bento-panel inspector">
+        <div class="detail-panel-header">
+          <div>
+            <span class="eyebrow" data-i18n="details.eyebrow">Inspector</span>
+            <h2 id="detail-title" data-i18n="details.title">Commit details</h2>
+          </div>
+          <div class="segmented-control" aria-label="Diff layout">
+            <button id="btn-diff-unified" class="btn btn-small active" data-i18n="details.unified">Unified</button>
+            <button id="btn-diff-split" class="btn btn-small" data-i18n="details.split">Split</button>
+          </div>
+        </div>
+        <div id="detail-body" class="detail-panel-body">
+          <div class="diff-placeholder">
+            <i class="ph ph-cursor-click"></i>
+            <span data-i18n="details.placeholder">Select a commit to inspect its changes.</span>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <div id="status-bar" class="status-bar">
+      <div class="status-left">
+        <span class="status-dot"></span>
+        <span id="status-repo"></span>
+        <span id="status-branch"></span>
+      </div>
+      <div class="status-right"><span id="status-info"></span></div>
     </div>
   </div>
 
-  <div id="status-bar" class="status-bar">
-    <div class="status-left">
-      <span id="status-repo"></span>
-      <span id="status-branch"></span>
-    </div>
-    <div class="status-right">
-      <span id="status-info"></span>
-    </div>
-  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <div id="toast" class="toast"></div>
-
-  <div id="search-overlay" class="search-overlay" style="display:none">
+  <div id="search-overlay" class="search-overlay is-hidden">
     <div class="search-panel">
       <div class="search-panel-input">
-        <span style="color:var(--text-tertiary);font-size:14px">&#x1F50D;</span>
-        <input type="text" id="search-input" placeholder="Search branches, commits, files, tags..." autofocus>
-        <span style="font-size:10px;color:var(--text-tertiary)">esc to close</span>
+        <i class="ph ph-magnifying-glass"></i>
+        <input type="text" id="search-input" placeholder="Search branches, commits, files and tags" data-i18n-placeholder="search.placeholder" autofocus>
+        <kbd>Esc</kbd>
       </div>
       <div class="search-filters" id="search-filters"></div>
       <div class="search-results" id="search-results"></div>
     </div>
   </div>
 
-  <div id="merge-workspace-overlay" style="display:none;position:fixed;inset:0;z-index:var(--z-modal);background:var(--bg-app);flex-direction:column"></div>
-
-  <div id="modal-overlay" class="confirm-overlay" style="display:none">
+  <div id="merge-workspace-overlay" class="fullscreen-workspace is-hidden"></div>
+  <div id="modal-overlay" class="confirm-overlay is-hidden">
     <div class="confirm-dialog" id="modal-dialog"></div>
   </div>
 </div>
 
+<script src="../../node_modules/i18next/dist/umd/i18next.min.js"></script>
+<script src="i18n.js"></script>
+<script src="theme.js"></script>
 <script src="components/repo-tabs.js"></script>
 <script src="components/branch-list.js"></script>
 <script src="components/graph-view.js"></script>

@@ -22,6 +22,8 @@ class GitTreeApp {
     this.bindEvents();
     this.components.search.init();
     this.components.welcome.init(this);
+    this.setupResize();
+    this.setupGlobalShortcuts();
     await this.components.repoTabs.init();
 
     const repos = this.components.repoTabs.repos;
@@ -29,13 +31,10 @@ class GitTreeApp {
       const active = await window.gitTree.getActiveRepo();
       if (active) {
         this.state.activeRepoIndex = repos.findIndex(r => r.path === active.path);
-        this.openRepo(active);
+        await this.openRepo(active);
         return;
       }
     }
-
-    this.setupResize();
-    this.setupGlobalShortcuts();
   }
 
   bindEvents() {
@@ -51,17 +50,15 @@ class GitTreeApp {
     document.getElementById('btn-pull').onclick = () => this.doPull();
     document.getElementById('btn-push').onclick = () => this.doPush();
     document.getElementById('btn-new-branch').onclick = () => this.components.branchList.promptCreateBranch();
-
-    document.getElementById('global-search').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        const term = e.target.value.trim();
-        if (term && this.state.repo) {
-          this.components.search.input.value = term;
-          this.components.search.show();
-          this.components.search.search();
-        }
-      }
+    document.getElementById('branch-create-row').onclick = () => this.components.branchList.promptCreateBranch();
+    document.querySelectorAll('.theme-toggle').forEach(button => {
+      button.onclick = () => Theme.toggle();
     });
+    document.querySelectorAll('.language-toggle').forEach(button => {
+      button.onclick = () => I18n.toggleLanguage();
+    });
+
+    window.addEventListener('gittree:language-changed', () => this.refreshLocalizedView());
   }
 
   async openRepo(repo) {
@@ -90,7 +87,8 @@ class GitTreeApp {
       const container = document.getElementById('stash-list');
       if (!list?.all?.length) { container.innerHTML = ''; return; }
       container.innerHTML = list.all.map((s, i) => `
-        <div class="branch-item" style="font-size:11px;color:var(--text-secondary)">
+        <div class="branch-item">
+          <i class="ph ph-archive branch-icon"></i>
           <span>${s.message || `Stash ${i}`}</span>
         </div>
       `).join('');
@@ -103,8 +101,8 @@ class GitTreeApp {
       const container = document.getElementById('tag-list');
       if (!tags?.all?.length) { container.innerHTML = ''; return; }
       container.innerHTML = tags.all.slice(0, 10).map(t => `
-        <div class="branch-item" style="font-size:11px;color:var(--text-secondary)">
-          <span class="badge badge-tag" style="margin-right:6px">tag</span>
+        <div class="branch-item">
+          <i class="ph ph-tag branch-icon"></i>
           <span>${t}</span>
         </div>
       `).join('');
@@ -120,7 +118,7 @@ class GitTreeApp {
       if (status.ahead) parts.push(`↑${status.ahead}`);
       if (status.behind) parts.push(`↓${status.behind}`);
       document.getElementById('status-branch').textContent = status.current ? `On ${status.current}` : '';
-      const info = parts.length ? parts.join(' ') : (status.isClean?.() ? 'Clean' : 'Modified');
+      const info = parts.length ? parts.join(' ') : (status.isClean ? 'Clean' : 'Modified');
       document.getElementById('status-info').textContent = info;
       this.components.statusBar.setInfo(info);
     } catch {}
@@ -133,77 +131,93 @@ class GitTreeApp {
 
   async refresh() {
     if (!this.state.repo) return;
-    this.showToast('Refreshing...');
+    this.showToast(t('common.loading'));
     await this.openRepo(this.state.repo);
-    this.showToast('Refreshed', 'success');
+    this.showToast(t('feedback.refreshed'), 'success');
   }
 
   async doFetch() {
     if (!this.state.repo) return;
-    this.showToast('Fetching...');
+    this.showToast(t('feedback.fetching'));
     const result = await window.gitTree.fetch(this.state.repo.path);
     if (result.error) { this.showToast(result.error, 'error'); return; }
-    this.showToast('Fetch complete', 'success');
+    this.showToast(t('feedback.fetchComplete'), 'success');
     this.refresh();
   }
 
   async doPull() {
     if (!this.state.repo) return;
-    this.showToast('Pulling...');
+    this.showToast(t('feedback.pulling'));
     const result = await window.gitTree.pull(this.state.repo.path);
     if (result.error) { this.showToast(result.error, 'error'); return; }
-    this.showToast('Pull complete', 'success');
+    this.showToast(t('feedback.pullComplete'), 'success');
     this.refresh();
   }
 
   async doPush() {
     if (!this.state.repo) return;
-    this.showToast('Pushing...');
+    this.showToast(t('feedback.pushing'));
     const result = await window.gitTree.push(this.state.repo.path);
     if (result.error) { this.showToast(result.error, 'error'); return; }
-    this.showToast('Push complete', 'success');
+    this.showToast(t('feedback.pushComplete'), 'success');
     this.refresh();
   }
 
   showWelcome() {
     this.state.repo = null;
     this.components.welcome.show();
-    this.components.graphView.body.innerHTML = '<div class="empty-state">Open a repository to start</div>';
+    this.components.graphView.body.innerHTML = `<div class="empty-state">${t('welcome.open')}</div>`;
     this.components.diffViewer.clear();
     this.components.statusBar.clear();
   }
 
   setupResize() {
-    const handle = document.getElementById('resize-handle-h');
-    const topPanel = document.getElementById('main-view');
-    const bottomPanel = document.getElementById('detail-panel');
-    let startY, startHeight;
+    const workspace = document.getElementById('workspace-body');
+    const leftHandle = document.getElementById('resize-handle-left');
+    const rightHandle = document.getElementById('resize-handle-right');
+    const savedLeft = Number(localStorage.getItem('gittree.panel.left'));
+    const savedRight = Number(localStorage.getItem('gittree.panel.right'));
 
-    handle.onmousedown = (e) => {
-      startY = e.clientY;
-      startHeight = topPanel.offsetHeight;
-      document.body.style.cursor = 'row-resize';
+    if (Number.isFinite(savedLeft) && savedLeft > 0) {
+      workspace.style.setProperty('--left-panel', `${savedLeft}px`);
+    }
+    if (Number.isFinite(savedRight) && savedRight > 0) {
+      workspace.style.setProperty('--right-panel', `${savedRight}px`);
+    }
 
-      const onMove = (ev) => {
-        const delta = ev.clientY - startY;
-        const newH = Math.max(120, startHeight + delta);
-        const totalH = topPanel.parentElement.offsetHeight;
-        const diffH = totalH - newH - 2;
-        if (diffH >= 80) {
-          topPanel.style.flex = 'none';
-          topPanel.style.height = newH + 'px';
-          bottomPanel.style.flex = 'none';
-          bottomPanel.style.height = diffH + 'px';
-        }
-      };
-      const onUp = () => {
-        document.body.style.cursor = '';
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-      };
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
+    const bindHandle = (handle, side, min, max) => {
+      handle.addEventListener('pointerdown', event => {
+        event.preventDefault();
+        const startX = event.clientX;
+        const panel = side === 'left'
+          ? document.getElementById('sidebar')
+          : document.getElementById('detail-panel');
+        const startWidth = panel.getBoundingClientRect().width;
+        handle.classList.add('is-dragging');
+        document.body.style.cursor = 'col-resize';
+
+        const onMove = moveEvent => {
+          const delta = moveEvent.clientX - startX;
+          const width = Math.min(max, Math.max(min, startWidth + (side === 'left' ? delta : -delta)));
+          workspace.style.setProperty(`--${side}-panel`, `${width}px`);
+        };
+
+        const onUp = () => {
+          const width = Math.round(panel.getBoundingClientRect().width);
+          localStorage.setItem(`gittree.panel.${side}`, String(width));
+          handle.classList.remove('is-dragging');
+          document.body.style.cursor = '';
+          document.removeEventListener('pointermove', onMove);
+          document.removeEventListener('pointerup', onUp);
+        };
+
+        document.addEventListener('pointermove', onMove);
+        document.addEventListener('pointerup', onUp);
+      });
     };
+
+    bindHandle(leftHandle, 'left', 220, 380);
+    bindHandle(rightHandle, 'right', 300, 620);
   }
 
   setupGlobalShortcuts() {
@@ -229,6 +243,15 @@ class GitTreeApp {
     });
   }
 
+  refreshLocalizedView() {
+    if (this.state.repo) {
+      this.components.branchList.render();
+      this.components.graphView.render();
+      this.components.diffViewer.clear();
+    }
+    this.components.welcome.loadRecent();
+  }
+
   showToast(message, type = '') {
     const toast = document.getElementById('toast');
     toast.textContent = message;
@@ -248,34 +271,40 @@ class GitTreeApp {
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  await I18n.init();
+  I18n.translateDOM();
+  Theme.apply(document.documentElement.dataset.theme, false);
+
   window.addEventListener('error', (e) => {
     const bar = document.createElement('div');
-    bar.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#c0392b;color:#fff;padding:8px 30px 8px 12px;z-index:99999;font-size:12px;font-family:monospace;display:flex;align-items:center;justify-content:space-between';
-    bar.innerHTML = `<span>JS ERROR: ${e.message} (${e.filename}:${e.lineno})</span>`;
-    const x = document.createElement('span');
-    x.style.cssText = 'cursor:pointer;font-size:16px;opacity:0.7;padding:0 4px';
-    x.textContent = '×';
-    x.onclick = () => bar.remove();
-    bar.appendChild(x);
+    bar.className = 'system-alert system-alert-error';
+    const message = document.createElement('span');
+    message.textContent = `JS ERROR: ${e.message} (${e.filename}:${e.lineno})`;
+    const close = document.createElement('button');
+    close.className = 'btn-icon';
+    close.innerHTML = '<i class="ph ph-x"></i>';
+    close.onclick = () => bar.remove();
+    bar.append(message, close);
     document.body.appendChild(bar);
     setTimeout(() => bar.remove(), 8000);
   });
 
   window.addEventListener('unhandledrejection', (e) => {
     const bar = document.createElement('div');
-    bar.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#d35400;color:#fff;padding:8px 30px 8px 12px;z-index:99999;font-size:12px;font-family:monospace;display:flex;align-items:center;justify-content:space-between';
-    bar.innerHTML = `<span>PROMISE ERROR: ${e.reason?.message || e.reason}</span>`;
-    const x = document.createElement('span');
-    x.style.cssText = 'cursor:pointer;font-size:16px;opacity:0.7;padding:0 4px';
-    x.textContent = '×';
-    x.onclick = () => bar.remove();
-    bar.appendChild(x);
+    bar.className = 'system-alert system-alert-warning';
+    const message = document.createElement('span');
+    message.textContent = `PROMISE ERROR: ${e.reason?.message || e.reason}`;
+    const close = document.createElement('button');
+    close.className = 'btn-icon';
+    close.innerHTML = '<i class="ph ph-x"></i>';
+    close.onclick = () => bar.remove();
+    bar.append(message, close);
     document.body.appendChild(bar);
     setTimeout(() => bar.remove(), 8000);
   });
 
   const app = new GitTreeApp();
-  app.init();
   window.app = app;
+  await app.init();
 });

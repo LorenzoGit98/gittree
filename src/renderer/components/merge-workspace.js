@@ -41,7 +41,7 @@ class MergeWorkspace {
 
   showLoading() {
     this.ensureContainer();
-    this.container.style.display = 'flex';
+    this.container.classList.remove('is-hidden');
     this.container.innerHTML = '<div class="empty-state">Loading merge preview...</div>';
   }
 
@@ -51,7 +51,7 @@ class MergeWorkspace {
     if (!this.container) {
       this.container = document.createElement('div');
       this.container.id = 'merge-workspace-overlay';
-      this.container.style.cssText = 'position:fixed;inset:0;z-index:var(--z-modal);background:var(--bg-app);display:none;flex-direction:column';
+      this.container.className = 'fullscreen-workspace is-hidden';
       document.getElementById('app').appendChild(this.container);
     }
   }
@@ -67,13 +67,13 @@ class MergeWorkspace {
       <div class="merge-workspace">
         <div class="merge-header">
           <div class="merge-direction">
-            <span style="color:var(--text-secondary);font-size:12px">Merge</span>
+            <span class="merge-direction-label">Merge</span>
             <span class="merge-source">${this.esc(d.source)}</span>
-            <span class="merge-arrow">→</span>
+            <i class="ph ph-arrow-right merge-arrow"></i>
             <span class="merge-target">${this.esc(d.target)}</span>
           </div>
-          <div style="margin-left:auto;display:flex;gap:8px">
-            <button id="merge-cancel-btn" class="btn">Close</button>
+          <div class="merge-header-actions">
+            <button id="merge-cancel-btn" class="btn"><i class="ph ph-x"></i>Close</button>
           </div>
         </div>
 
@@ -82,8 +82,8 @@ class MergeWorkspace {
             <div class="merge-section-header">Summary</div>
             <div class="merge-summary">
               <div class="merge-stat"><div class="merge-stat-label">Commits to merge</div><div class="merge-stat-value">${d.commitsCount}</div></div>
-              <div class="merge-stat"><div class="merge-stat-label">Source branch</div><div class="merge-stat-value" style="font-size:14px;font-family:var(--font-mono)">${this.esc(d.source)}</div></div>
-              <div class="merge-stat"><div class="merge-stat-label">Target branch</div><div class="merge-stat-value" style="font-size:14px;font-family:var(--font-mono)">${this.esc(d.target)}</div></div>
+              <div class="merge-stat"><div class="merge-stat-label">Source branch</div><div class="merge-stat-value merge-branch-value">${this.esc(d.source)}</div></div>
+              <div class="merge-stat"><div class="merge-stat-label">Target branch</div><div class="merge-stat-value merge-branch-value">${this.esc(d.target)}</div></div>
             </div>
           </div>
 
@@ -92,7 +92,7 @@ class MergeWorkspace {
             <div class="merge-risk-list">
               ${hasLocalChanges ? `
                 <div class="merge-risk-item">
-                  <span class="merge-risk-icon warning">⚠</span>
+                  <i class="ph ph-warning merge-risk-icon warning"></i>
                   <div class="merge-risk-content">
                     <div class="merge-risk-title">Local changes detected</div>
                     <div class="merge-risk-detail">You have uncommitted changes that may interfere with the merge.</div>
@@ -103,7 +103,7 @@ class MergeWorkspace {
                 </div>
               ` : ''}
               <div class="merge-risk-item">
-                <span class="merge-risk-icon info">ℹ</span>
+                <i class="ph ph-info merge-risk-icon info"></i>
                 <div class="merge-risk-content">
                   <div class="merge-risk-title">${d.commitsCount} commit${d.commitsCount !== 1 ? 's' : ''} from ${this.esc(d.source)} will be merged</div>
                   <div class="merge-risk-detail">Commits made by ${[...new Set(d.commits.map(c => c.author_name))].slice(0, 3).join(', ')}</div>
@@ -114,7 +114,7 @@ class MergeWorkspace {
 
           <div class="merge-section">
             <div class="merge-section-header">Commits (${d.commitsCount})</div>
-            <div style="max-height:200px;overflow-y:auto">
+            <div class="merge-commit-scroll">
               ${d.commits.slice(0, 30).map(c => `
                 <div class="compare-commit-item">
                   <span class="compare-commit-hash">${c.hash.substring(0,7)}</span>
@@ -123,7 +123,7 @@ class MergeWorkspace {
                   <span class="compare-commit-date">${this.fmtDate(c.date)}</span>
                 </div>
               `).join('')}
-              ${d.commitsCount > 30 ? `<div style="padding:8px;text-align:center;color:var(--text-tertiary)">...and ${d.commitsCount - 30} more</div>` : ''}
+              ${d.commitsCount > 30 ? `<div class="merge-overflow-note">…and ${d.commitsCount - 30} more</div>` : ''}
             </div>
           </div>
 
@@ -146,10 +146,11 @@ class MergeWorkspace {
         </div>
 
         <div class="merge-actions">
-          <span style="font-size:11px;color:var(--text-secondary)">
-            You are about to merge <strong style="color:var(--accent)">${this.esc(d.source)}</strong> into <strong style="color:var(--text-primary)">${this.esc(d.target)}</strong>
+          <span class="merge-action-summary">
+            You are about to merge <strong>${this.esc(d.source)}</strong> into <strong>${this.esc(d.target)}</strong>
           </span>
-          <button id="merge-confirm-btn" class="btn btn-primary" style="margin-left:auto">
+          <button id="merge-confirm-btn" class="btn btn-primary merge-confirm">
+            <i class="ph ph-git-merge"></i>
             Merge ${this.esc(d.source)} into ${this.esc(d.target)}
           </button>
         </div>
@@ -172,7 +173,7 @@ class MergeWorkspace {
       this.classList.add('selected');
     };
 
-    this.container.style.display = 'flex';
+    this.container.classList.remove('is-hidden');
   }
 
   async executeMerge() {
@@ -191,7 +192,7 @@ class MergeWorkspace {
   }
 
   hide() {
-    if (this.container) this.container.style.display = 'none';
+    if (this.container) this.container.classList.add('is-hidden');
   }
 
   esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }

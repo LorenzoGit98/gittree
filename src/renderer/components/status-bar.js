@@ -6,7 +6,7 @@ class StatusBar {
   }
 
   setRepo(name) { this.repoEl.textContent = name || ''; }
-  setBranch(name) { this.branchEl.textContent = name ? `● ${name}` : ''; }
+  setBranch(name) { this.branchEl.textContent = name || ''; }
   setInfo(text) { this.infoEl.textContent = text || ''; }
   clear() { this.repoEl.textContent = ''; this.branchEl.textContent = ''; this.infoEl.textContent = ''; }
 }

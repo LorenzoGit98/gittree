@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, nativeTheme } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const GitService = require('./git-service');
@@ -22,7 +22,7 @@ function createWindow() {
     height: 820,
     minWidth: 900,
     minHeight: 600,
-    backgroundColor: '#1e1e2e',
+    backgroundColor: '#f3f6fb',
     titleBarStyle: 'default',
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload.js'),
@@ -141,6 +141,13 @@ function closeActiveRepo() {
 }
 
 function registerIpcHandlers() {
+  ipcMain.handle('app:set-theme', (_event, theme) => {
+    const safeTheme = theme === 'dark' ? 'dark' : 'light';
+    nativeTheme.themeSource = safeTheme;
+    if (mainWindow) mainWindow.setBackgroundColor(safeTheme === 'dark' ? '#121a27' : '#f3f6fb');
+    return safeTheme;
+  });
+
   ipcMain.handle('dialog:select-directory', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openDirectory']
@@ -365,6 +372,7 @@ function registerIpcHandlers() {
 }
 
 app.whenReady().then(() => {
+  nativeTheme.themeSource = 'light';
   repoManager = new RepoManager();
   registerIpcHandlers();
   buildMenu();

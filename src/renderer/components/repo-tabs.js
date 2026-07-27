@@ -24,7 +24,7 @@ class RepoTabs {
 
       const close = document.createElement('span');
       close.className = 'repo-tab-close';
-      close.textContent = '×';
+      close.innerHTML = '<i class="ph ph-x"></i>';
       close.onclick = e => { e.stopPropagation(); this.removeRepo(repo.path); };
 
       el.appendChild(name);
@@ -63,7 +63,7 @@ class RepoTabs {
         this.app.showToast(result.error, 'error');
       }
     } catch (e) {
-      this.app.showToast('Error: ' + e.message, 'error');
+      this.app.showToast(`${t('common.error')}: ${e.message}`, 'error');
     }
   }
 }

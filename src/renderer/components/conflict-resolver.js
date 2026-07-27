@@ -22,7 +22,7 @@ class ConflictResolver {
     if (!this.container) {
       this.container = document.createElement('div');
       this.container.id = 'merge-workspace-overlay';
-      this.container.style.cssText = 'position:fixed;inset:0;z-index:var(--z-modal);background:var(--bg-app);display:none;flex-direction:column';
+      this.container.className = 'fullscreen-workspace is-hidden';
       document.getElementById('app').appendChild(this.container);
     }
   }
@@ -37,12 +37,12 @@ class ConflictResolver {
     this.container.innerHTML = `
       <div class="conflict-workspace">
         <div class="conflict-header">
-          <span style="font-size:13px;font-weight:500">Resolve Conflicts</span>
+          <span class="conflict-title">Resolve Conflicts</span>
           <div class="conflict-progress">
             <span>${resolved}/${total} resolved</span>
             <div class="conflict-progress-bar"><div class="conflict-progress-fill" style="width:${progress}%"></div></div>
           </div>
-          <button class="btn btn-small" onclick="window.app.emit('refresh')">Cancel</button>
+          <button class="btn btn-small" onclick="window.conflictResolver.hide()"><i class="ph ph-x"></i>Cancel</button>
         </div>
 
         <div class="conflict-body">
@@ -58,8 +58,8 @@ class ConflictResolver {
 
           <div class="conflict-editor">
             <div class="conflict-editor-toolbar">
-              <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-secondary)">${this.esc(current.path || current)}</span>
-              <div style="margin-left:auto;display:flex;gap:4px">
+              <span class="conflict-current-file">${this.esc(current.path || current)}</span>
+              <div class="conflict-toolbar-actions">
                 <button class="conflict-action-btn accept-ours" id="conflict-accept-ours">Accept ours</button>
                 <button class="conflict-action-btn accept-theirs" id="conflict-accept-theirs">Accept theirs</button>
                 <button class="conflict-action-btn accept-both" id="conflict-accept-both">Accept both</button>
@@ -108,7 +108,7 @@ class ConflictResolver {
     // Attach to window for onclick handlers
     window.conflictResolver = this;
 
-    this.container.style.display = 'flex';
+    this.container.classList.remove('is-hidden');
   }
 
   navigate(delta) {
@@ -150,7 +150,7 @@ class ConflictResolver {
   }
 
   hide() {
-    if (this.container) this.container.style.display = 'none';
+    if (this.container) this.container.classList.add('is-hidden');
     window.conflictResolver = null;
   }
 

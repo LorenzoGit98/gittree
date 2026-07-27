@@ -33,7 +33,7 @@ class GlobalSearch {
 
   async show() {
     this.visible = true;
-    this.overlay.style.display = 'flex';
+    this.overlay.classList.remove('is-hidden');
     this.input.value = '';
     this.selectedIdx = -1;
     this.allData = [];
@@ -48,7 +48,7 @@ class GlobalSearch {
           window.gitTree.getStatus(this.app.state.repo.path)
         ]);
         if (branches?.branches) {
-          for (const [name, info] of Object.entries(branches.branches)) {
+          for (const name of Object.keys(branches.branches)) {
             this.allData.push({
               type: 'branch', label: name, subtitle: name.startsWith('remotes/') ? 'remote' : 'local',
               detail: name.startsWith('remotes/') ? 'Remote branch' : (name === branches.current ? 'Current branch' : 'Local branch'),
@@ -93,7 +93,7 @@ class GlobalSearch {
 
   hide() {
     this.visible = false;
-    this.overlay.style.display = 'none';
+    this.overlay.classList.add('is-hidden');
   }
 
   toggle() {
@@ -129,7 +129,7 @@ class GlobalSearch {
   renderResults(items) {
     this.results.innerHTML = '';
     if (!items.length && this.input.value.trim()) {
-      this.results.innerHTML = '<div class="search-empty">No results found</div>';
+      this.results.innerHTML = `<div class="search-empty">${t('search.empty')}</div>`;
       return;
     }
 
@@ -139,14 +139,14 @@ class GlobalSearch {
     for (const [type, group] of Object.entries(grouped)) {
       const header = document.createElement('div');
       header.className = 'search-section-header';
-      header.textContent = type.charAt(0).toUpperCase() + type.slice(1) + 's';
+      header.textContent = this.groupLabel(type);
       this.results.appendChild(header);
 
       group.forEach((item, idx) => {
         const el = document.createElement('div');
         el.className = 'search-result-item';
         el.innerHTML = `
-          <span class="search-result-icon">${this.iconForType(type)}</span>
+          <span class="search-result-icon"><i class="${this.iconForType(type)}"></i></span>
           <span class="search-result-content">
             <div class="search-result-title">${this.highlight(item.label, this.input.value)}</div>
             <div class="search-result-subtitle">${item.subtitle}</div>
@@ -160,8 +160,27 @@ class GlobalSearch {
   }
 
   iconForType(type) {
-    const m = { branch: '⎇', commit: '●', file: '□', repo: '📁', tag: '🏷', action: '>' };
-    return m[type] || '·';
+    const icons = {
+      branch: 'ph ph-git-branch',
+      commit: 'ph ph-git-commit',
+      file: 'ph ph-file-code',
+      repo: 'ph ph-folder-simple',
+      tag: 'ph ph-tag',
+      action: 'ph ph-command'
+    };
+    return icons[type] || 'ph ph-circle';
+  }
+
+  groupLabel(type) {
+    const labels = {
+      branch: t('search.branches'),
+      commit: t('search.commits'),
+      file: t('search.files'),
+      repo: 'Repositories',
+      tag: t('sidebar.tags'),
+      action: 'Actions'
+    };
+    return labels[type] || type;
   }
 
   highlight(text, query) {
@@ -190,9 +209,9 @@ class GlobalSearch {
     if (item.type === 'branch') {
       if (item.data.name.startsWith('remotes/')) {
         const local = item.data.name.replace('remotes/', '').split('/').pop();
-        this.app.branchList.checkoutRemote(local, item.data.name.replace('remotes/', ''));
+        this.app.components.branchList.checkoutRemote(local, item.data.name.replace('remotes/', ''));
       } else {
-        this.app.branchList.checkout(item.data.name);
+        this.app.components.branchList.checkout(item.data.name);
       }
     } else if (item.type === 'commit') {
       this.app.emit('commit:selected', item.data.hash);
@@ -200,9 +219,10 @@ class GlobalSearch {
       if (item.data.action === 'fetch') this.app.doFetch();
       else if (item.data.action === 'pull') this.app.doPull();
       else if (item.data.action === 'push') this.app.doPush();
-      else if (item.data.action === 'create-branch') this.app.branchList.promptCreateBranch();
+      else if (item.data.action === 'create-branch') this.app.components.branchList.promptCreateBranch();
     } else if (item.type === 'repo') {
-      this.app.repoTabs.addRepo(item.data.path);
+      const index = this.app.components.repoTabs.repos.findIndex(repo => repo.path === item.data.path);
+      if (index >= 0) this.app.components.repoTabs.selectRepo(index);
     }
   }
 

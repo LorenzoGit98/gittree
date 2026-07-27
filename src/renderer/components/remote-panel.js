@@ -22,7 +22,7 @@ class RemotePanel {
     this.container.innerHTML = '';
 
     if (!remotes || remotes.length === 0) {
-      this.container.innerHTML = '<div class="remote-item"><span style="color:var(--text-muted)">No remotes</span></div>';
+      this.container.innerHTML = '<div class="remote-item text-tertiary">No remotes</div>';
       return;
     }
 

@@ -144,21 +144,21 @@
 }
 
 .commit-ref.branch {
-  background: rgba(137, 180, 250, 0.2);
+  background: var(--primary-soft);
   color: var(--accent);
 }
 
 .commit-ref.tag {
-  background: rgba(249, 226, 175, 0.2);
+  background: var(--warning-soft);
   color: var(--warning);
 }
 
 .commit-ref.remote {
-  background: rgba(137, 220, 235, 0.2);
+  background: var(--info-soft);
   color: var(--info);
 }
 
 .commit-ref.head {
-  background: rgba(166, 227, 161, 0.2);
+  background: var(--success-soft);
   color: var(--success);
 }

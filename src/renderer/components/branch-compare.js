@@ -38,10 +38,13 @@ class BranchCompare {
         <div class="compare-header">
           <div class="compare-selector">
             <span class="badge badge-branch">${this.esc(this.data.source)}</span>
-            <span style="color:var(--text-tertiary);font-size:14px">→</span>
+            <i class="ph ph-arrow-right compare-arrow"></i>
             <span class="badge badge-remote">${this.esc(this.data.target)}</span>
           </div>
-          <button class="btn btn-small" onclick="window.app.emit('refresh')">Back to history</button>
+          <button class="btn btn-small compare-back" onclick="window.app.emit('refresh')">
+            <i class="ph ph-arrow-left"></i>
+            Back to history
+          </button>
         </div>
         <div class="compare-summary">
           <div class="compare-stat">

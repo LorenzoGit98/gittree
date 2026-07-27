@@ -4,6 +4,8 @@ class BranchListView {
     this.app = app;
     this.data = null;
     this.filter = '';
+    this.collapsedFolders = new Set();
+    this.collapsedGroups = new Set();
     this.searchInput = document.getElementById('branch-search');
     if (this.searchInput) {
       this.searchInput.addEventListener('input', () => {
@@ -42,45 +44,83 @@ class BranchListView {
 
     if (f) {
       locals = locals.filter(b => b.name.toLowerCase().includes(f));
-      remotes = remotes.filter(b => b.name.toLowerCase().includes(f) || b.full.toLowerCase().includes(f));
+      remotes = remotes.filter(b => b.name.toLowerCase().includes(f));
     }
 
-    const hasLocals = locals.length > 0;
-    const hasRemotes = remotes.length > 0;
-
-    if (!hasLocals && !hasRemotes) {
-      this.container.innerHTML = f
-        ? '<div style="padding:8px;text-align:center;color:var(--text-tertiary);font-size:11px">No branches match</div>'
-        : '<div style="padding:8px;text-align:center;color:var(--text-tertiary);font-size:11px">No branches</div>';
+    if (!locals.length && !remotes.length) {
+      this.container.innerHTML = `<div class="branch-empty">${f ? t('sidebar.noMatch') : t('sidebar.noBranches')}</div>`;
       return;
     }
 
     const frag = document.createDocumentFragment();
 
-    if (hasLocals) {
-      frag.appendChild(this.groupHeader(`Local${f ? ' (' + locals.length + ')' : ''}`));
-      locals.forEach(b => frag.appendChild(this.branchRow(b, current)));
+    if (locals.length) {
+      this.renderCollapsibleGroup(frag, t('sidebar.local'), 'local', locals, current, false);
     }
 
-    if (hasRemotes) {
-      frag.appendChild(this.groupHeader(`Remote${f ? ' (' + remotes.length + ')' : ''}`));
-      remotes.forEach(b => frag.appendChild(this.branchRow(b, current, true)));
+    if (remotes.length) {
+      this.renderCollapsibleGroup(frag, t('sidebar.remote'), 'remote', remotes, current, true);
     }
-
-    const addRow = document.createElement('div');
-    addRow.className = 'create-branch-row';
-    addRow.textContent = '+ Create branch';
-    addRow.onclick = () => this.promptCreateBranch();
-    frag.appendChild(addRow);
 
     this.container.appendChild(frag);
   }
 
-  groupHeader(label) {
-    const h = document.createElement('div');
-    h.className = 'branch-group-header';
-    h.textContent = label;
-    return h;
+  renderCollapsibleGroup(frag, label, groupId, branches, current, isRemote) {
+    const collapsed = this.collapsedGroups.has(groupId);
+
+    const header = document.createElement('div');
+    header.className = 'branch-group-header';
+    header.innerHTML = `
+      <i class="ph ph-caret-down branch-group-arrow${collapsed ? ' collapsed' : ''}"></i>
+      <span>${label}</span>
+    `;
+    header.onclick = () => {
+      if (this.collapsedGroups.has(groupId)) this.collapsedGroups.delete(groupId);
+      else this.collapsedGroups.add(groupId);
+      this.render();
+    };
+    frag.appendChild(header);
+
+    if (collapsed) return;
+
+    const folders = new Map();
+    const root = [];
+
+    branches.forEach(b => {
+      const idx = b.name.lastIndexOf('/');
+      if (idx > 0) {
+        const folder = b.name.substring(0, idx);
+        if (!folders.has(folder)) folders.set(folder, []);
+        folders.get(folder).push(b);
+      } else {
+        root.push(b);
+      }
+    });
+
+    root.forEach(b => frag.appendChild(this.branchRow(b, current, isRemote)));
+
+    for (const [folder, items] of folders) {
+      const fCollapsed = this.collapsedFolders.has(folder);
+
+      const folderHeader = document.createElement('div');
+      folderHeader.className = 'branch-folder-header';
+      folderHeader.innerHTML = `
+        <i class="ph ph-caret-down branch-folder-arrow${fCollapsed ? ' collapsed' : ''}"></i>
+        <i class="ph ph-folder-simple"></i>
+        <span class="branch-folder-name">${this.esc(folder)}/</span>
+        <span class="branch-folder-count">${items.length}</span>
+      `;
+      folderHeader.onclick = () => {
+        if (this.collapsedFolders.has(folder)) this.collapsedFolders.delete(folder);
+        else this.collapsedFolders.add(folder);
+        this.render();
+      };
+      frag.appendChild(folderHeader);
+
+      if (!fCollapsed) {
+        items.forEach(b => frag.appendChild(this.branchRow(b, current, isRemote)));
+      }
+    }
   }
 
   branchRow(branch, current, isRemote = false) {
@@ -88,9 +128,8 @@ class BranchListView {
     el.className = 'branch-item';
     if (!isRemote && branch.name === current) el.classList.add('active');
 
-    const icon = document.createElement('span');
-    icon.className = 'branch-icon';
-    icon.textContent = branch.name === current && !isRemote ? '●' : '○';
+    const icon = document.createElement('i');
+    icon.className = `ph ${isRemote ? 'ph-cloud' : 'ph-git-branch'} branch-icon`;
 
     const name = document.createElement('span');
     name.className = 'branch-name';
@@ -99,27 +138,23 @@ class BranchListView {
 
     const meta = document.createElement('span');
     meta.className = 'branch-meta';
-
     if (isRemote) {
       const bdg = document.createElement('span');
       bdg.className = 'badge badge-remote';
-      bdg.textContent = 'remote';
+      bdg.textContent = t('sidebar.remote');
       meta.appendChild(bdg);
     }
 
     el.appendChild(icon);
     el.appendChild(name);
     el.appendChild(meta);
-
     el.onclick = () => {
       if (isRemote) {
-        const localName = branch.name.split('/').pop();
-        this.checkoutRemote(localName, branch.name);
+        this.checkoutRemote(branch.name.split('/').pop(), branch.name);
       } else {
         this.checkout(branch.name);
       }
     };
-
     return el;
   }
 
@@ -150,4 +185,10 @@ class BranchListView {
   }
 
   get current() { return this.data?.current; }
+
+  esc(value) {
+    const element = document.createElement('div');
+    element.textContent = value;
+    return element.innerHTML;
+  }
 }

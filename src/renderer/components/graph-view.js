@@ -10,7 +10,7 @@ class GraphView {
   }
 
   async load(repoPath) {
-    this.body.innerHTML = '<div class="empty-state"><span class="empty-state-icon">~</span>Loading commits...</div>';
+    this.body.innerHTML = `<div class="empty-state"><i class="ph ph-circle-notch"></i>${t('history.loading')}</div>`;
     try {
       const log = await window.gitTree.getLog(repoPath, 300);
       if (log?.error) { this.body.innerHTML = `<div class="empty-state">Error: ${log.error}</div>`; return; }
@@ -46,7 +46,7 @@ class GraphView {
   render() {
     this.body.innerHTML = '';
     if (!this.commits.length) {
-      this.body.innerHTML = '<div class="empty-state">No commits found</div>';
+      this.body.innerHTML = `<div class="empty-state"><i class="ph ph-git-commit"></i>${t('history.empty')}</div>`;
       return;
     }
 
@@ -80,7 +80,11 @@ class GraphView {
 
       const msg = document.createElement('div');
       msg.className = 'graph-commit-message';
-      msg.textContent = c.message.split('\n')[0];
+      const messageText = document.createElement('span');
+      messageText.className = 'truncate';
+      messageText.textContent = c.message.split('\n')[0];
+      msg.appendChild(refsEl);
+      msg.appendChild(messageText);
 
       const auth = document.createElement('div');
       auth.className = 'graph-commit-author';
@@ -95,7 +99,6 @@ class GraphView {
       hash.textContent = c.hash.substring(0, 7);
 
       row.appendChild(cell);
-      row.appendChild(refsEl);
       row.appendChild(msg);
       row.appendChild(auth);
       row.appendChild(date);

@@ -137,7 +137,26 @@ class GitService {
   async getStatus() {
     try {
       const status = await this.git.status();
-      return status;
+      return {
+        current: status.current,
+        tracking: status.tracking,
+        detached: status.detached,
+        ahead: status.ahead,
+        behind: status.behind,
+        files: status.files.map(file => ({
+          path: file.path,
+          index: file.index,
+          working_dir: file.working_dir
+        })),
+        created: [...status.created],
+        deleted: [...status.deleted],
+        modified: [...status.modified],
+        renamed: status.renamed.map(file => ({ from: file.from, to: file.to })),
+        conflicted: [...status.conflicted],
+        staged: [...status.staged],
+        not_added: [...status.not_added],
+        isClean: status.isClean()
+      };
     } catch (err) {
       throw new Error(`Failed to get status: ${err.message}`);
     }

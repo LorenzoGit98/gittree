@@ -8,7 +8,7 @@
   font-size: 11px;
   color: var(--text-secondary);
   cursor: default;
-  background: transparent;
+  background: var(--surface-primary);
 }
 .branch-indicator::before {
   content: '';

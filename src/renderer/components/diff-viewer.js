@@ -18,7 +18,7 @@ class DiffViewer {
 
   async showDiffForCommit(repoPath, hash) {
     document.getElementById('detail-title').textContent = `Changes in ${hash.substring(0, 7)}`;
-    this.body.innerHTML = '<div class="diff-placeholder">Loading diff...</div>';
+    this.body.innerHTML = `<div class="diff-placeholder"><i class="ph ph-circle-notch"></i>${t('details.loading')}</div>`;
     try {
       const detail = await window.gitTree.getCommitDetail(repoPath, hash);
       if (detail?.error) { this.body.innerHTML = `<div class="diff-placeholder">${detail.error}</div>`; return; }
@@ -36,7 +36,10 @@ class DiffViewer {
   }
 
   render(diffText) {
-    if (!diffText) { this.body.innerHTML = '<div class="diff-placeholder">No changes</div>'; return; }
+    if (!diffText) {
+      this.body.innerHTML = `<div class="diff-placeholder"><i class="ph ph-check-circle"></i>${t('details.noChanges')}</div>`;
+      return;
+    }
     if (this.mode === 'unified') this.renderUnified(diffText);
     else this.renderSplit(diffText);
   }
@@ -151,7 +154,7 @@ class DiffViewer {
 
   clear() {
     this.currentDiff = null;
-    this.body.innerHTML = '<div class="diff-placeholder">Select a commit to view changes</div>';
-    document.getElementById('detail-title').textContent = 'Details';
+    this.body.innerHTML = `<div class="diff-placeholder"><i class="ph ph-cursor-click"></i>${t('details.placeholder')}</div>`;
+    document.getElementById('detail-title').textContent = t('details.title');
   }
 }

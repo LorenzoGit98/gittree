@@ -1,6 +1,9 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('gitTree', {
+  setTheme: (theme) =>
+    ipcRenderer.invoke('app:set-theme', theme),
+
   getLog: (repoPath, maxCount, branch) =>
     ipcRenderer.invoke('git:log', repoPath, maxCount, branch),
 
