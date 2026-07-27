@@ -5,6 +5,7 @@
   font-family: var(--font-mono);
   font-size: 11px;
   line-height: 1.6;
+  overscroll-behavior: contain;
 }
 
 .diff-file-block {
@@ -57,6 +58,9 @@
   padding: 0 var(--space-2);
   white-space: pre-wrap;
   word-break: break-all;
+  content-visibility: auto;
+  contain: layout paint style;
+  contain-intrinsic-size: 20px;
 }
 
 .diff-line-num {

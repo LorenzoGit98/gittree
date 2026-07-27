@@ -6,6 +6,7 @@ class GraphView {
     this.commits = [];
     this.selectedHash = null;
     this.branchRefs = new Map();
+    this.rowsByHash = new Map();
     this.searchTerm = '';
   }
 
@@ -45,6 +46,7 @@ class GraphView {
 
   render() {
     this.body.innerHTML = '';
+    this.rowsByHash.clear();
     if (!this.commits.length) {
       this.body.innerHTML = `<div class="empty-state"><i class="ph ph-git-commit"></i>${t('history.empty')}</div>`;
       return;
@@ -54,6 +56,7 @@ class GraphView {
     this.commits.forEach((c, i) => {
       const row = document.createElement('div');
       row.className = 'graph-row';
+      this.rowsByHash.set(c.hash, row);
       if (c.hash === this.selectedHash) row.classList.add('selected');
 
       const cell = document.createElement('div');
@@ -112,8 +115,9 @@ class GraphView {
   }
 
   select(hash) {
+    this.rowsByHash.get(this.selectedHash)?.classList.remove('selected');
     this.selectedHash = hash;
-    this.render();
+    this.rowsByHash.get(hash)?.classList.add('selected');
     this.app.emit('commit:selected', hash);
   }
 

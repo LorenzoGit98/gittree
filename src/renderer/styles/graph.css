@@ -2,11 +2,13 @@
   position: relative;
   overflow: auto;
   background: var(--surface-primary);
+  overscroll-behavior: contain;
 }
 
 .graph-canvas {
   position: relative;
   min-height: 100%;
+  contain: layout style;
 }
 
 .graph-header,
@@ -37,7 +39,9 @@
   border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-primary);
   cursor: pointer;
-  transition: background var(--transition-fast);
+  content-visibility: auto;
+  contain: layout paint style;
+  contain-intrinsic-size: 38px;
 }
 
 .graph-row:hover {
@@ -62,15 +66,14 @@
   z-index: 1;
   width: 10px;
   height: 10px;
-  border: 2px solid var(--surface-primary);
+  border: 1px solid var(--graph-node);
   border-radius: 50%;
-  background: var(--graph-node);
-  box-shadow: 0 0 0 1px var(--graph-node);
+  background: var(--surface-primary);
 }
 
 .graph-row.selected .graph-node {
   background: var(--graph-active);
-  box-shadow: 0 0 0 1px var(--graph-active);
+  border-color: var(--graph-active);
 }
 
 .graph-line-v {

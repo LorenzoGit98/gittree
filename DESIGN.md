@@ -68,6 +68,8 @@ The desktop workspace is a resizable three-panel bento:
 
 The left and right widths persist locally. The history panel always receives the remaining width. At narrower breakpoints the inspector hides first, then the branch navigator. Full-screen workflows such as merge and conflict resolution use an opaque shell rather than a translucent modal.
 
+The desktop window is frameless. The repository tabs are the first visible row of the application card: do not add a native menu, a separate title bar, or a GitTree brand label above or beside them. Keep minimize, maximize, and close controls inside the tab row, and preserve a draggable empty area between the tabs and right-side actions.
+
 ## Component contracts
 
 ### Buttons and icon controls

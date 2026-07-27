@@ -24,6 +24,7 @@ Apply the repository design system to every renderer UI change.
 - Prefer shared classes in `styles/components.css` over inline styling.
 - Add new raw color values only as semantic tokens in `variables.css`, for both themes.
 - Keep bento panels resizable without reducing the center workspace below its usable minimum.
+- Preserve the frameless window contract: repository tabs first, no native menu/title bar, and draggable empty space around the integrated window controls.
 - Preserve balanced developer density: 34–40px data rows and 34px minimum controls.
 - Use `data-i18n` for static markup and `t()` for runtime content.
 - Keep English as i18next fallback.

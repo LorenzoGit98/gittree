@@ -23,7 +23,8 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     backgroundColor: '#f3f6fb',
-    titleBarStyle: 'default',
+    frame: false,
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload.js'),
       contextIsolation: true,
@@ -40,70 +41,7 @@ function createWindow() {
 }
 
 function buildMenu() {
-  const template = [
-    {
-      label: 'File',
-      submenu: [
-        {
-          label: 'Open Repository...',
-          accelerator: 'CmdOrCtrl+O',
-          click: () => openRepoDialog()
-        },
-        { type: 'separator' },
-        {
-          label: 'Close Repository',
-          accelerator: 'CmdOrCtrl+W',
-          click: () => closeActiveRepo()
-        },
-        { type: 'separator' },
-        {
-          label: 'Exit',
-          accelerator: 'CmdOrCtrl+Q',
-          click: () => app.quit()
-        }
-      ]
-    },
-    {
-      label: 'Repository',
-      submenu: [
-        {
-          label: 'Refresh',
-          accelerator: 'F5',
-          click: () => sendToRenderer('refresh')
-        },
-        { type: 'separator' },
-        {
-          label: 'Fetch',
-          accelerator: 'CmdOrCtrl+Shift+F',
-          click: () => sendToRenderer('fetch')
-        },
-        {
-          label: 'Pull',
-          accelerator: 'CmdOrCtrl+Shift+P',
-          click: () => sendToRenderer('pull')
-        },
-        {
-          label: 'Push',
-          accelerator: 'CmdOrCtrl+Shift+U',
-          click: () => sendToRenderer('push')
-        }
-      ]
-    },
-    {
-      label: 'View',
-      submenu: [
-        { role: 'reload' },
-        { role: 'toggleDevTools' },
-        { type: 'separator' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
-        { role: 'resetZoom' }
-      ]
-    }
-  ];
-
-  const menu = Menu.buildFromTemplate(template);
-  Menu.setApplicationMenu(menu);
+  Menu.setApplicationMenu(null);
 }
 
 function sendToRenderer(channel, data) {
@@ -141,6 +79,21 @@ function closeActiveRepo() {
 }
 
 function registerIpcHandlers() {
+  ipcMain.handle('window:minimize', () => {
+    mainWindow?.minimize();
+  });
+
+  ipcMain.handle('window:toggle-maximize', () => {
+    if (!mainWindow) return false;
+    if (mainWindow.isMaximized()) mainWindow.unmaximize();
+    else mainWindow.maximize();
+    return mainWindow.isMaximized();
+  });
+
+  ipcMain.handle('window:close', () => {
+    mainWindow?.close();
+  });
+
   ipcMain.handle('app:set-theme', (_event, theme) => {
     const safeTheme = theme === 'dark' ? 'dark' : 'light';
     nativeTheme.themeSource = safeTheme;

@@ -82,7 +82,6 @@
   border-radius: var(--radius-sm);
   cursor: pointer;
   text-align: left;
-  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .branch-group-header {
@@ -112,6 +111,9 @@
   background: var(--surface-primary);
   color: var(--text-secondary);
   font-size: var(--text-xs);
+  content-visibility: auto;
+  contain: layout paint style;
+  contain-intrinsic-size: 30px;
 }
 
 .branch-folder-header:hover {
@@ -138,6 +140,9 @@
   padding: 0 var(--space-2);
   background: var(--surface-primary);
   color: var(--text-secondary);
+  content-visibility: auto;
+  contain: layout paint style;
+  contain-intrinsic-size: 34px;
 }
 
 .branch-item:hover {

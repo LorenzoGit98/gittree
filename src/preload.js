@@ -1,6 +1,15 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('gitTree', {
+  minimizeWindow: () =>
+    ipcRenderer.invoke('window:minimize'),
+
+  toggleMaximizeWindow: () =>
+    ipcRenderer.invoke('window:toggle-maximize'),
+
+  closeWindow: () =>
+    ipcRenderer.invoke('window:close'),
+
   setTheme: (theme) =>
     ipcRenderer.invoke('app:set-theme', theme),
 

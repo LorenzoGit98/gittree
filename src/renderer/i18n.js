@@ -17,6 +17,8 @@ const I18n = {
               toggleTheme: 'Toggle theme',
               changeLanguage: 'Change language',
               close: 'Close',
+              minimize: 'Minimize',
+              maximize: 'Maximize',
               cancel: 'Cancel',
               loading: 'Loading…',
               error: 'Error'
@@ -96,6 +98,8 @@ const I18n = {
               toggleTheme: 'Cambia tema',
               changeLanguage: 'Cambia lingua',
               close: 'Chiudi',
+              minimize: 'Riduci a icona',
+              maximize: 'Ingrandisci',
               cancel: 'Annulla',
               loading: 'Caricamento…',
               error: 'Errore'

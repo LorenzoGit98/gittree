@@ -13,29 +13,21 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-xl);
   background: var(--surface-shell);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 .app-header {
   min-height: 54px;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-2);
   padding: 0 var(--space-4);
   border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-primary);
+  -webkit-app-region: drag;
 }
 
-.app-identity {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-family: var(--font-display);
-  letter-spacing: -0.02em;
-}
-
-.app-mark,
 .welcome-brand {
   display: inline-flex;
   align-items: center;
@@ -44,22 +36,42 @@
   background: var(--primary);
 }
 
-:root[data-theme="dark"] .app-mark,
 :root[data-theme="dark"] .welcome-brand {
   color: var(--surface-primary);
-}
-
-.app-mark {
-  width: 30px;
-  height: 30px;
-  border-radius: 10px;
-  font-size: 17px;
 }
 
 .app-header-actions {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+.window-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.app-header-actions,
+.window-controls,
+.welcome-content,
+.welcome-settings {
+  -webkit-app-region: no-drag;
+}
+
+.repo-tabs-bar {
+  -webkit-app-region: drag;
+}
+
+.repo-tab-container,
+.tab-add-btn {
+  -webkit-app-region: no-drag;
+}
+
+.window-close:hover {
+  border-color: var(--error);
+  background: var(--error-soft);
+  color: var(--error-text);
 }
 
 .workspace-body {
@@ -80,7 +92,7 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   background: var(--surface-primary);
-  box-shadow: var(--shadow-sm);
+  contain: layout paint;
 }
 
 .sidebar {
@@ -125,6 +137,7 @@
   min-height: 0;
   overflow-y: auto;
   padding: var(--space-2);
+  overscroll-behavior: contain;
 }
 
 .sidebar-pinned-bottom {
@@ -162,6 +175,15 @@
   position: relative;
   cursor: col-resize;
   touch-action: none;
+}
+
+.resize-handle-v.is-dragging {
+  z-index: 20;
+  will-change: transform;
+}
+
+.workspace-body.is-resizing .bento-panel {
+  pointer-events: none;
 }
 
 .resize-handle-v::after {
