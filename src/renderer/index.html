@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GitTree</title>
+  <link rel="stylesheet" href="styles/variables.css">
+  <link rel="stylesheet" href="styles/layout.css">
+  <link rel="stylesheet" href="styles/components.css">
+  <link rel="stylesheet" href="styles/repo-tabs.css">
+  <link rel="stylesheet" href="styles/branch-list.css">
+  <link rel="stylesheet" href="styles/graph.css">
+  <link rel="stylesheet" href="styles/diff-viewer.css">
+  <link rel="stylesheet" href="styles/search.css">
+  <link rel="stylesheet" href="styles/merge.css">
+  <link rel="stylesheet" href="styles/conflicts.css">
+  <link rel="stylesheet" href="styles/branch-compare.css">
+  <link rel="stylesheet" href="styles/welcome.css">
+</head>
+<body>
+<div id="app">
+  <div id="welcome-screen" class="welcome">
+    <div class="welcome-content">
+      <h1>GitTree</h1>
+      <p>Lightweight Git client — clear, fast, safe.</p>
+      <div class="welcome-actions">
+        <button id="btn-open-repo" class="btn btn-primary">Open Repository</button>
+        <button id="btn-clone-repo" class="btn">Clone Repository</button>
+      </div>
+      <div class="welcome-recent" id="recent-repos"></div>
+    </div>
+  </div>
+
+  <div id="workspace" class="workspace" style="display:none">
+    <div id="repo-tabs-bar" class="repo-tabs-bar">
+      <div id="repo-tab-list" class="repo-tab-container"></div>
+      <button id="btn-add-repo-tab" class="btn-icon tab-add-btn" title="Add Repository">+</button>
+    </div>
+
+    <div class="workspace-body">
+      <aside id="sidebar" class="sidebar">
+        <div class="sidebar-section" data-section="branches">
+          <div class="sidebar-section-header collapsible">
+            <span class="collapse-arrow">&#x25BE;</span>
+            <span>Branches</span>
+            <button id="btn-new-branch" class="btn-icon" title="New Branch">+</button>
+          </div>
+          <div class="sidebar-section-body" id="branch-section-body">
+            <div class="branch-search-wrapper">
+              <input type="text" id="branch-search" class="branch-search-input" placeholder="Filter branches...">
+            </div>
+            <div id="branch-list" class="branch-list"></div>
+          </div>
+        </div>
+
+        <div class="sidebar-section" data-section="stashes">
+          <div class="sidebar-section-header collapsible collapsed">
+            <span class="collapse-arrow collapsed">&#x25BE;</span>
+            <span>Stashes</span>
+          </div>
+          <div class="sidebar-section-body collapsed" id="stash-section-body">
+            <div id="stash-list" class="branch-list"></div>
+          </div>
+        </div>
+
+        <div class="sidebar-section" data-section="tags">
+          <div class="sidebar-section-header collapsible">
+            <span class="collapse-arrow">&#x25BE;</span>
+            <span>Tags</span>
+          </div>
+          <div class="sidebar-section-body" id="tag-section-body">
+            <div id="tag-list" class="branch-list"></div>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main">
+        <div id="toolbar" class="toolbar">
+          <div class="toolbar-center">
+            <div class="search-wrapper">
+              <span class="search-icon">&#x1F50D;</span>
+              <input type="text" id="global-search" class="search-input" placeholder="Search branches, commits, files... (Ctrl+P)">
+            </div>
+          </div>
+          <div class="toolbar-right">
+            <button id="btn-fetch" class="btn btn-toolbar">Fetch</button>
+            <button id="btn-pull" class="btn btn-toolbar">Pull</button>
+            <button id="btn-push" class="btn btn-toolbar">Push</button>
+            <button id="btn-refresh" class="btn btn-toolbar">&#x21bb;</button>
+          </div>
+        </div>
+
+        <div class="content-area" id="main-content-area">
+          <div id="main-view" class="graph-panel">
+            <div class="graph-view" id="graph-view">
+              <div class="graph-header">
+                <div class="gh-graph"></div>
+                <div class="gh-message">Message</div>
+                <div class="gh-author">Author</div>
+                <div class="gh-date">Date</div>
+                <div class="gh-hash">Hash</div>
+              </div>
+              <div id="graph-body" class="graph-canvas"></div>
+            </div>
+          </div>
+
+          <div class="resize-handle-h" id="resize-handle-h"></div>
+
+          <div id="detail-panel" class="detail-panel">
+            <div class="detail-panel-header">
+              <span id="detail-title">Details</span>
+              <div style="display:flex;gap:4px">
+                <button id="btn-diff-unified" class="btn btn-small active">Unified</button>
+                <button id="btn-diff-split" class="btn btn-small">Split</button>
+              </div>
+            </div>
+            <div id="detail-body" class="detail-panel-body">
+              <div class="diff-placeholder">Select a commit to view changes</div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div id="status-bar" class="status-bar">
+    <div class="status-left">
+      <span id="status-repo"></span>
+      <span id="status-branch"></span>
+    </div>
+    <div class="status-right">
+      <span id="status-info"></span>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <div id="search-overlay" class="search-overlay" style="display:none">
+    <div class="search-panel">
+      <div class="search-panel-input">
+        <span style="color:var(--text-tertiary);font-size:14px">&#x1F50D;</span>
+        <input type="text" id="search-input" placeholder="Search branches, commits, files, tags..." autofocus>
+        <span style="font-size:10px;color:var(--text-tertiary)">esc to close</span>
+      </div>
+      <div class="search-filters" id="search-filters"></div>
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <div id="merge-workspace-overlay" style="display:none;position:fixed;inset:0;z-index:var(--z-modal);background:var(--bg-app);flex-direction:column"></div>
+
+  <div id="modal-overlay" class="confirm-overlay" style="display:none">
+    <div class="confirm-dialog" id="modal-dialog"></div>
+  </div>
+</div>
+
+<script src="components/repo-tabs.js"></script>
+<script src="components/branch-list.js"></script>
+<script src="components/graph-view.js"></script>
+<script src="components/diff-viewer.js"></script>
+<script src="components/search.js"></script>
+<script src="components/branch-compare.js"></script>
+<script src="components/merge-workspace.js"></script>
+<script src="components/conflict-resolver.js"></script>
+<script src="components/status-bar.js"></script>
+<script src="components/welcome.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

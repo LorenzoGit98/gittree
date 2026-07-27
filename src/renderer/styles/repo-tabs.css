@@ -1,0 +1,95 @@
+.repo-tabs-bar {
+  display: flex;
+  align-items: stretch;
+  background: var(--bg-app);
+  border-bottom: 1px solid var(--border);
+  min-height: 34px;
+  position: relative;
+}
+
+.repo-tab-container {
+  display: flex;
+  align-items: stretch;
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-app-region: no-drag;
+}
+.repo-tab-container::-webkit-scrollbar { height: 0; }
+
+.repo-tab {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+  background: var(--bg-app);
+  border-right: 1px solid var(--border);
+  border-bottom: 2px solid transparent;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+  min-width: 100px;
+  max-width: 220px;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.repo-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.repo-tab.active {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border-bottom-color: var(--accent);
+}
+
+.repo-tab-name {
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 400;
+}
+
+.repo-tab.active .repo-tab-name {
+  font-weight: 500;
+}
+
+.repo-tab-close {
+  width: 16px; height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  opacity: 0;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.repo-tab:hover .repo-tab-close { opacity: 1; }
+.repo-tab-close:hover { background: var(--error); color: white; }
+
+.tab-add-btn {
+  width: 28px; height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+  margin: 2px var(--space-1);
+}
+.tab-add-btn:hover { background: var(--bg-hover); color: var(--text-primary); }

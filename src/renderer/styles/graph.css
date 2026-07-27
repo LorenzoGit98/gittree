@@ -1,0 +1,129 @@
+.graph-view {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+}
+
+.graph-canvas {
+  position: relative;
+  min-height: 100%;
+}
+
+.graph-row {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 var(--space-2);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  gap: 0;
+}
+.graph-row:hover { background: var(--bg-hover); }
+.graph-row.selected { background: var(--bg-active); }
+
+.graph-cell {
+  width: 24px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  height: 100%;
+}
+
+.graph-node {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--graph-node);
+  border: 1.5px solid var(--graph-node);
+  z-index: 1;
+  transition: all var(--transition-fast);
+}
+.graph-row.selected .graph-node { background: var(--graph-active); border-color: var(--graph-active); }
+
+.graph-line-v {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--graph-line);
+  z-index: 0;
+}
+
+.graph-line-h {
+  position: absolute;
+  height: 2px;
+  background: var(--graph-line);
+  z-index: 0;
+}
+
+.graph-commit-message {
+  flex: 3;
+  font-size: 12px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 var(--space-2);
+}
+
+.graph-commit-author {
+  flex: 1.5;
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 var(--space-2);
+}
+
+.graph-commit-date {
+  flex: 0.8;
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  text-align: right;
+  padding: 0 var(--space-2);
+  white-space: nowrap;
+}
+
+.graph-commit-hash {
+  flex: 0.6;
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+  color: var(--text-tertiary);
+  text-align: right;
+  padding-right: var(--space-2);
+}
+
+.graph-refs {
+  display: flex;
+  gap: var(--space-1);
+  margin-left: var(--space-1);
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.graph-header {
+  display: flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-2);
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  min-height: 26px;
+}
+
+.graph-header .gh-graph { width: 24px; flex-shrink: 0; }
+.graph-header .gh-message { flex: 3; padding: 0 var(--space-2); }
+.graph-header .gh-author { flex: 1.5; padding: 0 var(--space-2); }
+.graph-header .gh-date { flex: 0.8; text-align: right; padding: 0 var(--space-2); }
+.graph-header .gh-hash { flex: 0.6; text-align: right; padding-right: var(--space-2); }

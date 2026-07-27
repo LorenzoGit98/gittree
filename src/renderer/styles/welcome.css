@@ -1,0 +1,63 @@
+.welcome {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  background: var(--bg-app);
+}
+
+.welcome-content {
+  text-align: center;
+  max-width: 400px;
+}
+
+.welcome-content h1 {
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--space-1);
+  letter-spacing: -0.3px;
+}
+
+.welcome-content p {
+  color: var(--text-tertiary);
+  font-size: var(--text-md);
+  font-weight: var(--weight-regular);
+  margin-bottom: var(--space-8);
+}
+
+.welcome-actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: center;
+  margin-bottom: var(--space-8);
+}
+
+.welcome-recent {
+  text-align: left;
+  margin-top: var(--space-4);
+}
+
+.welcome-recent-title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-2);
+  padding: 0 var(--space-3);
+}
+
+.welcome-recent-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+}
+
+.welcome-recent-item:hover { background: var(--bg-hover); }
+.welcome-recent-item .recent-name { font-size: 12px; color: var(--text-primary); }
+.welcome-recent-item .recent-path { font-size: 10.5px; color: var(--text-tertiary); }

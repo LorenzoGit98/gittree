@@ -1,0 +1,44 @@
+{
+  "name": "gittree-minimal",
+  "version": "1.0.0",
+  "description": "A lightweight, fast Git GUI client — SourceTree alternative",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux"
+  },
+  "build": {
+    "appId": "com.gittreeminimal.app",
+    "productName": "GitTree Minimal",
+    "files": [
+      "src/**/*",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.developer-tools"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Development"
+    }
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "diff2html": "^3.4.56",
+    "electron": "^43.2.0",
+    "simple-git": "^3.36.0"
+  },
+  "devDependencies": {
+    "electron-builder": "^26.15.3"
+  }
+}
