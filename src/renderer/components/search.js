@@ -75,8 +75,8 @@ class GlobalSearch {
       } catch {}
     }
 
-    if (this.app.repoTabs?.repos) {
-      this.app.repoTabs.repos.forEach(r => {
+    if (this.app.components.repoTabs?.repos) {
+      this.app.components.repoTabs.repos.forEach(r => {
         this.allData.push({ type: 'repo', label: r.name, subtitle: r.path, detail: 'Repository', data: { path: r.path } });
       });
     }

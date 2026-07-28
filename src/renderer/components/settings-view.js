@@ -122,6 +122,7 @@ class SettingsView {
     `;
     this.overlay.classList.remove('is-hidden');
     this.bindSettingsEvents(repo, metadata);
+    this.populateVersion();
     this.dialog.querySelector('[data-settings-close]')?.focus();
   }
 
@@ -129,6 +130,14 @@ class SettingsView {
     this.overlay.classList.add('is-hidden');
     this.dialog.className = 'confirm-dialog';
     this.dialog.innerHTML = '';
+  }
+
+  async populateVersion() {
+    const el = document.getElementById('about-version');
+    if (el && window.gitTree.getAppVersion) {
+      const v = await window.gitTree.getAppVersion();
+      el.textContent = v;
+    }
   }
 
   renderProjectSchedule(schedule = {}, metadata = {}) {

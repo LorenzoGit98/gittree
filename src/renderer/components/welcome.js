@@ -18,7 +18,7 @@ class WelcomeScreen {
       if (!dir) return;
       const isRepo = await window.gitTree.checkIsGitRepo(dir);
       if (!isRepo) { this.app.showToast(t('feedback.notRepo'), 'error'); return; }
-      await this.app.repoTabs.addRepo(dir);
+      await this.app.components.repoTabs.addRepo(dir);
     } catch (e) { this.app.showToast('Error: ' + e.message, 'error'); }
   }
 
@@ -38,7 +38,7 @@ class WelcomeScreen {
         el.className = 'welcome-recent-item';
         el.innerHTML = `<div class="recent-name">${this.esc(repo.name)}</div><div class="recent-path">${this.esc(repo.path)}</div>`;
         el.addEventListener('click', () => {
-          this.app.repoTabs.addRepo(repo.path);
+          this.app.components.repoTabs.addRepo(repo.path);
         });
         this.recentList.appendChild(el);
       });

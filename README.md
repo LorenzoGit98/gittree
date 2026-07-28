@@ -16,7 +16,7 @@
   <img alt="Status" src="https://img.shields.io/badge/status-beta-yellow">
 </p>
 
-> **v0.1.0 — Beta.** Alcune funzionalità sono ancora in evoluzione. Breaking changes possibili prima di v1.0.0. [Contribuisci](CONTRIBUTING.md).
+> **v0.1.0 — Beta.** Alcune funzionalità sono ancora in evoluzione. Breaking changes possibili prima di v0.2.0. [Contribuisci](CONTRIBUTING.md).
 
 ---
 
