@@ -173,17 +173,23 @@ class MergeWorkspace {
           <span class="merge-action-summary">
             You are about to merge <strong>${this.esc(d.source)}</strong> into <strong>${this.esc(d.target)}</strong>
           </span>
-          <button id="merge-confirm-btn" class="btn btn-primary merge-confirm"
+          <button id="merge-only-btn" class="btn btn-primary merge-confirm"
             ${hasLocalChanges ? `disabled title="${this.esc(t('mergeWorkspace.mergeBlocked'))}"` : ''}>
             <i class="ph ph-git-merge"></i>
             Merge ${this.esc(d.source)} into ${this.esc(d.target)}
+          </button>
+          <button id="merge-push-btn" class="btn merge-confirm"
+            ${hasLocalChanges ? `disabled title="${this.esc(t('mergeWorkspace.mergeBlocked'))}"` : ''}>
+            <i class="ph ph-git-merge"></i>
+            Merge &amp; Push
           </button>
         </div>
       </div>
     `;
 
     document.getElementById('merge-cancel-btn').onclick = () => this.hide();
-    document.getElementById('merge-confirm-btn').onclick = () => this.executeMerge();
+    document.getElementById('merge-only-btn').onclick = () => this.executeMerge(false);
+    document.getElementById('merge-push-btn').onclick = () => this.executeMerge(true);
     const viewChangesButton = document.getElementById('merge-view-changes-btn');
     if (viewChangesButton) {
       viewChangesButton.onclick = () => {
@@ -213,7 +219,7 @@ class MergeWorkspace {
     this.container.classList.remove('is-hidden');
   }
 
-  async executeMerge() {
+  async executeMerge(andPush = false) {
     const repo = this.app.state.repo;
     if (!repo) return;
     if (this.mergeData?.status?.isClean === false) {
@@ -234,6 +240,16 @@ class MergeWorkspace {
     this.hide();
     this.app.showToast('Merge completed', 'success');
     this.app.emit('refresh');
+
+    if (andPush) {
+      this.app.showToast('Pushing...');
+      const pushResult = await window.gitTree.push(repo.path, 'origin', this.mergeData.target);
+      if (pushResult.error) {
+        this.app.showToast('Merge done, but push failed: ' + pushResult.error, 'error');
+      } else {
+        this.app.showToast('Merge & Push complete', 'success');
+      }
+    }
   }
 
   async stashAndReload() {
