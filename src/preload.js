@@ -159,6 +159,9 @@ contextBridge.exposeInMainWorld('gitTree', {
   getTags: (repoPath) =>
     ipcRenderer.invoke('git:tags', repoPath),
 
+  createTag: (repoPath, name, commitHash, message = '') =>
+    ipcRenderer.invoke('git:create-tag', repoPath, name, commitHash, message),
+
   getOperationState: (repoPath) =>
     ipcRenderer.invoke('git:operation-state', repoPath),
 

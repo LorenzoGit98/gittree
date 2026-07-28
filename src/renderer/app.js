@@ -160,12 +160,49 @@ class GitTreeApp {
   setupPlatformChrome() {
     this.platform = window.gitTree.platform || 'win32';
     document.documentElement.dataset.platform = this.platform;
-    const searchShortcut = document.querySelector('[data-platform-shortcut="search"]');
-    if (searchShortcut) {
-      searchShortcut.textContent = this.platform === 'darwin' ? '⌘ P' : 'Ctrl P';
-    }
+    this.setupShortcutHints();
     window.gitTree.onWindowState(state => this.updateWindowChrome(state));
     window.gitTree.getWindowState().then(state => this.updateWindowChrome(state));
+  }
+
+  shortcutDefinitions() {
+    return {
+      open: { key: 'o' },
+      search: { key: 'p' },
+      fetch: { key: 'f', shift: true },
+      pull: { key: 'l', shift: true },
+      push: { key: 'p', shift: true },
+      newBranch: { key: 'b', shift: true },
+      refresh: { key: 'F5', primary: false }
+    };
+  }
+
+  shortcutLabel(action) {
+    const shortcut = this.shortcutDefinitions()[action];
+    if (!shortcut) return '';
+    if (shortcut.primary === false) return shortcut.key;
+    if (this.platform === 'darwin') {
+      return `⌘${shortcut.shift ? '⇧' : ''}${shortcut.key.toUpperCase()}`;
+    }
+    return `Ctrl+${shortcut.shift ? 'Shift+' : ''}${shortcut.key.toUpperCase()}`;
+  }
+
+  setupShortcutHints() {
+    document.querySelectorAll('[data-platform-shortcut]').forEach(element => {
+      element.textContent = this.shortcutLabel(element.dataset.platformShortcut);
+    });
+    const titleKeys = {
+      fetch: 'actions.fetch',
+      pull: 'actions.pull',
+      push: 'actions.push',
+      newBranch: 'sidebar.newBranch',
+      refresh: 'actions.refresh'
+    };
+    document.querySelectorAll('[data-shortcut-title]').forEach(element => {
+      const action = element.dataset.shortcutTitle;
+      element.title = `${t(titleKeys[action])} (${this.shortcutLabel(action)})`;
+      element.setAttribute('aria-label', element.title);
+    });
   }
 
   updateWindowChrome(state) {
@@ -527,6 +564,7 @@ class GitTreeApp {
 
   setInspectorState(state, persist = true) {
     const safeState = ['open', 'closed', 'maximized'].includes(state) ? state : 'open';
+    const previousState = this.inspectorState;
     const workspace = document.getElementById('workspace-body');
     const panel = document.getElementById('detail-panel');
     const toggleButton = document.getElementById('btn-toggle-inspector');
@@ -546,6 +584,9 @@ class GitTreeApp {
     maximizeButton.dataset.i18nTitle = isMaximized ? 'details.restore' : 'details.maximize';
     maximizeButton.title = t(maximizeButton.dataset.i18nTitle);
 
+    if (previousState !== safeState) {
+      this.components.diffViewer?.setInspectorExpanded(isMaximized);
+    }
     if (persist) localStorage.setItem('gittree.workspace.inspector', safeState);
   }
 
@@ -591,12 +632,35 @@ class GitTreeApp {
 
   setupGlobalShortcuts() {
     document.addEventListener('keydown', (e) => {
-      if (this.isPrimaryModifier(e) && e.key.toLowerCase() === 'o') {
+      const editable = e.target.closest?.('input, textarea, select, [contenteditable="true"]');
+      const modalOpen = !document.getElementById('modal-overlay').classList.contains('is-hidden');
+      const primary = this.isPrimaryModifier(e);
+      const key = e.key.toLowerCase();
+
+      if (!e.repeat && !editable && !modalOpen && primary && !e.shiftKey && key === 'o') {
         e.preventDefault();
         this.components.welcome.openRepo();
       }
-      if (e.key === 'F5') { e.preventDefault(); this.refresh(); }
-      if (e.key === 'Escape' && this.inspectorState === 'maximized') {
+      if (!e.repeat && !editable && !modalOpen && primary && e.shiftKey) {
+        if (key === 'f') {
+          e.preventDefault();
+          this.doFetch();
+        } else if (key === 'l') {
+          e.preventDefault();
+          this.doPull();
+        } else if (key === 'p') {
+          e.preventDefault();
+          this.doPush();
+        } else if (key === 'b') {
+          e.preventDefault();
+          this.components.branchList.promptCreateBranch();
+        }
+      }
+      if (!editable && !modalOpen && e.key === 'F5') {
+        e.preventDefault();
+        this.refresh();
+      }
+      if (e.key === 'Escape' && !modalOpen && this.inspectorState === 'maximized') {
         this.setInspectorState('open');
       }
     });
@@ -604,6 +668,7 @@ class GitTreeApp {
 
   refreshLocalizedView() {
     Theme.syncControls();
+    this.setupShortcutHints();
     this.updateWindowChrome(this.windowState);
     this.setInspectorState(this.inspectorState, false);
     if (this.state.repo) {

@@ -178,3 +178,39 @@ test('merge strategy is passed through for no-ff and squash without implicit com
   assert.equal(squash.git('rev-parse', 'HEAD'), squash.git('rev-parse', 'main'));
   assert.match(squash.git('diff', '--cached', '--name-only'), /feature\.txt/);
 });
+
+test('branch creation validates, creates and checks out the new branch', async t => {
+  const repo = createRepository();
+  t.after(() => repo.cleanup());
+  repo.write('README.md', 'base\n');
+  repo.git('add', '.');
+  repo.git('commit', '-m', 'base');
+
+  const service = new GitService(repo.repository);
+  const result = await service.createBranch('feature/quick-branch');
+
+  assert.equal(result.success, true);
+  assert.equal(result.name, 'feature/quick-branch');
+  assert.equal(repo.git('branch', '--show-current'), 'feature/quick-branch');
+  await assert.rejects(service.createBranch('invalid branch name'), /Invalid branch name/);
+});
+
+test('tags can be lightweight or annotated and reject invalid or duplicate names', async t => {
+  const repo = createRepository();
+  t.after(() => repo.cleanup());
+  repo.write('README.md', 'base\n');
+  repo.git('add', '.');
+  repo.git('commit', '-m', 'base');
+  const head = repo.git('rev-parse', 'HEAD');
+
+  const service = new GitService(repo.repository);
+  const lightweight = await service.createTag('v1.0.0', head);
+  const annotated = await service.createTag('release/one', head, 'First release');
+
+  assert.equal(lightweight.annotated, false);
+  assert.equal(annotated.annotated, true);
+  assert.equal(repo.git('rev-parse', 'v1.0.0'), head);
+  assert.equal(repo.git('cat-file', '-t', 'release/one'), 'tag');
+  await assert.rejects(service.createTag('v1.0.0', head), /already exists/);
+  await assert.rejects(service.createTag('invalid tag name', head), /Invalid tag name/);
+});

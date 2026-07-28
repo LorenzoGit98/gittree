@@ -591,6 +591,16 @@ function registerIpcHandlers() {
     }
   });
 
+  ipcMain.handle('git:create-tag', async (_event, repoPath, name, commitHash, message) => {
+    try {
+      const result = await getGitService(repoPath).createTag(name, commitHash, message);
+      sendToRenderer('operation:log', `Created tag ${result.name}`);
+      return result;
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
   ipcMain.handle('git:operation-state', async (_event, repoPath) => {
     try {
       return await getGitService(repoPath).getOperationState();

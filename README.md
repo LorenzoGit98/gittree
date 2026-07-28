@@ -109,8 +109,12 @@ Actions that are not applicable remain visible but disabled with an explanation.
 - Keep fewer than 100 commit rows in the DOM on large histories.
 - Resize Graph, Message, Author, Date and Hash columns independently.
 - Persist column widths per user.
+- Filter history by message, hash, author and reference type.
+- Sort by topology, date, author, message or hash and persist the choice per repository.
 
 The graph is derived from Git topology rather than being a decorative approximation.
+When a non-topological sort is active, GitTree intentionally replaces lane connections with
+a neutral commit marker so it never presents a misleading graph.
 
 ### History, Changes and commit workflow
 
@@ -146,6 +150,7 @@ GitTree never accepts arbitrary patches or raw Git commands from the renderer. S
 - Preview rebase and cherry-pick targets, files, status and pending operations.
 - Rebase the current branch onto a selected commit.
 - Cherry-pick selected commits parent-first and oldest-first.
+- Create lightweight or annotated tags directly from a commit context menu.
 - Keep merge commits out of the initial cherry-pick flow until a mainline picker exists.
 - Detect merge, rebase and cherry-pick operations after an application restart.
 - Read base, ours and theirs from Git index stages.
@@ -180,7 +185,7 @@ GitLab Request changes remains explicitly browser-assisted. Creating and merging
 
 ### Hosting providers
 
-GitTree recognizes GitHub, GitLab and Bitbucket Cloud remotes over SSH and HTTPS. It generates provider-specific compare, pull request or merge request URLs without handling passwords, SSH private keys or browser credentials.
+GitTree recognizes GitHub, GitLab, Bitbucket Cloud and Azure DevOps remotes over SSH and HTTPS. It generates provider-specific compare, pull request or merge request URLs without handling passwords, SSH private keys or browser credentials. Azure DevOps cloud and legacy `visualstudio.com` remote formats are normalized to the browser-based pull request creation flow.
 
 ### Brand and commercial use
 
@@ -192,7 +197,22 @@ See [TRADEMARKS.md](TRADEMARKS.md) for the branding policy.
 
 ### Settings and automation
 
-The Settings panel contains two local, repository-aware areas.
+The Settings panel contains repository-aware automation, Git profiles and a dedicated keyboard-shortcut guide. Toolbar actions stay visually compact; the complete shortcut reference opens as its own Settings view.
+
+### Keyboard workflow and quick branches
+
+Repository actions have cross-platform shortcuts that use `Ctrl` on Windows/Linux and `⌘` on macOS:
+
+| Action | Windows and Linux | macOS |
+| --- | --- | --- |
+| Fetch | `Ctrl+Shift+F` | `⌘⇧F` |
+| Pull | `Ctrl+Shift+L` | `⌘⇧L` |
+| Push | `Ctrl+Shift+P` | `⌘⇧P` |
+| Create branch | `Ctrl+Shift+B` | `⌘⇧B` |
+
+Quick branch creation offers Feature, Bug fix and Custom modes. Feature and Bug fix automatically reuse project conventions such as `feature/`, `feat/`, `bugfix/` or `fix/` found in local and remote branch folders. The proposed full ref is previewed and validated before Git creates and checks out the branch.
+
+The complete workflow is documented in the [GitTree User Guide](docs/USER_GUIDE.md).
 
 #### Project-level automatic fetch
 

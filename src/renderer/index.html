@@ -107,16 +107,20 @@
 
     <div class="workspace-command-bar" role="toolbar" aria-label="Repository actions" data-i18n-aria-label="actions.repositoryActions">
       <div class="workspace-command-group">
-        <button id="btn-fetch" class="btn btn-toolbar">
+        <button id="btn-fetch" class="btn btn-toolbar" type="button"
+          data-shortcut-title="fetch">
           <i class="ph ph-cloud-arrow-down"></i><span data-i18n="actions.fetch">Fetch</span>
         </button>
-        <button id="btn-pull" class="btn btn-toolbar">
+        <button id="btn-pull" class="btn btn-toolbar" type="button"
+          data-shortcut-title="pull">
           <i class="ph ph-download-simple"></i><span data-i18n="actions.pull">Pull</span>
         </button>
-        <button id="btn-push" class="btn btn-toolbar">
+        <button id="btn-push" class="btn btn-toolbar" type="button"
+          data-shortcut-title="push">
           <i class="ph ph-upload-simple"></i><span data-i18n="actions.push">Push</span>
         </button>
-        <button id="btn-refresh" class="btn-icon" title="Refresh" data-i18n-title="actions.refresh">
+        <button id="btn-refresh" class="btn-icon" type="button"
+          title="Refresh" data-shortcut-title="refresh">
           <i class="ph ph-arrows-clockwise"></i>
         </button>
       </div>
@@ -144,7 +148,8 @@
               <i class="ph ph-circle-notch" aria-hidden="true"></i>
               <span data-i18n="common.loading">Loading…</span>
             </span>
-            <button id="btn-new-branch" class="btn-icon" title="New branch" data-i18n-title="sidebar.newBranch">
+            <button id="btn-new-branch" class="btn-icon" type="button"
+              title="New branch" data-shortcut-title="newBranch">
               <i class="ph ph-plus"></i>
             </button>
           </div>
@@ -214,12 +219,46 @@
           <button class="search-trigger" id="global-search">
             <i class="ph ph-magnifying-glass"></i>
             <span data-i18n="search.trigger">Search commits, branches and files</span>
-            <kbd data-platform-shortcut="search">Ctrl P</kbd>
+            <kbd data-platform-shortcut="search">Ctrl+P</kbd>
           </button>
         </div>
 
         <div class="content-area" id="main-content-area">
           <div id="main-view" class="graph-panel">
+            <div class="history-controls" aria-label="History filters and sorting"
+              data-i18n-aria-label="history.filtersLabel">
+              <label class="history-filter-search">
+                <i class="ph ph-funnel" aria-hidden="true"></i>
+                <input id="history-filter-query" type="search" autocomplete="off"
+                  data-i18n-placeholder="history.filterPlaceholder"
+                  placeholder="Filter message, hash or author">
+              </label>
+              <select id="history-filter-author" class="history-filter-select" aria-label="Author"
+                data-i18n-aria-label="history.author">
+                <option value="" data-i18n="history.allAuthors">All authors</option>
+              </select>
+              <select id="history-filter-ref" class="history-filter-select" aria-label="All references"
+                data-i18n-aria-label="history.allRefs">
+                <option value="all" data-i18n="history.allRefs">All references</option>
+                <option value="branches" data-i18n="history.branchesOnly">Branches only</option>
+                <option value="tags" data-i18n="history.tagsOnly">Tags only</option>
+                <option value="head" data-i18n="history.headOnly">HEAD only</option>
+                <option value="none" data-i18n="history.withoutRefs">Without references</option>
+              </select>
+              <select id="history-sort" class="history-filter-select history-sort-select" aria-label="Topological order"
+                data-i18n-aria-label="history.sortTopology">
+                <option value="topology" data-i18n="history.sortTopology">Topological order</option>
+                <option value="date-desc" data-i18n="history.sortNewest">Newest first</option>
+                <option value="date-asc" data-i18n="history.sortOldest">Oldest first</option>
+                <option value="author" data-i18n="history.sortAuthor">Author A–Z</option>
+                <option value="subject" data-i18n="history.sortSubject">Message A–Z</option>
+                <option value="hash" data-i18n="history.sortHash">Hash A–Z</option>
+              </select>
+              <button id="history-filter-clear" class="btn btn-icon history-filter-clear" type="button"
+                title="Clear filters" data-i18n-title="history.clearFilters">
+                <i class="ph ph-x" aria-hidden="true"></i>
+              </button>
+            </div>
             <div class="graph-view" id="graph-view">
               <div class="graph-header">
                 <div class="graph-column-header gh-graph" data-column="graph">
@@ -404,6 +443,7 @@
 <script src="components/settings-view.js"></script>
 <script src="components/branch-context-menu.js"></script>
 <script src="components/commit-context-menu.js"></script>
+<script src="components/branch-naming.js"></script>
 <script src="components/branch-list.js"></script>
 <script src="components/graph-layout.js"></script>
 <script src="components/graph-view.js"></script>

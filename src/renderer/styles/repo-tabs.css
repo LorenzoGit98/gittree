@@ -70,6 +70,19 @@
   height: 18px;
 }
 
+.repo-tab-sync-label {
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-1);
+  border-right: 1px solid var(--border-subtle);
+  color: var(--text-tertiary);
+  font-size: 8px;
+  font-weight: var(--weight-semibold);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
 .repo-tab-close {
   width: 18px;
   height: 18px;

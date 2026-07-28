@@ -13,7 +13,12 @@ class GlobalSearch {
   init() {
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape' && this.visible) { this.hide(); return; }
-      if (this.app.isPrimaryModifier(e) && e.key.toLowerCase() === 'p') {
+      if (
+        this.app.isPrimaryModifier(e) &&
+        !e.shiftKey &&
+        !e.altKey &&
+        e.key.toLowerCase() === 'p'
+      ) {
         e.preventDefault();
         this.toggle();
         return;

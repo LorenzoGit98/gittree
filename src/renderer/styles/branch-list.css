@@ -239,3 +239,77 @@
   background: var(--surface-hover);
   color: var(--text-primary);
 }
+
+.quick-branch-dialog {
+  width: min(520px, 100%);
+}
+
+.quick-branch-heading h3 {
+  margin-top: var(--space-1);
+  margin-bottom: var(--space-2);
+}
+
+.quick-branch-heading p {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+
+.quick-branch-types {
+  min-width: 0;
+  border: 0;
+}
+
+.quick-branch-types legend {
+  margin-bottom: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.quick-branch-types .segmented-control {
+  width: 100%;
+}
+
+.quick-branch-types .btn {
+  flex: 1;
+}
+
+.quick-branch-preview {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-secondary);
+}
+
+.quick-branch-preview span,
+.quick-branch-convention {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.quick-branch-preview code {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quick-branch-convention,
+.quick-branch-error {
+  min-height: 18px;
+  margin: calc(var(--space-3) * -1) 0 0;
+}
+
+.quick-branch-error {
+  color: var(--error-text);
+  font-size: var(--text-xs);
+}
+
+.quick-branch-form.is-submitting [data-create] i {
+  animation: project-loading-spin 0.8s linear infinite;
+}

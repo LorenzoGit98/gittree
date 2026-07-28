@@ -1406,6 +1406,55 @@ class GitService {
       throw new Error(`Failed to get tags: ${err.message}`);
     }
   }
+
+  async createTag(name, commitHash, message = '') {
+    await this.assertNoPendingOperation();
+    await this.assertCommitish(commitHash);
+    if (
+      typeof name !== 'string' ||
+      !name.trim() ||
+      name.length > 255 ||
+      name.startsWith('-') ||
+      /[\0-\x20\x7f~^:?*[\]\\]/.test(name) ||
+      name.includes('..') ||
+      name.includes('@{') ||
+      name.endsWith('.') ||
+      name.endsWith('/') ||
+      name.split('/').some(part => !part || part.startsWith('.') || part.endsWith('.lock'))
+    ) {
+      throw new Error('Invalid tag name');
+    }
+    const safeName = name.trim();
+    try {
+      await this.git.raw(['check-ref-format', `refs/tags/${safeName}`]);
+    } catch {
+      throw new Error(`Invalid tag name: ${safeName}`);
+    }
+    try {
+      await this.git.raw(['show-ref', '--verify', `refs/tags/${safeName}`]);
+      throw new Error(`Tag already exists: ${safeName}`);
+    } catch (error) {
+      if (/Tag already exists/.test(error.message)) throw error;
+    }
+    if (typeof message !== 'string' || message.length > 10000 || message.includes('\0')) {
+      throw new Error('Invalid tag annotation');
+    }
+    const annotation = message.trim();
+    const args = annotation
+      ? ['tag', '-a', safeName, commitHash, '-m', annotation]
+      : ['tag', safeName, commitHash];
+    try {
+      await this.git.raw(args);
+      return {
+        success: true,
+        name: safeName,
+        hash: commitHash,
+        annotated: Boolean(annotation)
+      };
+    } catch (error) {
+      throw new Error(`Failed to create tag: ${error.message}`);
+    }
+  }
 }
 
 module.exports = GitService;

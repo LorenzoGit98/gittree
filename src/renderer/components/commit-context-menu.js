@@ -58,6 +58,13 @@ class CommitContextMenu {
     const cherryPick = this.previews['cherry-pick'];
     const actions = [
       {
+        action: 'create-tag',
+        icon: 'ph-tag',
+        label: t('commitMenu.createTag'),
+        disabled: this.hashes.length !== 1,
+        reason: this.hashes.length !== 1 ? t('commitMenu.createTagSingle') : ''
+      },
+      {
         action: 'rebase',
         icon: 'ph-git-branch',
         label: t('commitMenu.rebase'),
@@ -93,6 +100,12 @@ class CommitContextMenu {
 
   async execute(action) {
     const repo = this.app.state.repo;
+    if (action === 'create-tag') {
+      if (!repo || this.hashes.length !== 1) return;
+      this.close();
+      await this.createTagDialog(repo, this.hashes[0]);
+      return;
+    }
     const preview = this.previews[action];
     if (!repo || !preview) return;
     this.close();
@@ -109,6 +122,102 @@ class CommitContextMenu {
     }
     this.app.showToast(t('commitMenu.completed'), 'success');
     await this.app.refresh({ selectHash: result.head, silent: true });
+  }
+
+  createTagDialog(repo, hash) {
+    const overlay = document.getElementById('modal-overlay');
+    const dialog = document.getElementById('modal-dialog');
+    return new Promise(resolve => {
+      dialog.className = 'confirm-dialog tag-create-dialog';
+      dialog.setAttribute('role', 'dialog');
+      dialog.setAttribute('aria-modal', 'true');
+      dialog.setAttribute('aria-labelledby', 'tag-create-title');
+      dialog.innerHTML = `
+        <form class="tag-create-form">
+          <span class="eyebrow">${this.esc(hash.slice(0, 8))}</span>
+          <h3 id="tag-create-title">${this.esc(t('commitMenu.createTagTitle'))}</h3>
+          <label>
+            <span>${this.esc(t('commitMenu.tagName'))}</span>
+            <input name="name" maxlength="255" required autofocus
+              placeholder="${this.esc(t('commitMenu.tagNamePlaceholder'))}">
+          </label>
+          <label>
+            <span>${this.esc(t('commitMenu.tagMessage'))}</span>
+            <textarea name="message" maxlength="10000" rows="4"
+              placeholder="${this.esc(t('commitMenu.tagMessagePlaceholder'))}"></textarea>
+          </label>
+          <p class="tag-create-error" data-tag-error aria-live="polite"></p>
+          <div class="confirm-actions">
+            <button class="btn" type="button" data-cancel>${this.esc(t('common.cancel'))}</button>
+            <button class="btn btn-primary" type="submit" data-create>
+              <i class="ph ph-tag" aria-hidden="true"></i>
+              ${this.esc(t('commitMenu.createTagTitle'))}
+            </button>
+          </div>
+        </form>`;
+      overlay.classList.remove('is-hidden');
+      const form = dialog.querySelector('form');
+      const error = dialog.querySelector('[data-tag-error]');
+      const create = dialog.querySelector('[data-create]');
+      const cancel = dialog.querySelector('[data-cancel]');
+      let submitting = false;
+      const finish = value => {
+        document.removeEventListener('keydown', onKeydown);
+        overlay.removeEventListener('click', onOverlayClick);
+        overlay.classList.add('is-hidden');
+        dialog.className = 'confirm-dialog';
+        dialog.removeAttribute('role');
+        dialog.removeAttribute('aria-modal');
+        dialog.removeAttribute('aria-labelledby');
+        dialog.innerHTML = '';
+        resolve(value);
+      };
+      const onKeydown = event => {
+        if (event.key === 'Escape' && !submitting) finish(null);
+      };
+      const onOverlayClick = event => {
+        if (event.target === overlay && !submitting) finish(null);
+      };
+      cancel.onclick = () => {
+        if (!submitting) finish(null);
+      };
+      form.onsubmit = async event => {
+        event.preventDefault();
+        submitting = true;
+        create.disabled = true;
+        cancel.disabled = true;
+        form.elements.name.disabled = true;
+        form.elements.message.disabled = true;
+        create.querySelector('i').className = 'ph ph-circle-notch';
+        error.textContent = '';
+        try {
+          const result = await window.gitTree.createTag(
+            repo.path,
+            form.elements.name.value.trim(),
+            hash,
+            form.elements.message.value
+          );
+          if (!result?.success || result?.error) {
+            throw new Error(result?.error || t('commitMenu.tagCreateFailed'));
+          }
+          finish(result);
+          this.app.showToast(t('commitMenu.tagCreated', { tag: result.name }), 'success');
+          await this.app.refresh({ selectHash: hash, silent: true });
+        } catch (tagError) {
+          submitting = false;
+          create.disabled = false;
+          cancel.disabled = false;
+          form.elements.name.disabled = false;
+          form.elements.message.disabled = false;
+          create.querySelector('i').className = 'ph ph-tag';
+          error.textContent = tagError.message || t('commitMenu.tagCreateFailed');
+          form.elements.name.focus();
+        }
+      };
+      document.addEventListener('keydown', onKeydown);
+      overlay.addEventListener('click', onOverlayClick);
+      form.elements.name.focus();
+    });
   }
 
   previewDialog(preview) {

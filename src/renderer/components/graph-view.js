@@ -12,6 +12,9 @@ class GraphView {
     this.selectedHashes = new Set();
     this.selectionAnchor = null;
     this.searchTerm = '';
+    this.filters = { query: '', author: '', ref: 'all' };
+    this.sortMode = 'topology';
+    this.historyStateStorageKey = 'gittree.history.view';
     this.offset = 0;
     this.hasMore = false;
     this.loading = false;
@@ -41,6 +44,7 @@ class GraphView {
     this.body.appendChild(this.layer);
     this.applyColumnWidths();
     this.setupColumnResize();
+    this.setupHistoryControls();
     this.container.addEventListener('scroll', () => this.scheduleViewport());
     this.container.addEventListener('click', event => {
       const row = event.target.closest('.graph-row');
@@ -62,6 +66,7 @@ class GraphView {
     this.generation += 1;
     const generation = this.generation;
     this.repoPath = repoPath;
+    this.restoreHistoryState();
     this.rows = [];
     this.visibleRows = [];
     this.hashes.clear();
@@ -109,6 +114,7 @@ class GraphView {
       this.offset = page.nextOffset;
       this.hasMore = Boolean(page.hasMore);
       this.applyFilter();
+      this.updateAuthorOptions();
       this.updateGraphWidth();
       this.renderViewport(true);
     } catch (error) {
@@ -122,17 +128,50 @@ class GraphView {
   }
 
   applyFilter() {
-    const needle = this.searchTerm.trim().toLowerCase();
-    this.visibleRows = needle
-      ? this.rows.filter(row => {
-          const commit = row.commit;
-          return commit.subject.toLowerCase().includes(needle)
-            || commit.hash.startsWith(needle)
-            || commit.authorName.toLowerCase().includes(needle);
-        })
-      : this.rows;
+    const globalNeedle = this.searchTerm.trim().toLowerCase();
+    const filterNeedle = this.filters.query.trim().toLowerCase();
+    const rows = this.rows.filter(row => {
+      const commit = row.commit;
+      const searchable = `${commit.subject} ${commit.hash} ${commit.authorName} ${commit.authorEmail || ''}`
+        .toLowerCase();
+      if (globalNeedle && !searchable.includes(globalNeedle)) return false;
+      if (filterNeedle && !searchable.includes(filterNeedle)) return false;
+      if (
+        this.filters.author &&
+        (commit.authorEmail || commit.authorName) !== this.filters.author
+      ) return false;
+      const refs = this.refsByHash.get(commit.hash) || [];
+      if (this.filters.ref === 'branches' && !refs.some(ref => ['branch', 'remote'].includes(ref.type))) {
+        return false;
+      }
+      if (this.filters.ref === 'tags' && !refs.some(ref => ref.type === 'tag')) return false;
+      if (this.filters.ref === 'head' && !refs.some(ref => ref.type === 'head')) return false;
+      if (this.filters.ref === 'none' && refs.length) return false;
+      return true;
+    });
+    this.visibleRows = this.sortRows(rows);
     const height = Math.max(this.visibleRows.length * this.rowHeight, this.container.clientHeight - 36);
     this.body.style.height = `${height}px`;
+  }
+
+  sortRows(rows) {
+    if (this.sortMode === 'topology') return rows;
+    const sorted = [...rows];
+    const compareText = (left, right) => left.localeCompare(
+      right,
+      i18next.language,
+      { sensitivity: 'base' }
+    );
+    sorted.sort((left, right) => {
+      const a = left.commit;
+      const b = right.commit;
+      if (this.sortMode === 'date-desc') return Date.parse(b.date) - Date.parse(a.date);
+      if (this.sortMode === 'date-asc') return Date.parse(a.date) - Date.parse(b.date);
+      if (this.sortMode === 'author') return compareText(a.authorName, b.authorName);
+      if (this.sortMode === 'subject') return compareText(a.subject, b.subject);
+      return compareText(a.hash, b.hash);
+    });
+    return sorted;
   }
 
   scheduleViewport() {
@@ -176,7 +215,11 @@ class GraphView {
 
     const graph = document.createElement('div');
     graph.className = 'graph-cell';
-    graph.appendChild(this.createGraphSvg(layoutRow));
+    graph.appendChild(
+      this.sortMode === 'topology'
+        ? this.createGraphSvg(layoutRow)
+        : this.createSortMarker()
+    );
 
     const message = document.createElement('div');
     message.className = 'graph-commit-message';
@@ -205,6 +248,13 @@ class GraphView {
     hash.textContent = commit.hash.slice(0, 7);
     row.append(graph, message, author, date, hash);
     return row;
+  }
+
+  createSortMarker() {
+    const marker = document.createElement('div');
+    marker.className = 'graph-sort-marker';
+    marker.innerHTML = '<i class="ph ph-git-commit" aria-hidden="true"></i>';
+    return marker;
   }
 
   createGraphSvg(row) {
@@ -419,6 +469,113 @@ class GraphView {
       handle.setAttribute('aria-valuemax', definition.max);
       handle.setAttribute('aria-valuenow', this.columnWidths[column]);
     }
+  }
+
+  setupHistoryControls() {
+    this.filterQuery = document.getElementById('history-filter-query');
+    this.filterAuthor = document.getElementById('history-filter-author');
+    this.filterRef = document.getElementById('history-filter-ref');
+    this.sortSelect = document.getElementById('history-sort');
+    this.filterClear = document.getElementById('history-filter-clear');
+    this.filterQuery?.addEventListener('input', () => {
+      this.filters.query = this.filterQuery.value;
+      this.commitHistoryState();
+    });
+    this.filterAuthor?.addEventListener('change', () => {
+      this.filters.author = this.filterAuthor.value;
+      this.commitHistoryState();
+    });
+    this.filterRef?.addEventListener('change', () => {
+      this.filters.ref = this.filterRef.value;
+      this.commitHistoryState();
+    });
+    this.sortSelect?.addEventListener('change', () => {
+      this.sortMode = this.sortSelect.value;
+      this.commitHistoryState();
+    });
+    this.filterClear?.addEventListener('click', () => {
+      this.filters = { query: '', author: '', ref: 'all' };
+      this.syncHistoryControls();
+      this.commitHistoryState();
+      this.filterQuery?.focus();
+    });
+  }
+
+  commitHistoryState() {
+    this.persistHistoryState();
+    this.container.scrollTop = 0;
+    this.applyFilter();
+    this.renderViewport(true);
+  }
+
+  updateAuthorOptions() {
+    if (!this.filterAuthor) return;
+    const selected = this.filters.author;
+    const authors = new Map();
+    for (const row of this.rows) {
+      const email = row.commit.authorEmail || row.commit.authorName;
+      if (!email || authors.has(email)) continue;
+      authors.set(email, row.commit.authorName || email);
+    }
+    const first = document.createElement('option');
+    first.value = '';
+    first.textContent = t('history.allAuthors');
+    const options = [...authors]
+      .sort((left, right) => left[1].localeCompare(right[1], i18next.language))
+      .map(([email, name]) => {
+        const option = document.createElement('option');
+        option.value = email;
+        option.textContent = name;
+        return option;
+      });
+    this.filterAuthor.replaceChildren(first, ...options);
+    this.filterAuthor.value = authors.has(selected) ? selected : '';
+    if (selected && !authors.has(selected) && !this.hasMore) {
+      this.filters.author = '';
+      this.persistHistoryState();
+    }
+  }
+
+  restoreHistoryState() {
+    let stored = {};
+    try {
+      stored = JSON.parse(localStorage.getItem(this.historyStateStorageKey)) || {};
+    } catch {}
+    const state = stored[this.repoPath] || {};
+    this.filters = {
+      query: typeof state.query === 'string' ? state.query : '',
+      author: typeof state.author === 'string' ? state.author : '',
+      ref: ['all', 'branches', 'tags', 'head', 'none'].includes(state.ref)
+        ? state.ref
+        : 'all'
+    };
+    this.sortMode = [
+      'topology',
+      'date-desc',
+      'date-asc',
+      'author',
+      'subject',
+      'hash'
+    ].includes(state.sort) ? state.sort : 'topology';
+    this.syncHistoryControls();
+  }
+
+  persistHistoryState() {
+    if (!this.repoPath) return;
+    try {
+      const stored = JSON.parse(localStorage.getItem(this.historyStateStorageKey)) || {};
+      stored[this.repoPath] = { ...this.filters, sort: this.sortMode };
+      localStorage.setItem(this.historyStateStorageKey, JSON.stringify(stored));
+    } catch {
+      // Filters remain available for this session when storage is unavailable.
+    }
+  }
+
+  syncHistoryControls() {
+    if (this.filterQuery) this.filterQuery.value = this.filters.query;
+    if (this.filterAuthor) this.filterAuthor.value = this.filters.author;
+    if (this.filterRef) this.filterRef.value = this.filters.ref;
+    if (this.sortSelect) this.sortSelect.value = this.sortMode;
   }
 
   clampColumnWidth(width, definition) {

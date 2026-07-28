@@ -73,6 +73,18 @@ class SettingsView {
           </div>
         </section>
 
+        <section class="settings-section settings-navigation-section"
+          data-settings-section="shortcuts">
+          <button class="settings-navigation-row" type="button" data-settings-shortcuts>
+            <i class="ph ph-keyboard" aria-hidden="true"></i>
+            <div>
+              <strong>${this.esc(t('settings.shortcutsTitle'))}</strong>
+              <span>${this.esc(t('settings.shortcutsHelp'))}</span>
+            </div>
+            <i class="ph ph-caret-right settings-navigation-caret" aria-hidden="true"></i>
+          </button>
+        </section>
+
         <section class="settings-section" data-settings-section="accounts">
           <div class="settings-section-heading">
             <i class="ph ph-users-three" aria-hidden="true"></i>
@@ -128,6 +140,7 @@ class SettingsView {
 
   close() {
     this.overlay.classList.add('is-hidden');
+    this.overlay.onclick = null;
     this.dialog.className = 'confirm-dialog';
     this.dialog.innerHTML = '';
   }
@@ -199,8 +212,82 @@ class SettingsView {
     </div>`;
   }
 
+  openShortcuts() {
+    this.dialog.className = 'confirm-dialog settings-dialog';
+    this.dialog.innerHTML = `
+      <div class="settings-header">
+        <div class="settings-page-title">
+          <button class="btn-icon" type="button" data-shortcuts-back
+            title="${this.esc(t('settings.backToSettings'))}"
+            aria-label="${this.esc(t('settings.backToSettings'))}">
+            <i class="ph ph-arrow-left" aria-hidden="true"></i>
+          </button>
+          <div>
+            <span class="eyebrow">${this.esc(t('settings.eyebrow'))}</span>
+            <h2>${this.esc(t('settings.shortcutsTitle'))}</h2>
+          </div>
+        </div>
+        <button class="btn-icon" type="button" data-settings-close
+          title="${this.esc(t('common.close'))}" aria-label="${this.esc(t('common.close'))}">
+          <i class="ph ph-x" aria-hidden="true"></i>
+        </button>
+      </div>
+      <div class="settings-scroll">
+        <div class="settings-shortcut-intro">
+          <i class="ph ph-info" aria-hidden="true"></i>
+          <p>${this.esc(t('settings.shortcutsGuide'))}</p>
+        </div>
+        <section class="settings-section">
+          <div class="settings-section-heading">
+            <i class="ph ph-git-branch" aria-hidden="true"></i>
+            <div>
+              <h3>${this.esc(t('settings.repositoryShortcuts'))}</h3>
+              <p>${this.esc(t('settings.repositoryShortcutsHelp'))}</p>
+            </div>
+          </div>
+          <div class="settings-shortcut-list">
+            ${this.renderShortcut(t('actions.fetch'), 'fetch', t('settings.fetchShortcutHelp'))}
+            ${this.renderShortcut(t('actions.pull'), 'pull', t('settings.pullShortcutHelp'))}
+            ${this.renderShortcut(t('actions.push'), 'push', t('settings.pushShortcutHelp'))}
+            ${this.renderShortcut(t('sidebar.newBranch'), 'newBranch', t('settings.branchShortcutHelp'))}
+            ${this.renderShortcut(t('actions.refresh'), 'refresh', t('settings.refreshShortcutHelp'))}
+          </div>
+        </section>
+        <section class="settings-section">
+          <div class="settings-section-heading">
+            <i class="ph ph-navigation-arrow" aria-hidden="true"></i>
+            <div>
+              <h3>${this.esc(t('settings.navigationShortcuts'))}</h3>
+            </div>
+          </div>
+          <div class="settings-shortcut-list">
+            ${this.renderShortcut(t('welcome.open'), 'open', t('settings.openShortcutHelp'))}
+            ${this.renderShortcut(t('search.trigger'), 'search', t('settings.searchShortcutHelp'))}
+          </div>
+        </section>
+      </div>`;
+    this.overlay.classList.remove('is-hidden');
+    this.dialog.querySelector('[data-shortcuts-back]').onclick = () => this.open();
+    this.dialog.querySelector('[data-settings-close]').onclick = () => this.close();
+    this.overlay.onclick = event => {
+      if (event.target === this.overlay) this.close();
+    };
+    this.dialog.querySelector('[data-shortcuts-back]').focus();
+  }
+
+  renderShortcut(label, action, description) {
+    return `<div class="settings-shortcut-row">
+      <span class="settings-shortcut-copy">
+        <strong>${this.esc(label)}</strong>
+        <small>${this.esc(description)}</small>
+      </span>
+      <kbd>${this.esc(this.app.shortcutLabel(action))}</kbd>
+    </div>`;
+  }
+
   bindSettingsEvents(repo, metadata) {
     this.dialog.querySelector('[data-settings-close]').onclick = () => this.close();
+    this.dialog.querySelector('[data-settings-shortcuts]').onclick = () => this.openShortcuts();
     this.overlay.onclick = event => {
       if (event.target === this.overlay) this.close();
     };

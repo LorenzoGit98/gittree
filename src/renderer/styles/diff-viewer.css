@@ -112,17 +112,24 @@
 }
 
 .diff-split {
+  min-width: 520px;
+}
+
+.diff-split-columns {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
 }
 
-.diff-split-pane {
-  min-width: 0;
-  overflow: hidden;
-}
-
-.diff-split-pane:first-child {
+.diff-split-columns > .diff-line:nth-child(odd) {
   border-right: 1px solid var(--border-subtle);
+}
+
+.workspace-body.inspector-maximized .diff-split {
+  min-width: 0;
+}
+
+.workspace-body.inspector-maximized .diff-split-columns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .diff-toolbar {

@@ -265,6 +265,11 @@ kbd {
   color: var(--warning-text);
 }
 
+.sync-indicator-part.is-synced {
+  min-width: 20px;
+  color: var(--success-text);
+}
+
 .chip {
   display: inline-flex;
   align-items: center;

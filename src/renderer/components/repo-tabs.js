@@ -39,7 +39,7 @@ class RepoTabs {
 
   updateSync(repoPath, state) {
     if (!repoPath) return;
-    if (!state || (!state.ahead && !state.behind)) {
+    if (!state) {
       this.syncByRepoPath.delete(repoPath);
     } else {
       this.syncByRepoPath.set(repoPath, state);
@@ -49,17 +49,25 @@ class RepoTabs {
 
   createSyncIndicator(repoPath) {
     const state = this.syncByRepoPath.get(repoPath);
-    if (!state || (!state.ahead && !state.behind)) return null;
+    if (!state) return null;
     const indicator = document.createElement('span');
     indicator.className = 'sync-indicator repo-tab-sync';
-    indicator.title = t('tabs.syncState', {
-      branch: state.branch,
-      ahead: state.ahead || 0,
-      behind: state.behind || 0
-    });
+    const synchronized = !state.ahead && !state.behind;
+    indicator.title = synchronized
+      ? t('tabs.syncedState', { branch: state.branch })
+      : t('tabs.syncState', {
+          branch: state.branch,
+          ahead: state.ahead || 0,
+          behind: state.behind || 0
+        });
     indicator.setAttribute('aria-label', indicator.title);
+    const label = document.createElement('span');
+    label.className = 'repo-tab-sync-label';
+    label.textContent = t('tabs.sync');
+    indicator.appendChild(label);
     if (state.ahead > 0) indicator.appendChild(this.syncPart('ahead', state.ahead));
     if (state.behind > 0) indicator.appendChild(this.syncPart('behind', state.behind));
+    if (synchronized) indicator.appendChild(this.syncPart('synced', null));
     return indicator;
   }
 
@@ -67,12 +75,16 @@ class RepoTabs {
     const part = document.createElement('span');
     part.className = `sync-indicator-part is-${direction}`;
     const icon = document.createElement('i');
-    icon.className = `ph ph-arrow-${direction === 'ahead' ? 'up' : 'down'}`;
+    icon.className = direction === 'synced'
+      ? 'ph ph-check'
+      : `ph ph-arrow-${direction === 'ahead' ? 'up' : 'down'}`;
     icon.setAttribute('aria-hidden', 'true');
-    const value = document.createElement('span');
-    value.textContent = String(count);
     part.appendChild(icon);
-    part.appendChild(value);
+    if (count !== null) {
+      const value = document.createElement('span');
+      value.textContent = String(count);
+      part.appendChild(value);
+    }
     return part;
   }
 

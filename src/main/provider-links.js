@@ -20,12 +20,44 @@ function parseRemoteUrl(remoteUrl) {
   }
 
   repositoryPath = repositoryPath.replace(/\.git$/i, '').replace(/\/+$/, '');
+  const normalizedHost = host.toLowerCase();
   const segments = repositoryPath.split('/').filter(Boolean);
   if (!host || segments.length < 2) return null;
 
+  const azureSsh = ['ssh.dev.azure.com', 'vs-ssh.visualstudio.com'].includes(normalizedHost);
+  const azureCloud = normalizedHost === 'dev.azure.com';
+  const azureLegacy = normalizedHost.endsWith('.visualstudio.com')
+    && normalizedHost !== 'vs-ssh.visualstudio.com';
+  if (azureSsh || azureCloud || azureLegacy) {
+    let organization;
+    let project;
+    let repository;
+    if (azureSsh && segments[0]?.toLowerCase() === 'v3') {
+      [, organization, project, repository] = segments;
+    } else if (azureCloud) {
+      [organization, project] = segments;
+      const gitIndex = segments.findIndex(segment => segment.toLowerCase() === '_git');
+      repository = gitIndex >= 0 ? segments[gitIndex + 1] : null;
+    } else {
+      organization = normalizedHost.slice(0, -'.visualstudio.com'.length);
+      [project] = segments;
+      const gitIndex = segments.findIndex(segment => segment.toLowerCase() === '_git');
+      repository = gitIndex >= 0 ? segments[gitIndex + 1] : null;
+    }
+    if (!organization || !project || !repository) return null;
+    return {
+      provider: 'azure',
+      host: normalizedHost,
+      ownerPath: `${organization}/${project}`,
+      repository,
+      organization,
+      project,
+      webBase: `https://dev.azure.com/${organization}/${project}/_git/${repository}`
+    };
+  }
+
   const repository = segments.pop();
   const ownerPath = segments.join('/');
-  const normalizedHost = host.toLowerCase();
   let provider = null;
   if (normalizedHost.includes('github')) provider = 'github';
   else if (normalizedHost.includes('gitlab')) provider = 'gitlab';
@@ -53,6 +85,9 @@ function buildPullRequestUrl(remote, sourceBranch, targetBranch) {
   }
   if (remote.provider === 'bitbucket') {
     return `${remote.webBase}/pull-requests/new?source=${source}&dest=${target}`;
+  }
+  if (remote.provider === 'azure') {
+    return `${remote.webBase}/pullrequestcreate?sourceRef=${source}&targetRef=${target}`;
   }
   return null;
 }

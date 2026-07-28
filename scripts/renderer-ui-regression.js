@@ -237,8 +237,18 @@ const contractExpression = `
     });
     const activeTab = document.querySelector('.repo-tab.active');
     tabSyncVisible =
+      activeTab?.querySelector('.repo-tab-sync-label')?.textContent.trim() === 'Sync' &&
       activeTab?.querySelector('.repo-tab-sync .is-ahead')?.textContent.trim() === '2' &&
       activeTab?.querySelector('.repo-tab-sync .is-behind')?.textContent.trim() === '4';
+    repoTabs.updateSync(window.app.state.repo.path, {
+      branch: 'quality',
+      ahead: 0,
+      behind: 0,
+      upstream: 'origin/quality'
+    });
+    tabSyncVisible = tabSyncVisible &&
+      document.querySelector('.repo-tab.active .repo-tab-sync-label')?.textContent.trim() === 'Sync' &&
+      Boolean(document.querySelector('.repo-tab.active .repo-tab-sync .is-synced'));
     repoTabs.syncByRepoPath = originalRepoSyncState || new Map();
     repoTabs.render();
   }
@@ -254,6 +264,9 @@ const contractExpression = `
   document.getElementById('btn-maximize-inspector').click();
   const maximizes = window.app.inspectorState === 'maximized' &&
     workspaceBody.classList.contains('inspector-maximized');
+  const splitWhenMaximized =
+    window.app.components.diffViewer.mode === 'split' &&
+    document.getElementById('btn-diff-split').classList.contains('active');
   document.getElementById('btn-maximize-inspector').click();
   document.getElementById('btn-close-inspector').click();
   const closes = window.app.inspectorState === 'closed' &&
@@ -372,6 +385,50 @@ const contractExpression = `
   if (originalGraphColumnsStorage == null) localStorage.removeItem(graphColumnsStorageKey);
   else localStorage.setItem(graphColumnsStorageKey, originalGraphColumnsStorage);
 
+  const historyStateKey = graphView.historyStateStorageKey;
+  const originalHistoryStateStorage = localStorage.getItem(historyStateKey);
+  const originalHistoryFilters = { ...graphView.filters };
+  const originalHistorySort = graphView.sortMode;
+  const historyQuery = document.getElementById('history-filter-query');
+  const historySort = document.getElementById('history-sort');
+  const filterHash = graphView.rows[0]?.commit.hash.slice(0, 10) || '';
+  if (historyQuery && filterHash) {
+    historyQuery.value = filterHash;
+    historyQuery.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  const historyFilterWorks =
+    Boolean(filterHash) &&
+    graphView.visibleRows.length >= 1 &&
+    graphView.visibleRows.every(row => row.commit.hash.includes(filterHash));
+  if (historySort) {
+    historySort.value = 'date-asc';
+    historySort.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  const storedHistoryState = JSON.parse(localStorage.getItem(historyStateKey) || '{}')[
+    window.app.state.repo.path
+  ];
+  const historyControlsContract = {
+    present:
+      Boolean(historyQuery) &&
+      Boolean(document.getElementById('history-filter-author')) &&
+      Boolean(document.getElementById('history-filter-ref')) &&
+      Boolean(historySort),
+    filterWorks: historyFilterWorks,
+    sortWorks:
+      graphView.sortMode === 'date-asc' &&
+      Boolean(document.querySelector('.graph-sort-marker')),
+    persists:
+      storedHistoryState?.query === filterHash &&
+      storedHistoryState?.sort === 'date-asc'
+  };
+  graphView.filters = originalHistoryFilters;
+  graphView.sortMode = originalHistorySort;
+  graphView.syncHistoryControls();
+  graphView.applyFilter();
+  graphView.renderViewport(true);
+  if (originalHistoryStateStorage == null) localStorage.removeItem(historyStateKey);
+  else localStorage.setItem(historyStateKey, originalHistoryStateStorage);
+
   const originalLanguage = i18next.language;
   await i18next.changeLanguage('it');
   I18n.translateDOM();
@@ -388,6 +445,14 @@ const contractExpression = `
   const productIcon = document.querySelector('.welcome-brand img');
   const platform = window.gitTree.platform;
   const platformShortcut = document.querySelector('[data-platform-shortcut="search"]');
+  const repositoryShortcutLabels = {
+    fetch: window.app.shortcutLabel('fetch'),
+    pull: window.app.shortcutLabel('pull'),
+    push: window.app.shortcutLabel('push'),
+    newBranch: window.app.shortcutLabel('newBranch')
+  };
+  const toolbarShortcutsAreUncluttered =
+    !document.querySelector('#btn-fetch kbd, #btn-pull kbd, #btn-push kbd, #btn-new-branch kbd');
   const windowMaximizeButton = document.querySelector('#workspace .window-maximize');
   let windowChromeTracksState = false;
   let windowControlsMatchPlatform = false;
@@ -412,7 +477,11 @@ const contractExpression = `
         ? getComputedStyle(windowMaximizeButton.parentElement).display === 'none'
         : getComputedStyle(windowMaximizeButton.parentElement).display !== 'none';
     shortcutMatchesPlatform =
-      platformShortcut?.textContent.trim() === (platform === 'darwin' ? '⌘ P' : 'Ctrl P');
+      platformShortcut?.textContent.trim() === (platform === 'darwin' ? '⌘P' : 'Ctrl+P') &&
+      repositoryShortcutLabels.fetch === (platform === 'darwin' ? '⌘⇧F' : 'Ctrl+Shift+F') &&
+      repositoryShortcutLabels.pull === (platform === 'darwin' ? '⌘⇧L' : 'Ctrl+Shift+L') &&
+      repositoryShortcutLabels.push === (platform === 'darwin' ? '⌘⇧P' : 'Ctrl+Shift+P') &&
+      repositoryShortcutLabels.newBranch === (platform === 'darwin' ? '⌘⇧B' : 'Ctrl+Shift+B');
     window.app.updateWindowChrome(originalWindowState);
   }
   const recentCommitDate = new Date();
@@ -468,6 +537,7 @@ const contractExpression = `
   let commitMultiSelect = false;
   let commitContextOpens = false;
   let commitContextHasActions = false;
+  let commitTagDialogOpens = false;
   if (selectionFixture.length === 2) {
     graphView.select(selectionFixture[0], false);
     graphView.selectFromEvent(selectionFixture[1], {
@@ -488,8 +558,25 @@ const contractExpression = `
     );
     commitContextOpens = !commitContext.element.classList.contains('is-hidden');
     commitContextHasActions =
+      Boolean(commitContext.element.querySelector('[data-action="create-tag"]')) &&
       Boolean(commitContext.element.querySelector('[data-action="rebase"]')) &&
       Boolean(commitContext.element.querySelector('[data-action="cherry-pick"]'));
+    commitContext.close();
+    commitContext.open(
+      new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 40,
+        clientY: 40
+      }),
+      [selectionFixture[0]]
+    );
+    const createTagItem = commitContext.element.querySelector('[data-action="create-tag"]');
+    createTagItem?.click();
+    commitTagDialogOpens =
+      !document.getElementById('modal-overlay').classList.contains('is-hidden') &&
+      Boolean(document.querySelector('.tag-create-dialog'));
+    document.querySelector('.tag-create-dialog [data-cancel]')?.click();
     commitContext.close();
   }
   graphView.selectedHashes = new Set(originalSelectedHashes);
@@ -526,6 +613,8 @@ const contractExpression = `
   let settingsOpens = false;
   let settingsHasAutoFetch = false;
   let settingsHasAccounts = false;
+  let settingsHasShortcuts = false;
+  let settingsShortcutsDedicated = false;
   if (window.app.components.settings && settingsButton) {
     await window.app.components.settings.open();
     const settingsDialog = document.querySelector('.settings-dialog');
@@ -539,8 +628,49 @@ const contractExpression = `
     settingsHasAccounts =
       Boolean(settingsDialog?.querySelector('[data-settings-section="accounts"]')) &&
       Boolean(settingsDialog?.querySelector('#settings-account-form'));
+    const shortcutNavigation = settingsDialog?.querySelector('[data-settings-shortcuts]');
+    settingsHasShortcuts = Boolean(shortcutNavigation);
+    shortcutNavigation?.click();
+    settingsShortcutsDedicated =
+      Boolean(document.querySelector('[data-shortcuts-back]')) &&
+      document.querySelectorAll('.settings-shortcut-list kbd').length === 7;
     window.app.components.settings.close();
   }
+
+  const originalCreateBranch = branchList.createBranch;
+  const originalRefresh = window.app.refresh;
+  const createdBranches = [];
+  branchList.createBranch = async (_repoPath, name) => {
+    createdBranches.push(name);
+    return { success: true, name };
+  };
+  window.app.refresh = async () => {};
+  const submitQuickBranch = async (selector, description) => {
+    document.querySelector(selector)?.click();
+    await Promise.resolve();
+    const branchDialog = document.querySelector('.quick-branch-dialog');
+    const input = branchDialog?.querySelector('[name="description"]');
+    if (!input) return { opens: false, preview: false };
+    input.value = description;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    const expected = BranchNaming.compose('feature', description, branchList.metadata);
+    const preview = branchDialog.querySelector('[data-branch-preview]')?.textContent === expected;
+    branchDialog.querySelector('form').requestSubmit();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    return { opens: true, preview };
+  };
+  const plusBranchResult = await submitQuickBranch('#btn-new-branch', 'Renderer Plus Contract');
+  const rowBranchResult = await submitQuickBranch('#branch-create-row', 'Renderer Row Contract');
+  branchList.createBranch = originalCreateBranch;
+  window.app.refresh = originalRefresh;
+  const quickBranchContract = {
+    plusOpens: plusBranchResult.opens,
+    rowOpens: rowBranchResult.opens,
+    previewsConvention: plusBranchResult.preview && rowBranchResult.preview,
+    bothCreate: createdBranches.length === 2,
+    closesAfterSuccess:
+      document.getElementById('modal-overlay').classList.contains('is-hidden')
+  };
   window.app.setWorkspaceMode(originalWorkspaceMode, false);
   if (originalWorkspaceModeStorage == null) localStorage.removeItem(workspaceModeStorageKey);
   else localStorage.setItem(workspaceModeStorageKey, originalWorkspaceModeStorage);
@@ -597,6 +727,7 @@ const contractExpression = `
       columnRestores: graphColumnRestores,
       columnsStayAligned: graphColumnsStayAligned,
       keyboardResize: graphKeyboardResize,
+      filtersAndSorting: historyControlsContract,
       dateIncludesCalendarAndTime:
         renderedRecentCommitDate === expectedRecentCommitDate
     },
@@ -620,7 +751,9 @@ const contractExpression = `
     commitActions: {
       multiSelect: commitMultiSelect,
       contextOpens: commitContextOpens,
-      contextHasActions: commitContextHasActions
+      contextHasActions: commitContextHasActions,
+      tagDialogOpens: commitTagDialogOpens,
+      createTagApi: typeof window.gitTree.createTag === 'function'
     },
     pullRequests: {
       controlsPresent: pullRequestControls,
@@ -631,10 +764,17 @@ const contractExpression = `
       buttonPresent: Boolean(settingsButton),
       opens: settingsOpens,
       autoFetch: settingsHasAutoFetch,
-      accounts: settingsHasAccounts
+      accounts: settingsHasAccounts,
+      shortcuts: settingsHasShortcuts,
+      shortcutsDedicated: settingsShortcutsDedicated,
+      toolbarShortcutsUncluttered: toolbarShortcutsAreUncluttered
+    },
+    quickBranch: {
+      ...quickBranchContract
     },
     inspector: {
       maximizes,
+      splitWhenMaximized,
       closes,
       reopens,
       persists: inspectorPersists,
@@ -708,6 +848,7 @@ async function main() {
         !contracts.graph.columnRestores ||
         !contracts.graph.columnsStayAligned ||
         !contracts.graph.keyboardResize ||
+        !Object.values(contracts.graph.filtersAndSorting).every(Boolean) ||
         !contracts.graph.dateIncludesCalendarAndTime ||
         !contracts.workspaceToolbar.actionsMovedAboveWorkspace ||
         !contracts.workspaceToolbar.searchRemainsInHistory ||
@@ -716,7 +857,9 @@ async function main() {
         !Object.values(contracts.commitActions).every(Boolean) ||
         !Object.values(contracts.pullRequests).every(Boolean) ||
         !Object.values(contracts.settings).every(Boolean) ||
+        !Object.values(contracts.quickBranch).every(Boolean) ||
         !contracts.inspector.maximizes ||
+        !contracts.inspector.splitWhenMaximized ||
         !contracts.inspector.closes ||
         !contracts.inspector.reopens ||
         !contracts.inspector.persists ||

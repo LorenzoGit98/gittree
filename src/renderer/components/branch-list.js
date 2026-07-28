@@ -311,13 +311,187 @@ class BranchListView {
   }
 
   async promptCreateBranch() {
-    const name = prompt('Branch name:');
-    if (!name) return;
     const repo = this.app.state.repo;
     if (!repo) return;
-    const r = await window.gitTree.createBranch(repo.path, name);
-    if (r.error) this.app.showToast(r.error, 'error');
-    else this.app.emit('refresh');
+    const result = await this.quickBranchDialog(repo.path);
+    if (!result?.success) return;
+    this.app.showToast(t('feedback.branchCreated', { branch: result.name }), 'success');
+    await this.app.refresh({ silent: true });
+  }
+
+  createBranch(repoPath, name) {
+    return window.gitTree.createBranch(repoPath, name);
+  }
+
+  quickBranchDialog(repoPath) {
+    const overlay = document.getElementById('modal-overlay');
+    const dialog = document.getElementById('modal-dialog');
+    const prefixes = {
+      feature: BranchNaming.detectPrefix('feature', this.metadata),
+      bugfix: BranchNaming.detectPrefix('bugfix', this.metadata)
+    };
+    const localNames = new Set(
+      (this.metadata?.branches || [])
+        .filter(branch => branch.kind === 'local')
+        .map(branch => branch.name.toLowerCase())
+    );
+
+    return new Promise(resolve => {
+      dialog.className = 'confirm-dialog quick-branch-dialog';
+      dialog.setAttribute('role', 'dialog');
+      dialog.setAttribute('aria-modal', 'true');
+      dialog.setAttribute('aria-labelledby', 'quick-branch-title');
+      dialog.innerHTML = `
+        <form class="branch-dialog-form quick-branch-form">
+          <div class="quick-branch-heading">
+            <span class="eyebrow">${this.esc(t('sidebar.quickBranchEyebrow'))}</span>
+            <h3 id="quick-branch-title">${this.esc(t('sidebar.quickBranchTitle'))}</h3>
+            <p>${this.esc(t('sidebar.quickBranchHelp'))}</p>
+          </div>
+          <fieldset class="quick-branch-types">
+            <legend>${this.esc(t('sidebar.branchType'))}</legend>
+            <div class="segmented-control" role="group">
+              <button class="btn active" type="button" data-branch-type="feature"
+                aria-pressed="true">
+                <i class="ph ph-sparkle" aria-hidden="true"></i>
+                ${this.esc(t('sidebar.featureBranch'))}
+              </button>
+              <button class="btn" type="button" data-branch-type="bugfix"
+                aria-pressed="false">
+                <i class="ph ph-bug" aria-hidden="true"></i>
+                ${this.esc(t('sidebar.bugfixBranch'))}
+              </button>
+              <button class="btn" type="button" data-branch-type="custom"
+                aria-pressed="false">
+                <i class="ph ph-pencil-simple" aria-hidden="true"></i>
+                ${this.esc(t('sidebar.customBranch'))}
+              </button>
+            </div>
+          </fieldset>
+          <label>
+            ${this.esc(t('sidebar.branchDescription'))}
+            <input name="description" maxlength="160" required autofocus
+              placeholder="${this.esc(t('sidebar.branchDescriptionPlaceholder'))}">
+          </label>
+          <div class="quick-branch-preview">
+            <span>${this.esc(t('sidebar.branchPreview'))}</span>
+            <code data-branch-preview>${this.esc(`${prefixes.feature}/`)}</code>
+          </div>
+          <p class="quick-branch-convention" data-branch-convention></p>
+          <p class="quick-branch-error" data-branch-error aria-live="polite"></p>
+          <div class="confirm-actions">
+            <button class="btn" type="button" data-cancel>${this.esc(t('common.cancel'))}</button>
+            <button class="btn btn-primary" type="submit" data-create disabled>
+              <i class="ph ph-git-branch" aria-hidden="true"></i>
+              ${this.esc(t('sidebar.createBranch'))}
+            </button>
+          </div>
+        </form>`;
+      overlay.classList.remove('is-hidden');
+
+      const form = dialog.querySelector('form');
+      const input = form.elements.description;
+      const preview = dialog.querySelector('[data-branch-preview]');
+      const convention = dialog.querySelector('[data-branch-convention]');
+      const error = dialog.querySelector('[data-branch-error]');
+      const create = dialog.querySelector('[data-create]');
+      const cancel = dialog.querySelector('[data-cancel]');
+      const typeButtons = [...dialog.querySelectorAll('[data-branch-type]')];
+      let selectedType = 'feature';
+      let submitting = false;
+
+      const update = () => {
+        const value = input.value;
+        const name = BranchNaming.compose(selectedType, value, this.metadata);
+        const exists = Boolean(name && localNames.has(name.toLowerCase()));
+        preview.textContent = name || (
+          selectedType === 'custom' ? t('sidebar.customBranchPlaceholder') : `${prefixes[selectedType]}/`
+        );
+        convention.textContent = selectedType === 'custom'
+          ? t('sidebar.customConvention')
+          : t('sidebar.detectedConvention', {
+              prefix: `${prefixes[selectedType]}/`
+            });
+        input.placeholder = selectedType === 'custom'
+          ? t('sidebar.customBranchPlaceholder')
+          : t('sidebar.branchDescriptionPlaceholder');
+        error.textContent = exists
+          ? t('sidebar.branchAlreadyExists', { branch: name })
+          : (value.trim() && !name ? t('sidebar.invalidBranchDescription') : '');
+        create.disabled = submitting || !name || exists;
+      };
+
+      const finish = value => {
+        document.removeEventListener('keydown', onKeydown);
+        overlay.removeEventListener('click', onOverlayClick);
+        overlay.classList.add('is-hidden');
+        dialog.className = 'confirm-dialog';
+        dialog.removeAttribute('role');
+        dialog.removeAttribute('aria-modal');
+        dialog.removeAttribute('aria-labelledby');
+        dialog.innerHTML = '';
+        resolve(value);
+      };
+      const onKeydown = event => {
+        if (event.key !== 'Escape' || submitting) return;
+        event.preventDefault();
+        finish(null);
+      };
+      const onOverlayClick = event => {
+        if (event.target === overlay && !submitting) finish(null);
+      };
+
+      typeButtons.forEach(button => {
+        button.onclick = () => {
+          selectedType = button.dataset.branchType;
+          typeButtons.forEach(item => {
+            const active = item === button;
+            item.classList.toggle('active', active);
+            item.setAttribute('aria-pressed', String(active));
+          });
+          update();
+          input.focus();
+        };
+      });
+      input.addEventListener('input', update);
+      cancel.onclick = () => {
+        if (!submitting) finish(null);
+      };
+      form.onsubmit = async event => {
+        event.preventDefault();
+        const name = BranchNaming.compose(selectedType, input.value, this.metadata);
+        if (!name || localNames.has(name.toLowerCase())) return;
+        submitting = true;
+        form.classList.add('is-submitting');
+        input.disabled = true;
+        typeButtons.forEach(button => { button.disabled = true; });
+        cancel.disabled = true;
+        create.querySelector('i').className = 'ph ph-circle-notch';
+        update();
+        error.textContent = t('sidebar.creatingBranch');
+        try {
+          const result = await this.createBranch(repoPath, name);
+          if (!result?.success || result?.error) {
+            throw new Error(result?.error || t('sidebar.branchCreateFailed'));
+          }
+          finish({ ...result, name: result.name || name });
+        } catch (branchError) {
+          submitting = false;
+          form.classList.remove('is-submitting');
+          input.disabled = false;
+          typeButtons.forEach(button => { button.disabled = false; });
+          cancel.disabled = false;
+          create.querySelector('i').className = 'ph ph-git-branch';
+          update();
+          error.textContent = branchError.message || t('sidebar.branchCreateFailed');
+          input.focus();
+        }
+      };
+      document.addEventListener('keydown', onKeydown);
+      overlay.addEventListener('click', onOverlayClick);
+      update();
+      input.focus();
+    });
   }
 
   get current() { return this.data?.current; }
