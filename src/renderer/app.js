@@ -3,12 +3,14 @@ class GitTreeApp {
     this.state = { repo: null, activeRepoIndex: -1, currentBranch: null };
     this.components = {};
     this.inspectorState = 'open';
+    this.updateState = null;
     this._events = {};
   }
 
   async init() {
     this.components.welcome = new WelcomeScreen();
     this.components.repoTabs = new RepoTabs(document.getElementById('repo-tab-list'), this);
+    this.components.branchContextMenu = new BranchContextMenu(this);
     this.components.branchList = new BranchListView(document.getElementById('branch-list'), this);
     this.components.graphView = new GraphView(
       document.getElementById('graph-view'), document.getElementById('graph-body'), this
@@ -21,6 +23,7 @@ class GitTreeApp {
     this.components.statusBar = new StatusBar();
 
     this.bindEvents();
+    await this.setupUpdates();
     this.components.search.init();
     this.components.welcome.init(this);
     this.setupResize();
@@ -79,6 +82,52 @@ class GitTreeApp {
     window.addEventListener('gittree:language-changed', () => this.refreshLocalizedView());
   }
 
+  async setupUpdates() {
+    const button = document.getElementById('btn-update');
+    button.onclick = async () => {
+      if (this.updateState?.status === 'available') {
+        button.disabled = true;
+        const result = await window.gitTree.downloadUpdate();
+        if (result?.error) this.showToast(result.error, 'error');
+      } else if (this.updateState?.status === 'downloaded') {
+        await window.gitTree.installUpdate();
+      }
+    };
+    window.gitTree.onUpdateState(state => this.handleUpdateState(state));
+    this.handleUpdateState(await window.gitTree.getUpdateState());
+  }
+
+  handleUpdateState(state) {
+    if (!state) return;
+    const previousStatus = this.updateState?.status;
+    this.updateState = state;
+    const button = document.getElementById('btn-update');
+    const icon = button.querySelector('i');
+    const label = button.querySelector('span');
+    button.disabled = state.status === 'downloading' || state.status === 'checking';
+    button.classList.toggle(
+      'is-hidden',
+      !['available', 'downloading', 'downloaded'].includes(state.status)
+    );
+
+    if (state.status === 'available') {
+      icon.className = 'ph ph-download-simple';
+      label.textContent = t('updates.availableVersion', { version: state.availableVersion });
+      if (previousStatus !== 'available') {
+        this.showToast(t('updates.availableVersion', { version: state.availableVersion }), 'success');
+      }
+    } else if (state.status === 'downloading') {
+      icon.className = 'ph ph-circle-notch';
+      label.textContent = t('updates.downloading', { progress: state.progress });
+    } else if (state.status === 'downloaded') {
+      icon.className = 'ph ph-arrows-clockwise';
+      label.textContent = t('updates.restart');
+      if (previousStatus !== 'downloaded') this.showToast(t('updates.ready'), 'success');
+    } else if (state.status === 'error' && state.error) {
+      this.showToast(t('updates.failed', { error: state.error }), 'error');
+    }
+  }
+
   async openRepo(repo) {
     this.state.repo = repo;
     this.components.welcome.hide();
@@ -97,6 +146,8 @@ class GitTreeApp {
     document.getElementById('status-repo').textContent = repo.name;
     this.components.statusBar.setRepo(repo.name);
     this.components.statusBar.setBranch(branchName || '');
+    const operationState = await window.gitTree.getOperationState(repo.path);
+    if (operationState?.type) await this.components.conflict.open(operationState);
   }
 
   async loadStashes(repoPath) {
@@ -378,6 +429,7 @@ class GitTreeApp {
       this.components.diffViewer.clear();
     }
     this.components.welcome.loadRecent();
+    if (this.updateState) this.handleUpdateState(this.updateState);
   }
 
   showToast(message, type = '') {

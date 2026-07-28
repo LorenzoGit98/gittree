@@ -13,14 +13,14 @@ class BranchCompare {
     if (!repo) return;
 
     try {
-      const diff = await window.gitTree.getDiff(repo.path, `${target}..${source}`);
-      const log = await window.gitTree.getLog(repo.path, 100, `${target}..${source}`);
+      const comparison = await window.gitTree.compareBranches(repo.path, target, source);
+      if (comparison?.error) throw new Error(comparison.error);
 
       this.data = {
         source, target,
-        commitsCount: log.all?.length || 0,
-        commits: log.all || [],
-        diff: diff || ''
+        commitsCount: comparison.commits?.length || 0,
+        commits: comparison.commits || [],
+        diff: comparison.diff || ''
       };
 
       this.showCompareView();
@@ -32,7 +32,7 @@ class BranchCompare {
   showCompareView() {
     if (!this.data) return;
 
-    const mainView = document.getElementById('main-view');
+    const mainView = document.getElementById('merge-workspace-overlay');
     mainView.innerHTML = `
       <div class="branch-compare">
         <div class="compare-header">
@@ -41,7 +41,7 @@ class BranchCompare {
             <i class="ph ph-arrow-right compare-arrow"></i>
             <span class="badge badge-remote">${this.esc(this.data.target)}</span>
           </div>
-          <button class="btn btn-small compare-back" onclick="window.app.emit('refresh')">
+          <button class="btn btn-small compare-back" id="compare-close">
             <i class="ph ph-arrow-left"></i>
             Back to history
           </button>
@@ -55,7 +55,7 @@ class BranchCompare {
         <div class="compare-body">
           <div class="compare-commits-list">
             ${this.data.commits.map(c => `
-              <div class="compare-commit-item" onclick="window.app.emit('commit:selected','${c.hash}')">
+              <div class="compare-commit-item" data-hash="${this.esc(c.hash)}">
                 <span class="compare-commit-hash">${c.hash.substring(0,7)}</span>
                 <span class="compare-commit-message">${this.esc(c.message.split('\n')[0])}</span>
                 <span class="compare-commit-author">${this.esc(c.author_name)}</span>
@@ -66,6 +66,14 @@ class BranchCompare {
         </div>
       </div>
     `;
+    mainView.classList.remove('is-hidden');
+    document.getElementById('compare-close').onclick = () => {
+      mainView.classList.add('is-hidden');
+      mainView.innerHTML = '';
+    };
+    mainView.querySelectorAll('.compare-commit-item[data-hash]').forEach(item => {
+      item.onclick = () => this.app.emit('commit:selected', item.dataset.hash);
+    });
   }
 
   esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }

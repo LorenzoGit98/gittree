@@ -26,6 +26,12 @@
   font-size: 92px;
 }
 
+.welcome-brand img {
+  width: min(72%, 220px);
+  height: min(72%, 220px);
+  object-fit: contain;
+}
+
 .welcome-content {
   align-self: center;
   padding: var(--space-10);

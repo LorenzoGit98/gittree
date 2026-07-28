@@ -1,11 +1,14 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu, nativeTheme } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, nativeTheme, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const GitService = require('./git-service');
 const RepoManager = require('./repo-manager');
+const UpdateService = require('./update-service');
+const { buildPullRequestUrl } = require('./provider-links');
 
 let mainWindow;
 let repoManager;
+let updateService;
 
 const gitServices = new Map();
 
@@ -17,6 +20,9 @@ function getGitService(repoPath) {
 }
 
 function createWindow() {
+  const iconPath = app.isPackaged
+    ? path.join(app.getAppPath(), 'icon.png')
+    : path.join(__dirname, '..', '..', 'icon.png');
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -25,6 +31,7 @@ function createWindow() {
     backgroundColor: '#f7f9fc',
     frame: false,
     autoHideMenuBar: true,
+    icon: iconPath,
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload.js'),
       contextIsolation: true,
@@ -34,6 +41,9 @@ function createWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+  if (updateService) updateService.setWindow(mainWindow);
+  else updateService = new UpdateService(mainWindow);
+  mainWindow.webContents.once('did-finish-load', () => updateService.initialize());
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -106,6 +116,25 @@ function registerIpcHandlers() {
     return safeTheme;
   });
 
+  ipcMain.handle('update:get-state', () => {
+    return updateService?.getState() || {
+      status: app.isPackaged ? 'idle' : 'disabled',
+      currentVersion: app.getVersion()
+    };
+  });
+
+  ipcMain.handle('update:check', () => {
+    return updateService?.check(true) || { success: false, error: 'Updater is not ready' };
+  });
+
+  ipcMain.handle('update:download', () => {
+    return updateService?.download() || { success: false, error: 'Updater is not ready' };
+  });
+
+  ipcMain.handle('update:install', () => {
+    return updateService?.install() || { success: false, error: 'Updater is not ready' };
+  });
+
   ipcMain.handle('dialog:select-directory', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openDirectory']
@@ -130,6 +159,14 @@ function registerIpcHandlers() {
     try {
       const git = getGitService(repoPath);
       return await git.getLog(maxCount, branch);
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:graph-page', async (_event, repoPath, offset, limit) => {
+    try {
+      return await getGitService(repoPath).getGraphPage(offset, limit);
     } catch (err) {
       return { error: err.message };
     }
@@ -162,12 +199,83 @@ function registerIpcHandlers() {
     }
   });
 
+  ipcMain.handle('git:branch-metadata', async (_event, repoPath) => {
+    try {
+      return await getGitService(repoPath).getBranchMetadata();
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:branch-compare', async (_event, repoPath, baseBranch, compareBranch) => {
+    try {
+      return await getGitService(repoPath).getBranchComparison(baseBranch, compareBranch);
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
   ipcMain.handle('git:checkout', async (_event, repoPath, branch) => {
     try {
       const git = getGitService(repoPath);
       const result = await git.checkoutBranch(branch);
       sendToRenderer('operation:log', `Checked out ${branch}`);
       return result;
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:checkout-tracking', async (_event, repoPath, remoteRef) => {
+    try {
+      const result = await getGitService(repoPath).checkoutTrackingBranch(remoteRef);
+      sendToRenderer('operation:log', `Checked out ${result.branch}`);
+      return result;
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:branch-rename', async (_event, repoPath, branch, newName) => {
+    try {
+      const result = await getGitService(repoPath).renameBranch(branch, newName);
+      sendToRenderer('operation:log', `Renamed ${branch} to ${newName}`);
+      return result;
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:branch-rebase', async (_event, repoPath, branch) => {
+    const git = getGitService(repoPath);
+    try {
+      const result = await git.rebaseOnto(branch);
+      sendToRenderer('operation:log', `Rebased onto ${branch}`);
+      return result;
+    } catch (err) {
+      return { error: err.message, conflictState: await git.getOperationState() };
+    }
+  });
+
+  ipcMain.handle('git:branch-track', async (_event, repoPath, branch, remoteRef) => {
+    try {
+      return await getGitService(repoPath).trackBranch(branch, remoteRef);
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:branch-fetch', async (_event, repoPath, remote, branch) => {
+    try {
+      return await getGitService(repoPath).fetchBranch(remote, branch);
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:branch-delete-remote', async (_event, repoPath, remote, branch) => {
+    try {
+      return await getGitService(repoPath).deleteRemoteBranch(remote, branch);
     } catch (err) {
       return { error: err.message };
     }
@@ -184,14 +292,14 @@ function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle('git:merge', async (_event, repoPath, branch) => {
+  ipcMain.handle('git:merge', async (_event, repoPath, branch, strategy) => {
+    const git = getGitService(repoPath);
     try {
-      const git = getGitService(repoPath);
-      const result = await git.merge(branch);
+      const result = await git.merge(branch, strategy);
       sendToRenderer('operation:log', `Merged ${branch}`);
       return result;
     } catch (err) {
-      return { error: err.message };
+      return { error: err.message, conflictState: await git.getOperationState() };
     }
   });
 
@@ -204,10 +312,10 @@ function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle('git:push', async (_event, repoPath, remote, branch) => {
+  ipcMain.handle('git:push', async (_event, repoPath, remote, branch, setUpstream) => {
     try {
       const git = getGitService(repoPath);
-      const result = await git.push(remote, branch);
+      const result = await git.push(remote, branch, setUpstream);
       sendToRenderer('operation:log', `Pushed to ${remote}`);
       return result;
     } catch (err) {
@@ -300,6 +408,68 @@ function registerIpcHandlers() {
     }
   });
 
+  ipcMain.handle('git:operation-state', async (_event, repoPath) => {
+    try {
+      return await getGitService(repoPath).getOperationState();
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:conflict-read', async (_event, repoPath, filePath) => {
+    try {
+      return await getGitService(repoPath).readConflict(filePath);
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:conflict-resolve', async (_event, repoPath, filePath, resolution) => {
+    try {
+      return await getGitService(repoPath).resolveConflict(filePath, resolution);
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:operation-continue', async (_event, repoPath) => {
+    try {
+      return await getGitService(repoPath).continueOperation();
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:operation-abort', async (_event, repoPath) => {
+    try {
+      return await getGitService(repoPath).abortOperation();
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle(
+    'app:open-pull-request',
+    async (_event, repoPath, remoteName, sourceBranch, targetBranch) => {
+      try {
+        const git = getGitService(repoPath);
+        await git.assertValidBranchName(sourceBranch);
+        await git.assertValidBranchName(targetBranch);
+        const metadata = await git.getBranchMetadata();
+        const remote = metadata.remotes.find(item => item.name === remoteName);
+        if (!remote) return { error: 'Remote not found' };
+        const url = buildPullRequestUrl(remote?.provider, sourceBranch, targetBranch);
+        if (!url) return { error: 'Pull requests are not supported for this remote provider' };
+        const parsed = new URL(url);
+        if (parsed.protocol !== 'https:') return { error: 'Unsafe pull request URL' };
+        await shell.openExternal(url);
+        return { success: true, url };
+      } catch (err) {
+        return { error: err.message };
+      }
+    }
+  );
+
   ipcMain.handle('repo:list', () => {
     return repoManager.getAllRepos();
   });
@@ -330,7 +500,12 @@ function registerIpcHandlers() {
 }
 
 app.whenReady().then(() => {
+  app.setName('GitTree');
+  app.setAppUserModelId('com.lorenzogit.gittree');
   nativeTheme.themeSource = 'light';
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.setIcon(path.join(__dirname, '..', '..', 'icon.png'));
+  }
   repoManager = new RepoManager();
   registerIpcHandlers();
   buildMenu();

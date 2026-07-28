@@ -40,6 +40,15 @@
   --graph-node: #73839a;
   --graph-active: #102a4c;
   --graph-highlight: #245d92;
+  --graph-head: #102a4c;
+  --graph-lane-1: #2f6fb2;
+  --graph-lane-2: #d1495b;
+  --graph-lane-3: #4f9d69;
+  --graph-lane-4: #c58623;
+  --graph-lane-5: #7557a8;
+  --graph-lane-6: #218b8b;
+  --graph-lane-7: #b85c9e;
+  --graph-lane-8: #6f7f32;
 
   --border-subtle: #e3e8ef;
   --border-default: #d5dce6;
@@ -171,6 +180,15 @@
   --graph-node: #708096;
   --graph-active: #dce9f8;
   --graph-highlight: #8dbcea;
+  --graph-head: #f4f7fb;
+  --graph-lane-1: #64a4e3;
+  --graph-lane-2: #e77882;
+  --graph-lane-3: #6fbd89;
+  --graph-lane-4: #e0ad55;
+  --graph-lane-5: #a58bd3;
+  --graph-lane-6: #55b8b8;
+  --graph-lane-7: #d17fbd;
+  --graph-lane-8: #a4b45e;
 
   --border-subtle: #2a394b;
   --border-default: #38495d;
@@ -232,6 +250,15 @@
   --graph-node: #747b85;
   --graph-active: #f1f5f9;
   --graph-highlight: #9dc7ef;
+  --graph-head: #ffffff;
+  --graph-lane-1: #6daeea;
+  --graph-lane-2: #ef7d87;
+  --graph-lane-3: #75c991;
+  --graph-lane-4: #e6b45b;
+  --graph-lane-5: #ad94dc;
+  --graph-lane-6: #59c0c0;
+  --graph-lane-7: #da85c5;
+  --graph-lane-8: #acbc64;
 
   --border-subtle: #202020;
   --border-default: #303030;

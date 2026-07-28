@@ -5,11 +5,13 @@ class MergeWorkspace {
     this.targetBranch = null;
     this.mergeData = null;
     this.container = null;
+    this.strategy = 'noff';
   }
 
   async open(source, target) {
     this.sourceBranch = source;
     this.targetBranch = target;
+    this.strategy = 'noff';
     const repo = this.app.state.repo;
     if (!repo) return;
 
@@ -160,17 +162,20 @@ class MergeWorkspace {
     document.getElementById('merge-cancel-btn').onclick = () => this.hide();
     document.getElementById('merge-confirm-btn').onclick = () => this.executeMerge();
 
-    document.getElementById('merge-opt-ff').onclick = function() {
+    document.getElementById('merge-opt-ff').onclick = () => {
       document.querySelectorAll('.merge-option').forEach(el => el.classList.remove('selected'));
-      this.classList.add('selected');
+      document.getElementById('merge-opt-ff').classList.add('selected');
+      this.strategy = 'ff';
     };
-    document.getElementById('merge-opt-noff').onclick = function() {
+    document.getElementById('merge-opt-noff').onclick = () => {
       document.querySelectorAll('.merge-option').forEach(el => el.classList.remove('selected'));
-      this.classList.add('selected');
+      document.getElementById('merge-opt-noff').classList.add('selected');
+      this.strategy = 'noff';
     };
-    document.getElementById('merge-opt-squash').onclick = function() {
+    document.getElementById('merge-opt-squash').onclick = () => {
       document.querySelectorAll('.merge-option').forEach(el => el.classList.remove('selected'));
-      this.classList.add('selected');
+      document.getElementById('merge-opt-squash').classList.add('selected');
+      this.strategy = 'squash';
     };
 
     this.container.classList.remove('is-hidden');
@@ -181,8 +186,12 @@ class MergeWorkspace {
     if (!repo) return;
     this.app.showToast('Merging...');
 
-    const result = await window.gitTree.merge(repo.path, this.mergeData.source);
+    const result = await window.gitTree.merge(repo.path, this.mergeData.source, this.strategy);
     if (result.error) {
+      if (result.conflictState?.type) {
+        this.hide();
+        await this.app.components.conflict.open(result.conflictState);
+      }
       this.app.showToast(result.error, 'error');
       return;
     }

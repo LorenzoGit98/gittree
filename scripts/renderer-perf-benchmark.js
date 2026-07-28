@@ -68,8 +68,31 @@ const expression = `
   };
 
   const graph = document.querySelector('.graph-view');
+  const graphView = window.app?.components?.graphView;
   const workspace = document.getElementById('workspace-body');
-  if (!graph || !workspace) throw new Error('Required GitTree performance surfaces are missing');
+  if (!graph || !graphView || !workspace) throw new Error('Required GitTree performance surfaces are missing');
+
+  const originalRows = graphView.rows;
+  const originalVisibleRows = graphView.visibleRows;
+  const originalHasMore = graphView.hasMore;
+  graphView.rows = Array.from({ length: 10000 }, (_, index) => ({
+    lane: 0,
+    incoming: index > 0,
+    before: index ? ['synthetic'] : [],
+    after: index < 9999 ? ['synthetic'] : [],
+    parents: index < 9999 ? [{ hash: 's' + (index + 1), lane: 0, kind: 'first-parent' }] : [],
+    commit: {
+      hash: 'synthetic-' + String(index).padStart(10, '0'),
+      subject: 'Synthetic performance commit ' + index,
+      authorName: 'Performance fixture',
+      authorEmail: 'fixture@example.com',
+      date: '2026-01-01T00:00:00.000Z'
+    }
+  }));
+  graphView.visibleRows = graphView.rows;
+  graphView.hasMore = false;
+  graphView.body.style.height = (10000 * graphView.rowHeight) + 'px';
+  graphView.renderViewport(true);
 
   const originalScrollTop = graph.scrollTop;
   const maxScroll = Math.max(0, graph.scrollHeight - graph.clientHeight);
@@ -77,6 +100,7 @@ const expression = `
     graph.scrollTop = maxScroll * progress;
   }, () => graph.scrollTop, 1000);
   graph.scrollTop = originalScrollTop;
+  const virtualRows = document.querySelectorAll('.graph-row').length;
 
   const originalLeft = workspace.style.getPropertyValue('--left-panel');
   const leftHandle = document.getElementById('resize-handle-left');
@@ -115,9 +139,15 @@ const expression = `
   else workspace.style.removeProperty('--left-panel');
   if (storedLeft == null) localStorage.removeItem('gittree.panel.left');
   else localStorage.setItem('gittree.panel.left', storedLeft);
+  graphView.rows = originalRows;
+  graphView.visibleRows = originalVisibleRows;
+  graphView.hasMore = originalHasMore;
+  graphView.applyFilter();
+  graphView.renderViewport(true);
 
   return {
-    rows: document.querySelectorAll('.graph-row').length,
+    syntheticCommits: 10000,
+    rows: virtualRows,
     scrollRange: maxScroll,
     scroll,
     resizePreview,
@@ -145,7 +175,10 @@ async function main() {
     console.log(JSON.stringify(metrics, null, 2));
     if (!metrics.resizeContract.avoidsLiveLayout ||
         !metrics.resizeContract.commitsOnRelease ||
+        metrics.rows >= 100 ||
         metrics.scroll.averageMs > 1 ||
+        metrics.scroll.p95Ms > 1 ||
+        metrics.scroll.over8ms > 0 ||
         metrics.resizePreview.averageMs > 1) {
       process.exitCode = 1;
     }

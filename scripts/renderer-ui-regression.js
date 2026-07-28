@@ -97,10 +97,56 @@ const contractExpression = `
   const activeRow = document.querySelector('#branch-list .branch-item.active');
   const activeStyle = activeRow ? getComputedStyle(activeRow) : null;
   const selectedLooksDistinct =
-    selectedStyle.boxShadow !== 'none' &&
+    selectedStyle.boxShadow === 'none' &&
     (!activeStyle || selectedStyle.backgroundColor !== activeStyle.backgroundColor);
   target.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
   const afterDoubleClick = activations;
+  const nestedIsIndented =
+    target.classList.contains('is-nested') &&
+    parseFloat(getComputedStyle(target).paddingLeft) >= 24;
+
+  const contextMenu = window.app.components.branchContextMenu;
+  const contextMetadata = {
+    current: branchList.current,
+    defaultBranch: branchList.current,
+    branches: [{ name: 'feature/__renderer-ui-contract__', kind: 'local', current: false, upstream: '' }],
+    remotes: []
+  };
+  contextMenu.open(
+    new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: innerWidth - 2,
+      clientY: innerHeight - 2
+    }),
+    contextMetadata.branches[0],
+    contextMetadata,
+    { isClean: true },
+    { type: null, conflicts: [] }
+  );
+  const contextRect = contextMenu.element.getBoundingClientRect();
+  const contextOpens = !contextMenu.element.classList.contains('is-hidden');
+  const contextClamped =
+    contextRect.right <= innerWidth - 7 && contextRect.bottom <= innerHeight - 7;
+  const contextHasStableActions =
+    Boolean(contextMenu.element.querySelector('[data-action="checkout"]')) &&
+    Boolean(contextMenu.element.querySelector('[data-action="merge"]')) &&
+    Boolean(contextMenu.element.querySelector('[data-action="rebase"]')) &&
+    Boolean(contextMenu.element.querySelector('[data-action="diff"]')) &&
+    Boolean(contextMenu.element.querySelector('[data-action="delete"]'));
+  const contextDisabledExplained = [...contextMenu.element.querySelectorAll('[aria-disabled="true"]')]
+    .every(item => Boolean(item.title));
+  document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  const contextOutsideClickCloses = contextMenu.element.classList.contains('is-hidden');
+  contextMenu.open(
+    new MouseEvent('contextmenu', { clientX: 20, clientY: 20 }),
+    contextMetadata.branches[0],
+    contextMetadata,
+    { isClean: true },
+    { type: null, conflicts: [] }
+  );
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  const contextEscCloses = contextMenu.element.classList.contains('is-hidden');
 
   branchList.checkout = originalCheckout;
   branchList.checkoutRemote = originalCheckoutRemote;
@@ -183,6 +229,8 @@ const contractExpression = `
   await i18next.changeLanguage(originalLanguage);
   I18n.translateDOM();
   Theme.syncControls();
+  const updateState = await window.gitTree.getUpdateState();
+  const productIcon = document.querySelector('.welcome-brand img');
 
   return {
     activeTab: {
@@ -199,13 +247,28 @@ const contractExpression = `
       synthetic: target.querySelector('.branch-name')?.textContent,
       showLeafOnly:
         target.querySelector('.branch-name')?.textContent === '__renderer-ui-contract__' &&
-        nestedLabels.every(label => !label.includes('/'))
+        nestedLabels.every(label => !label.includes('/')),
+      nestedIsIndented
     },
     branchActivation: {
       afterSingleClick,
       afterDoubleClick,
       requiresDoubleClick: afterSingleClick === 0 && afterDoubleClick === 1,
       selectedLooksDistinct
+    },
+    branchContextMenu: {
+      opens: contextOpens,
+      clamped: contextClamped,
+      stableActions: contextHasStableActions,
+      disabledExplained: contextDisabledExplained,
+      outsideClickCloses: contextOutsideClickCloses,
+      escapeCloses: contextEscCloses,
+      rightClickDoesNotCheckout: afterSingleClick === 0
+    },
+    graph: {
+      virtualRows: document.querySelectorAll('.graph-row').length,
+      boundedDom: document.querySelectorAll('.graph-row').length < 100,
+      rendersLanes: Boolean(document.querySelector('.graph-lanes .graph-lane-node'))
     },
     workspaceToolbar: {
       actionsMovedAboveWorkspace:
@@ -235,6 +298,12 @@ const contractExpression = `
     localization: {
       english: englishSmoke,
       italian: italianSmoke
+    },
+    releaseShell: {
+      iconLoaded: productIcon?.complete && productIcon?.naturalWidth === 1024,
+      updaterDisabledInDevelopment:
+        updateState.status === 'disabled' &&
+        document.getElementById('btn-update').classList.contains('is-hidden')
     }
   };
 })()
@@ -249,8 +318,12 @@ async function main() {
 
     if (!contracts.activeTab.selectedOnStartup ||
         !contracts.branchLabels.showLeafOnly ||
+        !contracts.branchLabels.nestedIsIndented ||
         !contracts.branchActivation.requiresDoubleClick ||
         !contracts.branchActivation.selectedLooksDistinct ||
+        !Object.values(contracts.branchContextMenu).every(Boolean) ||
+        !contracts.graph.boundedDom ||
+        !contracts.graph.rendersLanes ||
         !contracts.workspaceToolbar.actionsMovedAboveWorkspace ||
         !contracts.workspaceToolbar.searchRemainsInHistory ||
         !contracts.inspector.maximizes ||
@@ -264,7 +337,8 @@ async function main() {
         !Object.values(contracts.themes.smoke).every(Boolean) ||
         contracts.themes.available.length !== 3 ||
         !contracts.localization.english ||
-        !contracts.localization.italian) {
+        !contracts.localization.italian ||
+        !Object.values(contracts.releaseShell).every(Boolean)) {
       process.exitCode = 1;
     }
   } finally {

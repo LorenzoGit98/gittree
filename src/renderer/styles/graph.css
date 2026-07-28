@@ -1,20 +1,27 @@
 .graph-view {
+  --graph-width: 64px;
   position: relative;
   overflow: auto;
   background: var(--surface-primary);
   overscroll-behavior: contain;
+  contain: layout paint;
 }
 
 .graph-canvas {
   position: relative;
   min-height: 100%;
-  contain: layout style;
+  contain: strict;
+}
+
+.graph-virtual-layer {
+  position: absolute;
+  inset: 0;
 }
 
 .graph-header,
 .graph-row {
   display: grid;
-  grid-template-columns: 44px minmax(220px, 3fr) minmax(110px, 1.2fr) 90px 74px;
+  grid-template-columns: var(--graph-width) minmax(220px, 3fr) minmax(110px, 1.2fr) 90px 74px;
   align-items: center;
 }
 
@@ -29,70 +36,70 @@
   color: var(--text-tertiary);
   font-size: 9.5px;
   font-weight: var(--weight-semibold);
-  letter-spacing: 0.07em;
+  letter-spacing: .07em;
   text-transform: uppercase;
 }
 
 .graph-row {
-  min-height: 38px;
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 38px;
   padding: 0 var(--space-2);
   border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-primary);
   cursor: pointer;
-  content-visibility: auto;
-  contain: layout paint style;
-  contain-intrinsic-size: 38px;
+  contain: strict;
+  will-change: transform;
 }
 
-.graph-row:hover {
-  background: var(--surface-hover);
-}
-
-.graph-row.selected {
-  background: var(--primary-soft);
-}
+.graph-row:hover { background: var(--surface-hover); }
+.graph-row.selected { background: var(--primary-soft); }
 
 .graph-cell {
-  position: relative;
-  width: 44px;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: var(--graph-width);
+  height: 38px;
 }
 
-.graph-node {
-  position: relative;
-  z-index: 1;
-  width: 10px;
-  height: 10px;
-  border: 1px solid var(--graph-node);
-  border-radius: 50%;
-  background: var(--surface-primary);
+.graph-lanes {
+  display: block;
+  width: 100%;
+  height: 38px;
+  overflow: visible;
 }
 
-.graph-row.selected .graph-node {
-  background: var(--graph-active);
-  border-color: var(--graph-active);
+.graph-lane-path {
+  fill: none;
+  stroke: var(--lane-color);
+  stroke-width: 1.65;
+  vector-effect: non-scaling-stroke;
 }
 
-.graph-line-v {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  z-index: 0;
-  width: 2px;
-  background: var(--graph-line);
-  transform: translateX(-50%);
+.graph-lane-node {
+  fill: var(--lane-color);
+  stroke: var(--surface-primary);
+  stroke-width: 1.5;
 }
 
-.graph-line-h {
-  position: absolute;
-  z-index: 0;
-  height: 2px;
-  background: var(--graph-line);
+.graph-lane-node.is-merge {
+  stroke-width: 2.5;
 }
+
+.graph-head-indicator {
+  fill: none;
+  stroke: var(--graph-head);
+  stroke-width: 2;
+}
+
+.graph-lane-0 { --lane-color: var(--graph-lane-1); }
+.graph-lane-1 { --lane-color: var(--graph-lane-2); }
+.graph-lane-2 { --lane-color: var(--graph-lane-3); }
+.graph-lane-3 { --lane-color: var(--graph-lane-4); }
+.graph-lane-4 { --lane-color: var(--graph-lane-5); }
+.graph-lane-5 { --lane-color: var(--graph-lane-6); }
+.graph-lane-6 { --lane-color: var(--graph-lane-7); }
+.graph-lane-7 { --lane-color: var(--graph-lane-8); }
 
 .graph-commit-message,
 .graph-commit-author,
@@ -111,7 +118,6 @@
   color: var(--text-primary);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -131,9 +137,7 @@
   white-space: nowrap;
 }
 
-.graph-commit-hash {
-  font-family: var(--font-mono);
-}
+.graph-commit-hash { font-family: var(--font-mono); }
 
 .graph-refs {
   display: inline-flex;
@@ -145,11 +149,8 @@
 @media (max-width: 1260px) {
   .graph-header,
   .graph-row {
-    grid-template-columns: 40px minmax(200px, 3fr) minmax(90px, 1fr) 80px;
+    grid-template-columns: var(--graph-width) minmax(200px, 3fr) minmax(90px, 1fr) 80px;
   }
-
   .gh-hash,
-  .graph-commit-hash {
-    display: none;
-  }
+  .graph-commit-hash { display: none; }
 }

@@ -320,6 +320,27 @@ kbd {
   box-shadow: var(--shadow-lg);
 }
 
+.confirm-dialog > h3 {
+  margin-bottom: var(--space-2);
+  font-size: var(--text-lg);
+}
+
+.confirm-dialog > p {
+  margin-bottom: var(--space-5);
+  color: var(--text-secondary);
+}
+
+.btn-danger {
+  border-color: var(--error);
+  background: var(--error);
+  color: var(--text-inverse);
+}
+
+.btn-danger:hover {
+  border-color: var(--error-text);
+  background: var(--error-text);
+}
+
 .confirm-title {
   margin-bottom: var(--space-2);
   font-family: var(--font-display);

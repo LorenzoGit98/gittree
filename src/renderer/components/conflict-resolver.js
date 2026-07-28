@@ -1,158 +1,218 @@
 class ConflictResolver {
   constructor(app) {
     this.app = app;
-    this.conflicts = [];
-    this.currentIdx = 0;
-    this.resolved = new Set();
-    this.container = null;
-  }
-
-  async open(conflictFiles) {
-    this.conflicts = conflictFiles || [];
-    this.currentIdx = 0;
-    this.resolved.clear();
-    if (!this.conflicts.length) { this.app.showToast('No conflicts detected', 'info'); return; }
-    this.ensureContainer();
-    this.render();
-  }
-
-  ensureContainer() {
-    if (this.container) return;
     this.container = document.getElementById('merge-workspace-overlay');
-    if (!this.container) {
-      this.container = document.createElement('div');
-      this.container.id = 'merge-workspace-overlay';
-      this.container.className = 'fullscreen-workspace is-hidden';
-      document.getElementById('app').appendChild(this.container);
+    this.state = null;
+    this.currentPath = null;
+    this.current = null;
+    this.dirty = false;
+  }
+
+  async open(state = null) {
+    const repo = this.app.state.repo;
+    if (!repo) return;
+    this.state = state?.type ? state : await window.gitTree.getOperationState(repo.path);
+    if (this.state?.error) {
+      this.app.showToast(this.state.error, 'error');
+      return;
     }
+    if (!this.state?.type) return;
+    this.currentPath = this.state.conflicts[0] || null;
+    this.current = null;
+    this.dirty = false;
+    this.render();
+    this.container.classList.remove('is-hidden');
+    if (this.currentPath) await this.loadFile(this.currentPath);
   }
 
   render() {
-    this.ensureContainer();
-    const total = this.conflicts.length;
-    const resolved = this.resolved.size;
-    const progress = total > 0 ? (resolved / total) * 100 : 0;
-    const current = this.conflicts[this.currentIdx] || {};
-
+    const conflicts = this.state?.conflicts || [];
     this.container.innerHTML = `
       <div class="conflict-workspace">
-        <div class="conflict-header">
-          <span class="conflict-title">Resolve Conflicts</span>
-          <div class="conflict-progress">
-            <span>${resolved}/${total} resolved</span>
-            <div class="conflict-progress-bar"><div class="conflict-progress-fill" style="width:${progress}%"></div></div>
+        <header class="conflict-header">
+          <div>
+            <span class="eyebrow">${this.esc(t('conflicts.operation', { operation: this.state.type }))}</span>
+            <h2>${this.esc(t('conflicts.title'))}</h2>
           </div>
-          <button class="btn btn-small" onclick="window.conflictResolver.hide()"><i class="ph ph-x"></i>Cancel</button>
-        </div>
-
+          <div class="conflict-header-actions">
+            <span class="badge badge-conflict">${conflicts.length} ${this.esc(t('conflicts.remaining'))}</span>
+            <button class="btn" id="conflict-abort"><i class="ph ph-x-circle"></i>${this.esc(t('conflicts.abort'))}</button>
+            <button class="btn btn-primary" id="conflict-continue" ${conflicts.length ? 'disabled' : ''}>
+              <i class="ph ph-arrow-right"></i>${this.esc(t('common.continue'))}
+            </button>
+          </div>
+        </header>
         <div class="conflict-body">
-          <div class="conflict-file-list">
-            ${this.conflicts.map((f, i) => `
-              <div class="conflict-file-item${i === this.currentIdx ? ' active' : ''}${this.resolved.has(i) ? ' resolved' : ''}"
-                   onclick="window.conflictResolver.selectFile(${i})">
-                <span class="conflict-file-status ${this.resolved.has(i) ? 'resolved' : 'pending'}"></span>
-                ${this.esc(f.path || f)}
-              </div>
-            `).join('')}
-          </div>
-
-          <div class="conflict-editor">
-            <div class="conflict-editor-toolbar">
-              <span class="conflict-current-file">${this.esc(current.path || current)}</span>
-              <div class="conflict-toolbar-actions">
-                <button class="conflict-action-btn accept-ours" id="conflict-accept-ours">Accept ours</button>
-                <button class="conflict-action-btn accept-theirs" id="conflict-accept-theirs">Accept theirs</button>
-                <button class="conflict-action-btn accept-both" id="conflict-accept-both">Accept both</button>
-              </div>
-            </div>
-
-            <div class="conflict-panes three-pane">
-              <div class="conflict-pane">
-                <div class="conflict-pane-header ours">Current branch</div>
-                <div class="conflict-pane-content" id="conflict-ours-content">
-                  <div class="conflict-line neutral">File content from current branch</div>
-                </div>
-              </div>
-              <div class="conflict-pane">
-                <div class="conflict-pane-header theirs">Incoming branch</div>
-                <div class="conflict-pane-content" id="conflict-theirs-content">
-                  <div class="conflict-line neutral">File content from incoming branch</div>
-                </div>
-              </div>
-              <div class="conflict-pane">
-                <div class="conflict-pane-header result">Result</div>
-                <div class="conflict-editable" contenteditable="true" id="conflict-result-editor">
-                  Merge result will appear here
-                </div>
-              </div>
-            </div>
-          </div>
+          <aside class="conflict-file-list" aria-label="${this.esc(t('conflicts.files'))}">
+            ${conflicts.map(file => `<button class="conflict-file-item${file === this.currentPath ? ' active' : ''}" data-file="${this.esc(file)}">
+              <span class="conflict-file-status pending"></span><span>${this.esc(file)}</span>
+            </button>`).join('')}
+            ${conflicts.length ? '' : `<div class="conflict-complete"><i class="ph ph-check-circle"></i>${this.esc(t('conflicts.allResolved'))}</div>`}
+          </aside>
+          <main class="conflict-editor" id="conflict-editor">
+            <div class="empty-state">${this.esc(conflicts.length ? t('common.loading') : t('conflicts.readyContinue'))}</div>
+          </main>
         </div>
+      </div>`;
 
-        <div class="conflict-nav">
-          <button class="btn btn-small" id="conflict-prev-btn" ${this.currentIdx === 0 ? 'disabled' : ''}>Previous</button>
-          <button class="btn btn-small" id="conflict-next-btn" ${this.currentIdx >= total - 1 ? 'disabled' : ''}>Next</button>
-          <button class="btn btn-small" id="conflict-mark-resolved">Mark resolved</button>
-          <span class="conflict-stats">File ${this.currentIdx + 1} of ${total}</span>
+    this.container.querySelectorAll('[data-file]').forEach(button => {
+      button.onclick = async () => {
+        if (!await this.confirmDiscard()) return;
+        await this.loadFile(button.dataset.file);
+      };
+    });
+    document.getElementById('conflict-abort').onclick = () => this.abort();
+    document.getElementById('conflict-continue').onclick = () => this.continue();
+  }
+
+  async loadFile(filePath) {
+    const repo = this.app.state.repo;
+    if (!repo) return;
+    this.currentPath = filePath;
+    this.current = await window.gitTree.readConflict(repo.path, filePath);
+    if (this.current?.error) {
+      this.app.showToast(this.current.error, 'error');
+      return;
+    }
+    this.dirty = false;
+    this.render();
+    this.renderEditor();
+  }
+
+  renderEditor() {
+    if (!this.current) return;
+    const editor = document.getElementById('conflict-editor');
+    if (!editor) return;
+    const file = this.current;
+    editor.innerHTML = `
+      <div class="conflict-editor-toolbar">
+        <div>
+          <strong>${this.esc(file.path)}</strong>
+          ${file.binary ? `<span class="badge">${this.esc(t('conflicts.binary'))}</span>` : ''}
+        </div>
+        <div class="conflict-toolbar-actions">
+          <button class="btn conflict-ours" data-resolution="ours">${this.esc(t('conflicts.acceptOurs'))}</button>
+          <button class="btn conflict-theirs" data-resolution="theirs">${this.esc(t('conflicts.acceptTheirs'))}</button>
+          ${file.binary ? '' : `<button class="btn btn-primary" id="conflict-save">${this.esc(t('conflicts.saveResult'))}</button>`}
         </div>
       </div>
-    `;
-
-    document.getElementById('conflict-prev-btn').onclick = () => this.navigate(-1);
-    document.getElementById('conflict-next-btn').onclick = () => this.navigate(1);
-    document.getElementById('conflict-mark-resolved').onclick = () => this.markResolved();
-    document.getElementById('conflict-accept-ours').onclick = () => this.acceptOurs();
-    document.getElementById('conflict-accept-theirs').onclick = () => this.acceptTheirs();
-    document.getElementById('conflict-accept-both').onclick = () => this.acceptBoth();
-
-    // Attach to window for onclick handlers
-    window.conflictResolver = this;
-
-    this.container.classList.remove('is-hidden');
+      ${file.binary ? `
+        <div class="conflict-binary-state">
+          <i class="ph ph-file-lock"></i>
+          <h3>${this.esc(t('conflicts.binaryTitle'))}</h3>
+          <p>${this.esc(t('conflicts.binaryHelp'))}</p>
+        </div>
+      ` : `
+        <details class="conflict-base">
+          <summary>${this.esc(t('conflicts.base'))}</summary>
+          <pre>${this.esc(file.base)}</pre>
+        </details>
+        <div class="conflict-panes three-pane">
+          ${this.readOnlyPane(t('conflicts.ours'), file.ours, 'ours')}
+          ${this.readOnlyPane(t('conflicts.theirs'), file.theirs, 'theirs')}
+          <section class="conflict-pane">
+            <div class="conflict-pane-header result">${this.esc(t('conflicts.result'))}</div>
+            <textarea id="conflict-result-editor" spellcheck="false">${this.esc(file.result)}</textarea>
+          </section>
+        </div>
+      `}`;
+    editor.querySelectorAll('[data-resolution]').forEach(button => {
+      button.onclick = () => this.resolve(button.dataset.resolution);
+    });
+    const textarea = document.getElementById('conflict-result-editor');
+    if (textarea) textarea.addEventListener('input', () => { this.dirty = true; });
+    document.getElementById('conflict-save')?.addEventListener('click', () => (
+      this.resolve('manual', textarea.value)
+    ));
   }
 
-  navigate(delta) {
-    this.currentIdx = Math.max(0, Math.min(this.conflicts.length - 1, this.currentIdx + delta));
-    this.render();
+  readOnlyPane(label, content, kind) {
+    return `<section class="conflict-pane">
+      <div class="conflict-pane-header ${kind}">${this.esc(label)}</div>
+      <pre class="conflict-pane-content">${this.esc(content)}</pre>
+    </section>`;
   }
 
-  selectFile(idx) {
-    this.currentIdx = idx;
-    this.render();
-  }
-
-  markResolved() {
-    this.resolved.add(this.currentIdx);
-    if (this.resolved.size >= this.conflicts.length) {
-      this.hide();
-      this.app.showToast('All conflicts resolved', 'success');
-      this.app.emit('refresh');
-    } else {
-      this.render();
+  async resolve(strategy, content = '') {
+    const repo = this.app.state.repo;
+    if (!repo || !this.currentPath) return;
+    const result = await window.gitTree.resolveConflict(repo.path, this.currentPath, {
+      strategy,
+      ...(strategy === 'manual' ? { content } : {})
+    });
+    if (result?.error) {
+      this.app.showToast(result.error, 'error');
+      return;
     }
+    this.state = result.state;
+    this.currentPath = this.state.conflicts[0] || null;
+    this.current = null;
+    this.dirty = false;
+    this.render();
+    if (this.currentPath) await this.loadFile(this.currentPath);
   }
 
-  acceptOurs() {
-    const editor = document.getElementById('conflict-result-editor');
-    const ours = document.getElementById('conflict-ours-content');
-    if (editor && ours) editor.textContent = '/* Current branch version accepted */';
+  async continue() {
+    if (this.state?.conflicts?.length) return;
+    const repo = this.app.state.repo;
+    const result = await window.gitTree.continueOperation(repo.path);
+    if (result?.error) {
+      this.app.showToast(result.error, 'error');
+      const state = await window.gitTree.getOperationState(repo.path);
+      if (state?.type) await this.open(state);
+      return;
+    }
+    this.hide();
+    this.app.showToast(t('conflicts.completed'), 'success');
+    this.app.emit('refresh');
   }
 
-  acceptTheirs() {
-    const editor = document.getElementById('conflict-result-editor');
-    const theirs = document.getElementById('conflict-theirs-content');
-    if (editor && theirs) editor.textContent = '/* Incoming branch version accepted */';
+  async abort() {
+    if (!await this.confirm(t('conflicts.abortTitle'), t('conflicts.abortConfirm'))) return;
+    const repo = this.app.state.repo;
+    const result = await window.gitTree.abortOperation(repo.path);
+    if (result?.error) {
+      this.app.showToast(result.error, 'error');
+      return;
+    }
+    this.hide();
+    this.app.emit('refresh');
   }
 
-  acceptBoth() {
-    const editor = document.getElementById('conflict-result-editor');
-    if (editor) editor.textContent = '/* Both versions merged */';
+  async confirmDiscard() {
+    if (!this.dirty) return true;
+    return this.confirm(t('conflicts.discardTitle'), t('conflicts.discardConfirm'));
+  }
+
+  confirm(title, message) {
+    const overlay = document.getElementById('modal-overlay');
+    const dialog = document.getElementById('modal-dialog');
+    return new Promise(resolve => {
+      dialog.innerHTML = `<h3>${this.esc(title)}</h3><p>${this.esc(message)}</p>
+        <div class="confirm-actions"><button class="btn" data-cancel>${this.esc(t('common.cancel'))}</button>
+        <button class="btn btn-danger" data-confirm>${this.esc(t('common.continue'))}</button></div>`;
+      overlay.classList.remove('is-hidden');
+      const finish = value => {
+        overlay.classList.add('is-hidden');
+        dialog.innerHTML = '';
+        resolve(value);
+      };
+      dialog.querySelector('[data-cancel]').onclick = () => finish(false);
+      dialog.querySelector('[data-confirm]').onclick = () => finish(true);
+    });
   }
 
   hide() {
-    if (this.container) this.container.classList.add('is-hidden');
-    window.conflictResolver = null;
+    this.container.classList.add('is-hidden');
+    this.container.innerHTML = '';
+    this.state = null;
+    this.current = null;
+    this.dirty = false;
   }
 
-  esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+  esc(value) {
+    const element = document.createElement('div');
+    element.textContent = value ?? '';
+    return element.innerHTML;
+  }
 }

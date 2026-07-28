@@ -8,6 +8,9 @@ class BranchListView {
     this.collapsedGroups = this.restoreSet('gittree.sidebar.branchGroups');
     this.selectedBranchKey = null;
     this.selectedBranchElement = null;
+    this.metadata = null;
+    this.status = null;
+    this.operationState = null;
     this.searchInput = document.getElementById('branch-search');
     if (this.searchInput) {
       this.searchInput.addEventListener('input', () => {
@@ -30,13 +33,34 @@ class BranchListView {
       event.preventDefault();
       this.activateBranchRow(row);
     });
+    this.container.addEventListener('contextmenu', event => {
+      const row = event.target.closest('.branch-item');
+      if (!row || !this.container.contains(row)) return;
+      this.selectBranchRow(row);
+      const branch = this.metadata?.branches?.find(item => (
+        item.kind === row.dataset.branchKind && item.name === row.dataset.branchName
+      ));
+      if (!branch) return;
+      this.app.components.branchContextMenu.open(
+        event, branch, this.metadata, this.status, this.operationState
+      );
+    });
   }
 
   async load(repoPath) {
     try {
-      const result = await window.gitTree.getBranches(repoPath);
+      this.app.components.branchContextMenu?.close();
+      const [result, metadata, status, operationState] = await Promise.all([
+        window.gitTree.getBranches(repoPath),
+        window.gitTree.getBranchMetadata(repoPath),
+        window.gitTree.getStatus(repoPath),
+        window.gitTree.getOperationState(repoPath)
+      ]);
       if (result?.error) { this.container.innerHTML = ''; return; }
       this.data = result;
+      this.metadata = metadata?.error ? null : metadata;
+      this.status = status?.error ? null : status;
+      this.operationState = operationState?.error ? null : operationState;
       if (this.searchInput) this.searchInput.value = '';
       this.filter = '';
       this.selectedBranchKey = null;
@@ -152,9 +176,11 @@ class BranchListView {
   branchRow(branch, current, isRemote = false, displayName = branch.name) {
     const el = document.createElement('div');
     el.className = 'branch-item';
+    if (displayName !== branch.name) el.classList.add('is-nested');
     el.tabIndex = 0;
     el.dataset.branchName = branch.name;
     el.dataset.remote = String(isRemote);
+    el.dataset.branchKind = isRemote ? 'remote' : 'local';
     if (!isRemote && branch.name === current) el.classList.add('active');
     const selectionKey = `${isRemote ? 'remote' : 'local'}:${branch.name}`;
     el.dataset.selectionKey = selectionKey;
@@ -216,7 +242,7 @@ class BranchListView {
   async checkoutRemote(localName, remoteName) {
     const repo = this.app.state.repo;
     if (!repo) return;
-    const r = await window.gitTree.createBranch(repo.path, localName, `origin/${remoteName}`);
+    const r = await window.gitTree.checkoutTrackingBranch(repo.path, remoteName);
     if (r.error) { this.app.showToast(r.error, 'error'); return; }
     this.app.emit('refresh');
   }

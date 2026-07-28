@@ -154,7 +154,15 @@
 .branch-item.selected:not(.active) {
   background: var(--surface-active);
   color: var(--text-primary);
-  box-shadow: inset 3px 0 0 var(--border-focus);
+  box-shadow: none;
+}
+
+.branch-item.selected:not(.active) .branch-icon {
+  color: var(--text-link);
+}
+
+.branch-item.is-nested {
+  padding-left: 32px;
 }
 
 .branch-item:focus-visible {

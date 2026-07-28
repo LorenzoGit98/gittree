@@ -1,49 +1,56 @@
 {
   "name": "gittree-minimal",
   "version": "1.0.0",
-  "description": "A lightweight, fast Git GUI client — SourceTree alternative",
+  "description": "A fast, visual and privacy-first Git desktop client with a SourceTree-style graph.",
   "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",
+    "prepare:assets": "node scripts/prepare-build-assets.js",
+    "validate": "npm run test && npm run audit:design",
     "audit:design": "node .agents/skills/gittree-design-system/scripts/audit-design.js",
     "perf:renderer": "node scripts/renderer-perf-benchmark.js",
     "test:renderer-ui": "node scripts/renderer-ui-regression.js",
-    "build": "electron-builder",
-    "build:win": "electron-builder --win",
-    "build:mac": "electron-builder --mac",
-    "build:linux": "electron-builder --linux"
+    "test": "node --test",
+    "build": "npm run prepare:assets && electron-builder --dir --publish never",
+    "dist": "npm run prepare:assets && electron-builder --publish never",
+    "dist:win": "npm run prepare:assets && electron-builder --win --publish never",
+    "dist:mac": "npm run prepare:assets && electron-builder --mac --publish never",
+    "dist:linux": "npm run prepare:assets && electron-builder --linux --publish never",
+    "release:check": "node scripts/check-release-version.js",
+    "release:publish": "npm run release:check && npm run prepare:assets && electron-builder --publish always"
   },
-  "build": {
-    "appId": "com.gittreeminimal.app",
-    "productName": "GitTree Minimal",
-    "files": [
-      "src/**/*",
-      "node_modules/**/*"
-    ],
-    "win": {
-      "target": "nsis"
-    },
-    "mac": {
-      "target": "dmg",
-      "category": "public.app-category.developer-tools"
-    },
-    "linux": {
-      "target": "AppImage",
-      "category": "Development"
-    }
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lorenzogit98/gittree-minimal.git"
   },
-  "keywords": [],
-  "author": "",
+  "homepage": "https://github.com/lorenzogit98/gittree-minimal#readme",
+  "bugs": {
+    "url": "https://github.com/lorenzogit98/gittree-minimal/issues"
+  },
+  "keywords": [
+    "git",
+    "desktop",
+    "electron",
+    "git-client",
+    "source-tree",
+    "developer-tools"
+  ],
+  "author": "Lorenzo",
   "license": "ISC",
+  "desktopName": "GitTree.desktop",
   "type": "commonjs",
+  "engines": {
+    "node": ">=22"
+  },
   "dependencies": {
     "@phosphor-icons/web": "^2.1.2",
     "diff2html": "^3.4.56",
-    "electron": "^43.2.0",
+    "electron-updater": "^6.8.9",
     "i18next": "^26.3.6",
     "simple-git": "^3.36.0"
   },
   "devDependencies": {
+    "electron": "^43.2.0",
     "electron-builder": "^26.15.3"
   }
 }
