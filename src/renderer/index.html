@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; font-src 'self'; script-src 'self'">
+  <title>GitTree</title>
+  <link rel="icon" type="image/png" href="../../icon.png">
+  <link rel="stylesheet" href="../../node_modules/@phosphor-icons/web/src/regular/style.css">
+  <link rel="stylesheet" href="styles/variables.css">
+  <link rel="stylesheet" href="styles/layout.css">
+  <link rel="stylesheet" href="styles/components.css">
+  <link rel="stylesheet" href="styles/repo-tabs.css">
+  <link rel="stylesheet" href="styles/branch-list.css">
+  <link rel="stylesheet" href="styles/branch-context-menu.css">
+  <link rel="stylesheet" href="styles/commit-context-menu.css">
+  <link rel="stylesheet" href="styles/graph.css">
+  <link rel="stylesheet" href="styles/changes.css">
+  <link rel="stylesheet" href="styles/pull-requests.css">
+  <link rel="stylesheet" href="styles/diff-viewer.css">
+  <link rel="stylesheet" href="styles/search.css">
+  <link rel="stylesheet" href="styles/merge.css">
+  <link rel="stylesheet" href="styles/conflicts.css">
+  <link rel="stylesheet" href="styles/branch-compare.css">
+  <link rel="stylesheet" href="styles/welcome.css">
+  <link rel="stylesheet" href="styles/settings.css">
+</head>
+<body>
+<div id="app">
+  <div id="welcome-screen" class="welcome">
+    <div class="welcome-card">
+      <div class="welcome-brand" aria-hidden="true">
+        <img src="../../icon.png" alt="">
+      </div>
+      <div class="welcome-content">
+        <span class="eyebrow" data-i18n="welcome.eyebrow">Git workspace</span>
+        <h1>GitTree</h1>
+        <p data-i18n="welcome.subtitle">A focused desktop client for branches, commits and code review.</p>
+        <div class="welcome-actions">
+          <button id="btn-open-repo" class="btn btn-primary">
+            <i class="ph ph-folder-open"></i>
+            <span data-i18n="welcome.open">Open repository</span>
+          </button>
+          <button id="btn-clone-repo" class="btn">
+            <i class="ph ph-download-simple"></i>
+            <span data-i18n="welcome.clone">Clone repository</span>
+          </button>
+        </div>
+        <div class="welcome-recent" id="recent-repos"></div>
+      </div>
+      <div class="welcome-settings">
+        <button class="btn-icon theme-toggle" type="button" title="Toggle theme" data-i18n-title="common.toggleTheme">
+          <i class="ph ph-moon"></i>
+        </button>
+        <button class="btn btn-quiet language-toggle" type="button" title="Change language" data-i18n-title="common.changeLanguage">
+          <i class="ph ph-translate"></i>
+          <span class="language-code">EN</span>
+        </button>
+        <div class="window-controls">
+          <button class="btn-icon window-minimize" type="button" title="Minimize" data-i18n-title="common.minimize">
+            <i class="ph ph-minus"></i>
+          </button>
+          <button class="btn-icon window-maximize" type="button" title="Maximize" data-i18n-title="common.maximize">
+            <i class="ph ph-square"></i>
+          </button>
+          <button class="btn-icon window-close" type="button" title="Close" data-i18n-title="common.close">
+            <i class="ph ph-x"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="workspace" class="workspace is-hidden">
+    <header class="app-header">
+      <div id="repo-tabs-bar" class="repo-tabs-bar">
+        <div id="repo-tab-list" class="repo-tab-container"></div>
+        <button id="btn-add-repo-tab" class="btn-icon tab-add-btn" title="Add repository" data-i18n-title="tabs.add">
+          <i class="ph ph-plus"></i>
+        </button>
+      </div>
+      <div class="app-header-actions">
+        <button id="btn-settings" class="btn-icon settings-open" type="button"
+          title="Settings" data-i18n-title="settings.title">
+          <i class="ph ph-gear-six"></i>
+        </button>
+        <button class="btn-icon theme-toggle" type="button" title="Toggle theme" data-i18n-title="common.toggleTheme">
+          <i class="ph ph-moon"></i>
+        </button>
+        <button class="btn btn-quiet language-toggle" type="button" title="Change language" data-i18n-title="common.changeLanguage">
+          <i class="ph ph-translate"></i>
+          <span class="language-code">EN</span>
+        </button>
+      </div>
+      <div class="window-controls">
+        <button class="btn-icon window-minimize" type="button" title="Minimize" data-i18n-title="common.minimize">
+          <i class="ph ph-minus"></i>
+        </button>
+        <button class="btn-icon window-maximize" type="button" title="Maximize" data-i18n-title="common.maximize">
+          <i class="ph ph-square"></i>
+        </button>
+        <button class="btn-icon window-close" type="button" title="Close" data-i18n-title="common.close">
+          <i class="ph ph-x"></i>
+        </button>
+      </div>
+    </header>
+
+    <div class="workspace-command-bar" role="toolbar" aria-label="Repository actions" data-i18n-aria-label="actions.repositoryActions">
+      <div class="workspace-command-group">
+        <button id="btn-fetch" class="btn btn-toolbar">
+          <i class="ph ph-cloud-arrow-down"></i><span data-i18n="actions.fetch">Fetch</span>
+        </button>
+        <button id="btn-pull" class="btn btn-toolbar">
+          <i class="ph ph-download-simple"></i><span data-i18n="actions.pull">Pull</span>
+        </button>
+        <button id="btn-push" class="btn btn-toolbar">
+          <i class="ph ph-upload-simple"></i><span data-i18n="actions.push">Push</span>
+        </button>
+        <button id="btn-refresh" class="btn-icon" title="Refresh" data-i18n-title="actions.refresh">
+          <i class="ph ph-arrows-clockwise"></i>
+        </button>
+      </div>
+      <div class="workspace-command-group">
+        <button id="btn-update" class="btn btn-toolbar is-hidden" type="button">
+          <i class="ph ph-download-simple"></i>
+          <span data-i18n="updates.available">Update available</span>
+        </button>
+        <button id="btn-toggle-inspector" class="btn btn-toolbar active" type="button" aria-pressed="true">
+          <i class="ph ph-sidebar-simple"></i>
+          <span data-i18n="details.eyebrow">Inspector</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="workspace-body" id="workspace-body">
+      <aside id="sidebar" class="bento-panel sidebar">
+        <div class="panel-heading">
+          <div>
+            <span class="eyebrow" data-i18n="sidebar.workspace">Workspace</span>
+            <h2 data-i18n="sidebar.branches">Branches</h2>
+          </div>
+          <div class="panel-heading-actions">
+            <span id="branch-loading-indicator" class="project-loading-indicator is-hidden" role="status" aria-live="polite">
+              <i class="ph ph-circle-notch" aria-hidden="true"></i>
+              <span data-i18n="common.loading">Loading…</span>
+            </span>
+            <button id="btn-new-branch" class="btn-icon" title="New branch" data-i18n-title="sidebar.newBranch">
+              <i class="ph ph-plus"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="branch-search-wrapper">
+          <i class="ph ph-magnifying-glass"></i>
+          <input type="text" id="branch-search" class="branch-search-input" placeholder="Filter branches" data-i18n-placeholder="sidebar.filter">
+        </div>
+
+        <div class="sidebar-scroll" id="sidebar-scroll">
+          <div id="branch-list" class="branch-list"></div>
+        </div>
+
+        <div class="sidebar-pinned-bottom">
+          <button id="branch-create-row" class="create-branch-row">
+            <i class="ph ph-git-branch"></i>
+            <span data-i18n="sidebar.createBranch">Create branch</span>
+          </button>
+
+          <div class="sidebar-section" data-section="stashes">
+            <button class="sidebar-section-header collapsible collapsed" type="button">
+              <i class="ph ph-caret-down collapse-arrow collapsed"></i>
+              <span data-i18n="sidebar.stashes">Stashes</span>
+            </button>
+            <div class="sidebar-section-body collapsed" id="stash-section-body">
+              <div id="stash-list" class="branch-list"></div>
+            </div>
+          </div>
+
+          <div class="sidebar-section" data-section="tags">
+            <button class="sidebar-section-header collapsible" type="button">
+              <i class="ph ph-caret-down collapse-arrow"></i>
+              <span data-i18n="sidebar.tags">Tags</span>
+            </button>
+            <div class="sidebar-section-body" id="tag-section-body">
+              <div id="tag-list" class="branch-list"></div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <div class="resize-handle-v" id="resize-handle-left" role="separator" aria-orientation="vertical"></div>
+
+      <main class="bento-panel main">
+        <div id="toolbar" class="toolbar">
+          <div class="toolbar-title" id="workspace-title">
+            <span class="eyebrow" data-i18n="history.eyebrow">Repository activity</span>
+            <h2 data-i18n="history.title">Commit history</h2>
+            <span id="workspace-loading-indicator" class="project-loading-indicator is-hidden" role="status" aria-live="polite">
+              <i class="ph ph-circle-notch" aria-hidden="true"></i>
+              <span data-i18n="common.loading">Loading…</span>
+            </span>
+          </div>
+          <div id="workspace-mode-switch" class="segmented-control workspace-mode-switch" role="tablist" aria-label="Workspace view" data-i18n-aria-label="workspace.view">
+            <button class="btn active" type="button" role="tab" aria-selected="true" data-workspace-mode="history">
+              <i class="ph ph-git-commit"></i><span data-i18n="workspace.history">History</span>
+            </button>
+            <button class="btn" type="button" role="tab" aria-selected="false" data-workspace-mode="changes">
+              <i class="ph ph-files"></i><span data-i18n="workspace.changes">Changes</span>
+              <span id="workspace-changes-count" class="mode-count is-hidden">0</span>
+            </button>
+            <button class="btn" type="button" role="tab" aria-selected="false" data-workspace-mode="pullRequests">
+              <i class="ph ph-git-pull-request"></i><span data-i18n="workspace.pullRequests">Pull Requests</span>
+            </button>
+          </div>
+          <button class="search-trigger" id="global-search">
+            <i class="ph ph-magnifying-glass"></i>
+            <span data-i18n="search.trigger">Search commits, branches and files</span>
+            <kbd data-platform-shortcut="search">Ctrl P</kbd>
+          </button>
+        </div>
+
+        <div class="content-area" id="main-content-area">
+          <div id="main-view" class="graph-panel">
+            <div class="graph-view" id="graph-view">
+              <div class="graph-header">
+                <div class="graph-column-header gh-graph" data-column="graph">
+                  <span class="graph-column-label" data-i18n="history.graph">Graph</span>
+                  <span class="graph-column-resizer" role="separator" tabindex="0" aria-orientation="vertical" data-column="graph"></span>
+                </div>
+                <div class="graph-column-header gh-message" data-column="message">
+                  <span class="graph-column-label" data-i18n="history.message">Message</span>
+                  <span class="graph-column-resizer" role="separator" tabindex="0" aria-orientation="vertical" data-column="message"></span>
+                </div>
+                <div class="graph-column-header gh-author" data-column="author">
+                  <span class="graph-column-label" data-i18n="history.author">Author</span>
+                  <span class="graph-column-resizer" role="separator" tabindex="0" aria-orientation="vertical" data-column="author"></span>
+                </div>
+                <div class="graph-column-header gh-date" data-column="date">
+                  <span class="graph-column-label" data-i18n="history.date">Date</span>
+                  <span class="graph-column-resizer" role="separator" tabindex="0" aria-orientation="vertical" data-column="date"></span>
+                </div>
+                <div class="graph-column-header gh-hash" data-column="hash">
+                  <span class="graph-column-label" data-i18n="history.hash">Hash</span>
+                  <span class="graph-column-resizer" role="separator" tabindex="0" aria-orientation="vertical" data-column="hash"></span>
+                </div>
+              </div>
+              <div id="graph-body" class="graph-canvas"></div>
+            </div>
+          </div>
+          <div id="changes-view" class="changes-view is-hidden">
+            <div class="changes-lists">
+              <section class="changes-section">
+                <div class="changes-section-header">
+                  <div>
+                    <h3 data-i18n="changes.unstaged">Unstaged</h3>
+                    <span id="unstaged-count" class="badge">0</span>
+                  </div>
+                  <button id="btn-stage-all" class="btn btn-small" type="button">
+                    <i class="ph ph-plus-circle"></i><span data-i18n="changes.stageAll">Stage all</span>
+                  </button>
+                </div>
+                <div id="unstaged-files" class="changes-file-list" role="list"></div>
+              </section>
+              <section class="changes-section">
+                <div class="changes-section-header">
+                  <div>
+                    <h3 data-i18n="changes.staged">Staged</h3>
+                    <span id="staged-count" class="badge">0</span>
+                  </div>
+                  <button id="btn-unstage-all" class="btn btn-small" type="button">
+                    <i class="ph ph-minus-circle"></i><span data-i18n="changes.unstageAll">Unstage all</span>
+                  </button>
+                </div>
+                <div id="staged-files" class="changes-file-list" role="list"></div>
+              </section>
+            </div>
+            <form id="commit-composer" class="commit-composer">
+              <div class="commit-composer-heading">
+                <div>
+                  <span class="eyebrow" data-i18n="changes.composerEyebrow">Create commit</span>
+                  <h3 data-i18n="changes.composerTitle">Commit staged changes</h3>
+                </div>
+                <button id="btn-commit-identity" class="btn btn-quiet" type="button">
+                  <i class="ph ph-identification-card"></i>
+                  <span data-i18n="changes.identity">Identity</span>
+                </button>
+              </div>
+              <input id="commit-summary" class="commit-input" maxlength="200" required data-i18n-placeholder="changes.summaryPlaceholder" placeholder="Commit summary">
+              <textarea id="commit-body" class="commit-input commit-body" maxlength="100000" data-i18n-placeholder="changes.bodyPlaceholder" placeholder="Description (optional)"></textarea>
+              <div class="commit-options">
+                <label><input id="commit-amend" type="checkbox"> <span data-i18n="changes.amend">Amend HEAD</span></label>
+                <label><input id="commit-signoff" type="checkbox"> <span data-i18n="changes.signoff">Add sign-off</span></label>
+                <label id="commit-signing-label"><input id="commit-signing" type="checkbox"> <span data-i18n="changes.signing">Sign commit</span></label>
+                <label><input id="commit-author-toggle" type="checkbox"> <span data-i18n="changes.overrideAuthor">Override author</span></label>
+              </div>
+              <div id="commit-author-fields" class="commit-author-fields is-hidden">
+                <input id="commit-author-name" class="commit-input" maxlength="200" data-i18n-placeholder="changes.authorName" placeholder="Author name">
+                <input id="commit-author-email" class="commit-input" maxlength="254" type="email" data-i18n-placeholder="changes.authorEmail" placeholder="Author email">
+              </div>
+              <div class="commit-composer-footer">
+                <span id="commit-identity-status" class="text-secondary"></span>
+                <button id="btn-commit" class="btn btn-primary" type="submit">
+                  <i class="ph ph-check-circle"></i><span data-i18n="changes.commit">Commit</span>
+                </button>
+              </div>
+            </form>
+          </div>
+          <div id="pull-requests-view" class="pull-requests-view is-hidden">
+            <div class="pr-toolbar">
+              <div id="pr-provider-switch" class="segmented-control" role="tablist" data-i18n-aria-label="pullRequests.provider">
+                <button class="btn active" type="button" data-pr-provider="github">
+                  <i class="ph ph-github-logo"></i><span>GitHub</span>
+                </button>
+                <button class="btn" type="button" data-pr-provider="gitlab">
+                  <i class="ph ph-gitlab-logo"></i><span>GitLab</span>
+                </button>
+              </div>
+              <div id="pr-filters" class="pr-filters">
+                <button class="chip active" type="button" data-pr-filter="open" data-i18n="pullRequests.open">Open</button>
+                <button class="chip" type="button" data-pr-filter="review-requested" data-i18n="pullRequests.reviewRequested">Review requested</button>
+                <button class="chip" type="button" data-pr-filter="authored" data-i18n="pullRequests.authored">Authored</button>
+                <button class="chip" type="button" data-pr-filter="all" data-i18n="pullRequests.all">All</button>
+              </div>
+              <div class="pr-toolbar-end">
+                <input id="pr-search" class="pr-search" type="search" data-i18n-placeholder="pullRequests.search" placeholder="Search pull requests">
+                <button id="btn-pr-auth" class="btn btn-quiet" type="button">
+                  <i class="ph ph-plugs-connected"></i><span data-i18n="pullRequests.connect">Connect</span>
+                </button>
+              </div>
+            </div>
+            <div id="pr-notice" class="pr-notice is-hidden"></div>
+            <div id="pr-list" class="pr-list" role="list"></div>
+          </div>
+        </div>
+      </main>
+
+      <div class="resize-handle-v" id="resize-handle-right" role="separator" aria-orientation="vertical"></div>
+
+      <aside id="detail-panel" class="bento-panel inspector">
+        <div class="detail-panel-header">
+          <div class="detail-title-wrap">
+            <span class="eyebrow" data-i18n="details.eyebrow">Inspector</span>
+            <h2 id="detail-title" data-i18n="details.title">Commit details</h2>
+            <span id="inspector-loading-indicator" class="project-loading-indicator is-hidden" role="status" aria-live="polite">
+              <i class="ph ph-circle-notch" aria-hidden="true"></i>
+              <span data-i18n="common.loading">Loading…</span>
+            </span>
+          </div>
+          <div class="detail-panel-controls">
+            <div class="segmented-control" aria-label="Diff layout" data-i18n-aria-label="details.diffLayout">
+              <button id="btn-diff-unified" class="btn btn-small active" data-i18n="details.unified">Unified</button>
+              <button id="btn-diff-split" class="btn btn-small" data-i18n="details.split">Split</button>
+            </div>
+            <button id="btn-maximize-inspector" class="btn-icon" type="button" title="Maximize inspector" data-i18n-title="details.maximize">
+              <i class="ph ph-arrows-out-simple"></i>
+            </button>
+            <button id="btn-close-inspector" class="btn-icon" type="button" title="Close inspector" data-i18n-title="details.close">
+              <i class="ph ph-x"></i>
+            </button>
+          </div>
+        </div>
+        <div id="detail-body" class="detail-panel-body">
+          <div class="diff-placeholder">
+            <i class="ph ph-cursor-click"></i>
+            <span data-i18n="details.placeholder">Select a commit to inspect its changes.</span>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <div id="status-bar" class="status-bar">
+      <div class="status-left">
+        <span class="status-dot"></span>
+        <span id="status-repo"></span>
+        <span id="status-branch"></span>
+      </div>
+      <div class="status-right"><span id="status-info"></span></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <div id="search-overlay" class="search-overlay is-hidden">
+    <div class="search-panel">
+      <div class="search-panel-input">
+        <i class="ph ph-magnifying-glass"></i>
+        <input type="text" id="search-input" placeholder="Search branches, commits, files and tags" data-i18n-placeholder="search.placeholder" autofocus>
+        <kbd>Esc</kbd>
+      </div>
+      <div class="search-filters" id="search-filters"></div>
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <div id="merge-workspace-overlay" class="fullscreen-workspace is-hidden"></div>
+  <div id="modal-overlay" class="confirm-overlay is-hidden">
+    <div class="confirm-dialog" id="modal-dialog"></div>
+  </div>
+</div>
+
+<script src="../../node_modules/i18next/dist/umd/i18next.min.js"></script>
+<script src="i18n.js"></script>
+<script src="theme.js"></script>
+<script src="components/repo-tabs.js"></script>
+<script src="components/settings-view.js"></script>
+<script src="components/branch-context-menu.js"></script>
+<script src="components/commit-context-menu.js"></script>
+<script src="components/branch-list.js"></script>
+<script src="components/graph-layout.js"></script>
+<script src="components/graph-view.js"></script>
+<script src="components/changes-view.js"></script>
+<script src="components/pull-request-view.js"></script>
+<script src="components/diff-viewer.js"></script>
+<script src="components/search.js"></script>
+<script src="components/branch-compare.js"></script>
+<script src="components/merge-workspace.js"></script>
+<script src="components/conflict-resolver.js"></script>
+<script src="components/status-bar.js"></script>
+<script src="components/welcome.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

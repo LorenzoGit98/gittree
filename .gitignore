@@ -1,0 +1,11 @@
+node_modules/
+dist/
+out/
+build/icon.png
+*.blockmap
+latest*.yml
+builder-debug.yml
+builder-effective-config.yaml
+*.log
+.DS_Store
+Thumbs.db

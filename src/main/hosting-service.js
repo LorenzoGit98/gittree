@@ -1,0 +1,858 @@
+const path = require('node:path');
+
+class HostingService {
+  constructor(options) {
+    this.vault = options.vault;
+    this.oauthConfig = options.oauthConfig || {};
+    this.fetch = options.fetch || global.fetch;
+    this.openExternal = options.openExternal || (async () => {});
+    this.onAuthState = options.onAuthState || (() => {});
+    this.sleep = options.sleep || (milliseconds => new Promise(resolve => {
+      setTimeout(resolve, milliseconds);
+    }));
+    this.loginSessions = new Map();
+  }
+
+  validateProvider(provider) {
+    if (!['github', 'gitlab'].includes(provider)) {
+      throw new Error(`Unsupported hosting provider: ${provider}`);
+    }
+    return provider;
+  }
+
+  validateRepository(repository) {
+    const provider = this.validateProvider(repository?.provider);
+    const expectedHost = provider === 'github' ? 'github.com' : 'gitlab.com';
+    if (repository.host !== expectedHost) {
+      throw new Error(`${provider} review is available only for ${expectedHost}`);
+    }
+    const ownerPath = String(repository.ownerPath || '');
+    const name = String(repository.repository || '');
+    const segment = /^[A-Za-z0-9_.-]+$/;
+    if (
+      !ownerPath ||
+      ownerPath.length > 500 ||
+      !ownerPath.split('/').every(part => segment.test(part)) ||
+      !segment.test(name)
+    ) {
+      throw new Error('Invalid hosting repository');
+    }
+    return { provider, host: expectedHost, ownerPath, repository: name };
+  }
+
+  validatePullRequestId(id) {
+    const value = Number(id);
+    if (!Number.isSafeInteger(value) || value <= 0) {
+      throw new Error('Invalid pull request ID');
+    }
+    return value;
+  }
+
+  repositoryKey(repository) {
+    const value = this.validateRepository(repository);
+    return `${value.provider}:${value.ownerPath}/${value.repository}`;
+  }
+
+  draftKey(repository, id) {
+    return `${this.repositoryKey(repository)}:${this.validatePullRequestId(id)}`;
+  }
+
+  async providerStatus(provider) {
+    this.validateProvider(provider);
+    const account = await this.vault.getAccount(provider);
+    const security = this.vault.getSecurityState();
+    return {
+      provider,
+      configured: Boolean(this.oauthConfig[provider]),
+      connected: Boolean(account?.accessToken),
+      user: account?.user || null,
+      phase: this.loginSessions.has(provider) ? 'authorizing' : 'idle',
+      warning: security.warning || ''
+    };
+  }
+
+  async login(provider) {
+    this.validateProvider(provider);
+    const clientId = this.oauthConfig[provider];
+    if (!clientId) throw new Error(`${provider} OAuth is not configured in this build`);
+    await this.cancelLogin(provider);
+    const controller = new AbortController();
+    const device = provider === 'github'
+      ? await this.requestForm(
+          'https://github.com/login/device/code',
+          {
+            client_id: clientId
+          },
+          controller.signal
+        )
+      : await this.requestForm(
+          'https://gitlab.com/oauth/authorize_device',
+          {
+            client_id: clientId,
+            scope: 'api'
+          },
+          controller.signal
+        );
+    const session = {
+      controller,
+      deviceCode: device.device_code,
+      expiresAt: Date.now() + Number(device.expires_in || 900) * 1000,
+      interval: Math.max(5, Number(device.interval || 5))
+    };
+    this.loginSessions.set(provider, session);
+    const verificationUri = device.verification_uri_complete
+      || device.verification_uri
+      || device.verification_url;
+    if (verificationUri) {
+      const parsed = new URL(verificationUri);
+      const expectedHost = provider === 'github' ? 'github.com' : 'gitlab.com';
+      if (parsed.protocol !== 'https:' || parsed.hostname !== expectedHost) {
+        throw new Error('Provider returned an unsafe verification URL');
+      }
+      await this.openExternal(verificationUri);
+    }
+    this.pollDeviceToken(provider, clientId, session).catch(error => {
+      if (error.name !== 'AbortError') {
+        this.onAuthState({ provider, phase: 'error', error: error.message });
+      }
+    });
+    return {
+      success: true,
+      provider,
+      userCode: device.user_code,
+      verificationUri,
+      expiresIn: Number(device.expires_in || 900),
+      interval: session.interval
+    };
+  }
+
+  async pollDeviceToken(provider, clientId, session) {
+    while (Date.now() < session.expiresAt && !session.controller.signal.aborted) {
+      await this.sleep(session.interval * 1000);
+      let token;
+      if (provider === 'github') {
+        token = await this.requestForm(
+          'https://github.com/login/oauth/access_token',
+          {
+            client_id: clientId,
+            device_code: session.deviceCode,
+            grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
+          },
+          session.controller.signal
+        );
+      } else {
+        token = await this.requestForm(
+          'https://gitlab.com/oauth/token',
+          {
+            client_id: clientId,
+            device_code: session.deviceCode,
+            grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
+          },
+          session.controller.signal
+        );
+      }
+      if (token.error === 'authorization_pending') continue;
+      if (token.error === 'slow_down') {
+        session.interval += 5;
+        continue;
+      }
+      if (token.error) throw new Error(token.error_description || token.error);
+      if (!token.access_token) throw new Error('Provider did not return an access token');
+      const account = {
+        accessToken: token.access_token,
+        refreshToken: token.refresh_token || '',
+        expiresAt: token.expires_in
+          ? Date.now() + Number(token.expires_in) * 1000
+          : null,
+        user: await this.fetchCurrentUser(provider, token.access_token)
+      };
+      await this.vault.setAccount(provider, account);
+      this.loginSessions.delete(provider);
+      this.onAuthState({
+        provider,
+        phase: 'connected',
+        status: await this.providerStatus(provider)
+      });
+      return;
+    }
+    this.loginSessions.delete(provider);
+    if (!session.controller.signal.aborted) {
+      throw new Error('Device authorization expired');
+    }
+  }
+
+  async cancelLogin(provider) {
+    this.validateProvider(provider);
+    const session = this.loginSessions.get(provider);
+    if (session) session.controller.abort();
+    this.loginSessions.delete(provider);
+    return { success: true };
+  }
+
+  async logout(provider) {
+    await this.cancelLogin(provider);
+    await this.vault.removeAccount(provider);
+    return { success: true, provider };
+  }
+
+  async requestForm(url, values, signal) {
+    const response = await this.fetch(url, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams(values).toString(),
+      signal
+    });
+    return this.readResponse(response);
+  }
+
+  async fetchCurrentUser(provider, token) {
+    const response = await this.fetch(
+      provider === 'github'
+        ? 'https://api.github.com/user'
+        : 'https://gitlab.com/api/v4/user',
+      {
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+          'User-Agent': 'GitTree'
+        }
+      }
+    );
+    const user = await this.readResponse(response);
+    return provider === 'github'
+      ? { id: user.id, login: user.login, name: user.name, avatarUrl: user.avatar_url }
+      : {
+          id: user.id,
+          login: user.username,
+          name: user.name,
+          avatarUrl: user.avatar_url
+        };
+  }
+
+  async readResponse(response) {
+    const text = await response.text();
+    let value = {};
+    try {
+      value = text ? JSON.parse(text) : {};
+    } catch {
+      value = { message: text };
+    }
+    if (!response.ok) {
+      const rateLimit = response.headers.get('x-ratelimit-remaining') === '0'
+        ? ' Provider rate limit reached.'
+        : '';
+      throw new Error(`${value.message || value.error_description || `HTTP ${response.status}`}${rateLimit}`);
+    }
+    return value;
+  }
+
+  async api(repository, endpoint, options = {}) {
+    const repo = this.validateRepository(repository);
+    const account = await this.getAccessAccount(repo.provider);
+    if (!account?.accessToken) throw new Error(`Connect ${repo.provider} first`);
+    const url = repo.provider === 'github'
+      ? `https://api.github.com${endpoint}`
+      : `https://gitlab.com/api/v4${endpoint}`;
+    const response = await this.fetch(url, {
+      method: options.method || 'GET',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${account.accessToken}`,
+        'User-Agent': 'GitTree',
+        ...(options.body ? { 'Content-Type': 'application/json' } : {})
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined
+    });
+    const data = await this.readResponse(response);
+    return { data, headers: response.headers };
+  }
+
+  async getAccessAccount(provider) {
+    const account = await this.vault.getAccount(provider);
+    if (!account?.accessToken) return account;
+    if (
+      !account.refreshToken ||
+      !account.expiresAt ||
+      account.expiresAt > Date.now() + 60000
+    ) {
+      return account;
+    }
+    const clientId = this.oauthConfig[provider];
+    if (!clientId) throw new Error(`${provider} OAuth is not configured in this build`);
+    const token = await this.requestForm(
+      provider === 'github'
+        ? 'https://github.com/login/oauth/access_token'
+        : 'https://gitlab.com/oauth/token',
+      {
+        client_id: clientId,
+        grant_type: 'refresh_token',
+        refresh_token: account.refreshToken
+      }
+    );
+    if (!token.access_token) throw new Error('Provider token refresh failed');
+    const refreshed = {
+      ...account,
+      accessToken: token.access_token,
+      refreshToken: token.refresh_token || account.refreshToken,
+      expiresAt: token.expires_in
+        ? Date.now() + Number(token.expires_in) * 1000
+        : account.expiresAt
+    };
+    await this.vault.setAccount(provider, refreshed);
+    return refreshed;
+  }
+
+  async listPullRequests(repository, options = {}) {
+    const repo = this.validateRepository(repository);
+    const page = Math.max(1, Math.min(10000, Number(options.page) || 1));
+    const filter = ['open', 'review-requested', 'authored', 'all'].includes(options.filter)
+      ? options.filter
+      : 'open';
+    const search = String(options.search || '').trim().slice(0, 200).toLowerCase();
+    const account = await this.vault.getAccount(repo.provider);
+    if (!account?.accessToken) throw new Error(`Connect ${repo.provider} first`);
+    let result;
+    if (repo.provider === 'github') {
+      const state = filter === 'all' ? 'all' : 'open';
+      result = await this.api(
+        repo,
+        `/repos/${encodeURIComponent(repo.ownerPath)}/${encodeURIComponent(repo.repository)}/pulls?state=${state}&per_page=50&page=${page}`
+      );
+      let items = result.data.map(item => this.normalizeGitHubSummary(item, account.user));
+      if (filter === 'authored') {
+        items = items.filter(item => item.author.login === account.user?.login);
+      } else if (filter === 'review-requested') {
+        items = items.filter(item => item.reviewStatus === 'requested');
+      }
+      if (search) {
+        items = items.filter(item => (
+          item.title.toLowerCase().includes(search)
+          || item.source.toLowerCase().includes(search)
+          || String(item.number) === search
+        ));
+      }
+      return {
+        items,
+        page,
+        hasMore: /rel="next"/.test(result.headers.get('link') || '')
+      };
+    }
+
+    const project = encodeURIComponent(`${repo.ownerPath}/${repo.repository}`);
+    const query = new URLSearchParams({
+      state: filter === 'all' ? 'all' : 'opened',
+      scope: 'all',
+      per_page: '50',
+      page: String(page),
+      ...(search ? { search } : {}),
+      ...(filter === 'authored' && account.user?.login
+        ? { author_username: account.user.login }
+        : {}),
+      ...(filter === 'review-requested' && account.user?.login
+        ? { reviewer_username: account.user.login }
+        : {})
+    });
+    result = await this.api(repo, `/projects/${project}/merge_requests?${query}`);
+    return {
+      items: result.data.map(item => this.normalizeGitLabSummary(item, account.user)),
+      page,
+      hasMore: Boolean(result.headers.get('x-next-page'))
+    };
+  }
+
+  normalizeGitHubSummary(item, user) {
+    return {
+      provider: 'github',
+      id: item.id,
+      number: item.number,
+      title: item.title,
+      author: {
+        login: item.user?.login || '',
+        avatarUrl: item.user?.avatar_url || ''
+      },
+      source: item.head?.ref || '',
+      target: item.base?.ref || '',
+      headSha: item.head?.sha || '',
+      state: item.state,
+      draft: Boolean(item.draft),
+      reviewStatus: (item.requested_reviewers || []).some(
+        reviewer => reviewer.login === user?.login
+      ) ? 'requested' : 'none',
+      ciStatus: 'unknown'
+    };
+  }
+
+  normalizeGitLabSummary(item, user) {
+    return {
+      provider: 'gitlab',
+      id: item.id,
+      number: item.iid,
+      title: item.title,
+      author: {
+        login: item.author?.username || '',
+        avatarUrl: item.author?.avatar_url || ''
+      },
+      source: item.source_branch || '',
+      target: item.target_branch || '',
+      headSha: item.sha || item.diff_refs?.head_sha || '',
+      state: item.state,
+      draft: Boolean(item.draft || /^draft:/i.test(item.title || '')),
+      reviewStatus: (item.reviewers || []).some(
+        reviewer => reviewer.username === user?.login
+      ) ? 'requested' : 'none',
+      ciStatus: item.head_pipeline?.status || 'unknown'
+    };
+  }
+
+  async pullRequestDetail(repository, id) {
+    const repo = this.validateRepository(repository);
+    const pullRequestId = this.validatePullRequestId(id);
+    if (repo.provider === 'github') {
+      const prefix =
+        `/repos/${encodeURIComponent(repo.ownerPath)}/${encodeURIComponent(repo.repository)}`;
+      const pull = await this.api(repo, `${prefix}/pulls/${pullRequestId}`);
+      const [reviews, checks, files, threadResult] = await Promise.all([
+        this.api(repo, `${prefix}/pulls/${pullRequestId}/reviews?per_page=100`),
+        this.api(repo, `${prefix}/commits/${pull.data.head.sha}/check-runs?per_page=100`),
+        this.api(repo, `${prefix}/pulls/${pullRequestId}/files?per_page=100`),
+        this.githubGraphql(
+          `query($owner: String!, $name: String!, $number: Int!) {
+            repository(owner: $owner, name: $name) {
+              pullRequest(number: $number) {
+                reviewThreads(first: 100) {
+                  nodes {
+                    id
+                    isResolved
+                    comments(first: 100) {
+                      nodes {
+                        id
+                        databaseId
+                        body
+                        path
+                        line
+                        originalLine
+                        diffSide
+                        createdAt
+                        author { login }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }`,
+          {
+            owner: repo.ownerPath,
+            name: repo.repository,
+            number: pullRequestId
+          }
+        )
+      ]);
+      const account = await this.vault.getAccount('github');
+      const summary = this.normalizeGitHubSummary(pull.data, account?.user);
+      const latestReviews = new Map();
+      reviews.data.forEach(review => {
+        latestReviews.set(review.user?.login || '', {
+          login: review.user?.login || '',
+          state: review.state,
+          submittedAt: review.submitted_at
+        });
+      });
+      return {
+        summary,
+        permissions: {
+          review: true,
+          resolveThreads: true,
+          checkout: true
+        },
+        reviewers: [...latestReviews.values()],
+        checks: (checks.data.check_runs || []).map(check => ({
+          id: check.id,
+          name: check.name,
+          status: check.status,
+          conclusion: check.conclusion,
+          url: check.html_url
+        })),
+        files: files.data.map(file => this.normalizeGitHubFile(file)),
+        threads: (
+          threadResult.data?.repository?.pullRequest?.reviewThreads?.nodes || []
+        ).map(thread => {
+          const comments = thread.comments?.nodes || [];
+          const first = comments[0] || {};
+          return {
+            id: thread.id,
+            commentId: first.databaseId || null,
+            path: first.path || '',
+            line: first.line || first.originalLine || null,
+            side: first.diffSide || 'RIGHT',
+            resolved: Boolean(thread.isResolved),
+            author: first.author?.login || '',
+            body: first.body || '',
+            createdAt: first.createdAt,
+            notes: comments.map(comment => ({
+              id: comment.databaseId,
+              author: comment.author?.login || '',
+              body: comment.body || '',
+              createdAt: comment.createdAt
+            }))
+          };
+        }),
+        headSha: pull.data.head.sha,
+        mergeability: pull.data.mergeable_state || (
+          pull.data.mergeable === true ? 'mergeable' : 'unknown'
+        )
+      };
+    }
+
+    const project = encodeURIComponent(`${repo.ownerPath}/${repo.repository}`);
+    const prefix = `/projects/${project}/merge_requests/${pullRequestId}`;
+    const [mergeRequest, approvals, pipelines, changes, discussions] = await Promise.all([
+      this.api(repo, prefix),
+      this.api(repo, `${prefix}/approvals`),
+      this.api(repo, `${prefix}/pipelines?per_page=50`),
+      this.api(repo, `${prefix}/changes`),
+      this.api(repo, `${prefix}/discussions?per_page=100`)
+    ]);
+    const account = await this.vault.getAccount('gitlab');
+    const summary = this.normalizeGitLabSummary(mergeRequest.data, account?.user);
+    return {
+      summary,
+      permissions: {
+        review: true,
+        requestChanges: false,
+        resolveThreads: true,
+        checkout: true
+      },
+      reviewers: [
+        ...(mergeRequest.data.reviewers || []).map(reviewer => ({
+          login: reviewer.username,
+          state: 'requested'
+        })),
+        ...(approvals.data.approved_by || []).map(entry => ({
+          login: entry.user?.username || '',
+          state: 'APPROVED'
+        }))
+      ],
+      checks: pipelines.data.map(pipeline => ({
+        id: pipeline.id,
+        name: `Pipeline #${pipeline.id}`,
+        status: pipeline.status,
+        conclusion: pipeline.status,
+        url: pipeline.web_url
+      })),
+      files: (changes.data.changes || []).map(file => this.normalizeGitLabFile(file)),
+      threads: discussions.data.map(discussion => ({
+        id: discussion.id,
+        resolved: (discussion.notes || []).every(note => (
+          note.resolvable ? note.resolved : true
+        )),
+        notes: (discussion.notes || []).map(note => ({
+          id: note.id,
+          author: note.author?.username || '',
+          body: note.body || '',
+          resolved: Boolean(note.resolved),
+          resolvable: Boolean(note.resolvable),
+          createdAt: note.created_at
+        }))
+      })),
+      headSha: mergeRequest.data.diff_refs?.head_sha || mergeRequest.data.sha,
+      mergeability: mergeRequest.data.detailed_merge_status
+        || mergeRequest.data.merge_status
+        || 'unknown'
+    };
+  }
+
+  normalizeGitHubFile(file) {
+    return {
+      path: file.filename,
+      oldPath: file.previous_filename || null,
+      status: file.status,
+      additions: file.additions,
+      deletions: file.deletions,
+      binary: !file.patch,
+      patch: file.patch || ''
+    };
+  }
+
+  normalizeGitLabFile(file) {
+    return {
+      path: file.new_path,
+      oldPath: file.old_path !== file.new_path ? file.old_path : null,
+      status: file.new_file ? 'added' : file.deleted_file ? 'removed' : file.renamed_file
+        ? 'renamed'
+        : 'modified',
+      additions: null,
+      deletions: null,
+      binary: false,
+      patch: file.diff || ''
+    };
+  }
+
+  async pullRequestDiff(repository, id, page = 1) {
+    const repo = this.validateRepository(repository);
+    const pullRequestId = this.validatePullRequestId(id);
+    const safePage = Math.max(1, Math.min(10000, Number(page) || 1));
+    if (repo.provider === 'github') {
+      const result = await this.api(
+        repo,
+        `/repos/${encodeURIComponent(repo.ownerPath)}/${encodeURIComponent(repo.repository)}/pulls/${pullRequestId}/files?per_page=50&page=${safePage}`
+      );
+      return {
+        files: result.data.map(file => this.normalizeGitHubFile(file)),
+        page: safePage,
+        hasMore: /rel="next"/.test(result.headers.get('link') || '')
+      };
+    }
+    const project = encodeURIComponent(`${repo.ownerPath}/${repo.repository}`);
+    const result = await this.api(
+      repo,
+      `/projects/${project}/merge_requests/${pullRequestId}/changes`
+    );
+    return {
+      files: (result.data.changes || []).map(file => this.normalizeGitLabFile(file)),
+      page: 1,
+      hasMore: false
+    };
+  }
+
+  validateThreadId(value) {
+    const id = String(value || '');
+    if (!id || id.length > 200 || !/^[A-Za-z0-9_:/+=-]+$/.test(id)) {
+      throw new Error('Invalid review thread ID');
+    }
+    return id;
+  }
+
+  async githubGraphql(query, variables) {
+    const account = await this.getAccessAccount('github');
+    if (!account?.accessToken) throw new Error('Connect github first');
+    const response = await this.fetch('https://api.github.com/graphql', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${account.accessToken}`,
+        'Content-Type': 'application/json',
+        'User-Agent': 'GitTree'
+      },
+      body: JSON.stringify({ query, variables })
+    });
+    const result = await this.readResponse(response);
+    if (result.errors?.length) throw new Error(result.errors[0].message);
+    return result;
+  }
+
+  async resolveThread(repository, id, thread, resolved) {
+    const repo = this.validateRepository(repository);
+    const pullRequestId = this.validatePullRequestId(id);
+    const threadId = this.validateThreadId(thread?.id);
+    if (repo.provider === 'github') {
+      const mutation = resolved ? 'resolveReviewThread' : 'unresolveReviewThread';
+      const result = await this.githubGraphql(
+        `mutation($threadId: ID!) { ${mutation}(input: {threadId: $threadId}) { thread { id isResolved } } }`,
+        { threadId }
+      );
+      const updated = result.data?.[mutation]?.thread;
+      return { success: true, resolved: Boolean(updated?.isResolved) };
+    }
+    const noteId = Number(thread?.noteId);
+    if (!Number.isSafeInteger(noteId) || noteId <= 0) {
+      throw new Error('Invalid GitLab discussion note');
+    }
+    const project = encodeURIComponent(`${repo.ownerPath}/${repo.repository}`);
+    await this.api(
+      repo,
+      `/projects/${project}/merge_requests/${pullRequestId}/discussions/${encodeURIComponent(threadId)}/notes/${noteId}`,
+      { method: 'PUT', body: { resolved: Boolean(resolved) } }
+    );
+    return { success: true, resolved: Boolean(resolved) };
+  }
+
+  validateReviewDraft(draft) {
+    if (!draft || typeof draft !== 'object') throw new Error('Invalid review draft');
+    if (typeof draft.headSha !== 'string' || !/^[a-f0-9]{7,64}$/i.test(draft.headSha)) {
+      throw new Error('Invalid review head SHA');
+    }
+    if (!['COMMENT', 'APPROVE', 'REQUEST_CHANGES'].includes(draft.event)) {
+      throw new Error('Invalid review event');
+    }
+    const body = typeof draft.body === 'string' ? draft.body : '';
+    if (body.length > 65536 || /\0/.test(body)) throw new Error('Review body is too long');
+    const inlineComments = Array.isArray(draft.inlineComments) ? draft.inlineComments : [];
+    if (inlineComments.length > 500) throw new Error('Too many inline comments');
+    const comments = inlineComments.map(comment => {
+      const filePath = String(comment.path || '');
+      const normalized = path.posix.normalize(filePath);
+      if (
+        !filePath ||
+        filePath.length > 1000 ||
+        normalized !== filePath ||
+        normalized.startsWith('../') ||
+        path.posix.isAbsolute(filePath)
+      ) {
+        throw new Error('Invalid review comment path');
+      }
+      const line = Number(comment.line);
+      if (!Number.isSafeInteger(line) || line <= 0 || line > 10000000) {
+        throw new Error('Invalid review line');
+      }
+      const commentBody = String(comment.body || '');
+      if (!commentBody.trim() || commentBody.length > 65536 || /\0/.test(commentBody)) {
+        throw new Error('Invalid review comment');
+      }
+      const side = comment.side === 'LEFT' ? 'LEFT' : 'RIGHT';
+      return { path: filePath, line, side, body: commentBody };
+    });
+    const replies = (Array.isArray(draft.replies) ? draft.replies : []).map(reply => {
+      const threadId = String(reply.threadId || '');
+      const commentId = Number(reply.commentId);
+      const replyBody = String(reply.body || '');
+      if (
+        (!threadId && !Number.isSafeInteger(commentId)) ||
+        threadId.length > 200 ||
+        !replyBody.trim() ||
+        replyBody.length > 65536 ||
+        /\0/.test(replyBody)
+      ) {
+        throw new Error('Invalid review reply');
+      }
+      return {
+        threadId,
+        commentId: Number.isSafeInteger(commentId) ? commentId : null,
+        body: replyBody
+      };
+    });
+    return {
+      headSha: draft.headSha,
+      body,
+      event: draft.event,
+      inlineComments: comments,
+      replies,
+      completedOperations: Array.isArray(draft.completedOperations)
+        ? draft.completedOperations
+        : []
+    };
+  }
+
+  async saveReviewDraft(repository, id, draft) {
+    const safeDraft = this.validateReviewDraft(draft);
+    await this.vault.saveReviewDraft(this.draftKey(repository, id), safeDraft);
+    return { success: true };
+  }
+
+  async getReviewDraft(repository, id, headSha) {
+    if (typeof headSha !== 'string' || !/^[a-f0-9]{7,64}$/i.test(headSha)) {
+      throw new Error('Invalid review head SHA');
+    }
+    const draft = await this.vault.getReviewDraft(this.draftKey(repository, id));
+    return draft ? { ...draft, stale: draft.headSha !== headSha } : null;
+  }
+
+  async submitReview(repository, id, draft) {
+    const repo = this.validateRepository(repository);
+    const pullRequestId = this.validatePullRequestId(id);
+    const safeDraft = this.validateReviewDraft(draft);
+    const storedDraft = await this.vault.getReviewDraft(
+      this.draftKey(repo, pullRequestId)
+    );
+    if (storedDraft?.headSha === safeDraft.headSha) {
+      safeDraft.completedOperations = [
+        ...new Set([
+          ...safeDraft.completedOperations,
+          ...(storedDraft.completedOperations || [])
+        ])
+      ];
+    }
+    if (repo.provider === 'github') {
+      const result = await this.api(
+        repo,
+        `/repos/${encodeURIComponent(repo.ownerPath)}/${encodeURIComponent(repo.repository)}/pulls/${pullRequestId}/reviews`,
+        {
+          method: 'POST',
+          body: {
+            commit_id: safeDraft.headSha,
+            body: safeDraft.body,
+            event: safeDraft.event,
+            comments: safeDraft.inlineComments
+          }
+        }
+      );
+      for (const reply of safeDraft.replies) {
+        if (!reply.commentId) throw new Error('GitHub reply is missing its comment ID');
+        await this.api(
+          repo,
+          `/repos/${encodeURIComponent(repo.ownerPath)}/${encodeURIComponent(repo.repository)}/pulls/${pullRequestId}/comments/${reply.commentId}/replies`,
+          { method: 'POST', body: { body: reply.body } }
+        );
+      }
+      await this.vault.removeReviewDraft(this.draftKey(repo, pullRequestId));
+      return { success: true, review: { id: result.data.id, state: result.data.state } };
+    }
+    if (safeDraft.event === 'REQUEST_CHANGES') {
+      throw new Error('GitLab does not support Request changes in GitTree');
+    }
+    return this.submitGitLabReview(repo, pullRequestId, safeDraft);
+  }
+
+  async submitGitLabReview(repo, id, draft) {
+    const project = encodeURIComponent(`${repo.ownerPath}/${repo.repository}`);
+    const completed = new Set(draft.completedOperations);
+    const persist = async operation => {
+      completed.add(operation);
+      await this.vault.saveReviewDraft(this.draftKey(repo, id), {
+        ...draft,
+        completedOperations: [...completed]
+      });
+    };
+    for (let index = 0; index < draft.inlineComments.length; index += 1) {
+      const operation = `inline:${index}`;
+      if (completed.has(operation)) continue;
+      const comment = draft.inlineComments[index];
+      await this.api(repo, `/projects/${project}/merge_requests/${id}/discussions`, {
+        method: 'POST',
+        body: {
+          body: comment.body,
+          position: {
+            position_type: 'text',
+            head_sha: draft.headSha,
+            new_path: comment.path,
+            new_line: comment.line
+          }
+        }
+      });
+      await persist(operation);
+    }
+    for (let index = 0; index < draft.replies.length; index += 1) {
+      const operation = `reply:${index}`;
+      if (completed.has(operation)) continue;
+      const reply = draft.replies[index];
+      const threadId = this.validateThreadId(reply.threadId);
+      await this.api(
+        repo,
+        `/projects/${project}/merge_requests/${id}/discussions/${encodeURIComponent(threadId)}/notes`,
+        { method: 'POST', body: { body: reply.body } }
+      );
+      await persist(operation);
+    }
+    if (draft.body && !completed.has('summary')) {
+      await this.api(repo, `/projects/${project}/merge_requests/${id}/notes`, {
+        method: 'POST',
+        body: { body: draft.body }
+      });
+      await persist('summary');
+    }
+    if (draft.event === 'APPROVE' && !completed.has('approve')) {
+      await this.api(repo, `/projects/${project}/merge_requests/${id}/approve`, {
+        method: 'POST',
+        body: { sha: draft.headSha }
+      });
+      await persist('approve');
+    }
+    await this.vault.removeReviewDraft(this.draftKey(repo, id));
+    return { success: true };
+  }
+}
+
+module.exports = HostingService;

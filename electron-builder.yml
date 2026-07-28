@@ -1,0 +1,72 @@
+appId: com.lorenzogit.gittree
+productName: GitTree
+copyright: Copyright © 2026 Lorenzo
+
+asar: true
+compression: maximum
+generateUpdatesFilesForAllChannels: true
+
+directories:
+  output: dist
+  buildResources: build
+
+files:
+  - src/**/*
+  - icon.png
+  - package.json
+  - "!**/*.map"
+  - "!**/*.md"
+
+extraResources:
+  - from: build/oauth-config.json
+    to: oauth-config.json
+
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+
+publish:
+  provider: github
+  owner: lorenzogit98
+  repo: gittree-minimal
+  releaseType: release
+
+win:
+  icon: icon.png
+  executableName: GitTree
+  target:
+    - target: nsis
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: GitTree
+  uninstallDisplayName: GitTree
+  deleteAppDataOnUninstall: false
+
+mac:
+  icon: icon.png
+  category: public.app-category.developer-tools
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  target:
+    - dmg
+    - zip
+
+dmg:
+  title: GitTree ${version}
+
+linux:
+  icon: icon.png
+  category: Development
+  executableName: gittree
+  synopsis: Fast visual Git desktop client
+  description: A fast, visual and privacy-first Git desktop client.
+  target:
+    - AppImage
+    - deb
+
+appImage:
+  artifactName: ${productName}-${version}-${os}-${arch}.${ext}

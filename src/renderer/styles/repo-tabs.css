@@ -1,0 +1,99 @@
+.repo-tabs-bar {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.repo-tab-container {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.repo-tab {
+  min-width: 112px;
+  max-width: 220px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: var(--text-sm);
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.repo-tab::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: var(--border-strong);
+}
+
+.repo-tab:hover {
+  border-color: var(--border-default);
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.repo-tab.active {
+  border-color: var(--primary-muted);
+  background: var(--primary-soft);
+  color: var(--text-primary);
+}
+
+.repo-tab.active::before {
+  background: var(--primary);
+}
+
+.repo-tab-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  font-weight: var(--weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repo-tab-sync {
+  height: 18px;
+}
+
+.repo-tab-close {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  border-radius: 50%;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
+}
+
+.repo-tab:hover .repo-tab-close,
+.repo-tab.active .repo-tab-close {
+  opacity: 1;
+}
+
+.repo-tab-close:hover {
+  background: var(--error-soft);
+  color: var(--error-text);
+}
+
+.tab-add-btn {
+  flex-shrink: 0;
+}

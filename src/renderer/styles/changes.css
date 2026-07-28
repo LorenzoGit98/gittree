@@ -1,0 +1,297 @@
+.workspace-mode-switch {
+  justify-self: center;
+}
+
+.workspace-mode-switch .btn {
+  gap: 6px;
+}
+
+.mode-count {
+  min-width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--primary-soft);
+  color: var(--text-link);
+  font-size: 10px;
+}
+
+.changes-view,
+.pull-requests-view {
+  flex: 1;
+  min-height: 0;
+  background: var(--surface-primary);
+}
+
+.changes-view {
+  display: grid;
+  grid-template-rows: minmax(180px, 1fr) auto;
+  overflow: hidden;
+}
+
+.pull-requests-view {
+  display: flex;
+}
+
+.changes-lists {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  padding: var(--space-3);
+  overflow: hidden;
+  background: var(--surface-secondary);
+}
+
+.changes-section {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-primary);
+}
+
+.changes-section-header {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.changes-section-header > div {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.changes-section-header h3,
+.commit-composer h3 {
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+}
+
+.changes-file-list {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  contain: strict;
+}
+
+.changes-file-spacer {
+  position: relative;
+  width: 100%;
+}
+
+.changes-file-row {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 38px;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 34px;
+  align-items: center;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-primary);
+  color: var(--text-secondary);
+  contain: layout paint style;
+}
+
+.changes-file-row:hover {
+  background: var(--surface-hover);
+}
+
+.changes-file-row.selected {
+  background: var(--primary-soft);
+  color: var(--text-primary);
+}
+
+.changes-file-status {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  background: var(--surface-secondary);
+  color: var(--text-link);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: var(--weight-semibold);
+}
+
+.changes-file-main {
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  border: 0;
+  background: var(--surface-primary);
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.changes-file-row:hover .changes-file-main {
+  background: var(--surface-hover);
+}
+
+.changes-file-row.selected .changes-file-main {
+  background: var(--primary-soft);
+}
+
+.changes-file-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.changes-file-action {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: 50%;
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.changes-file-action:hover,
+.changes-file-action:focus-visible {
+  border-color: var(--border-strong);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+}
+
+.changes-empty {
+  height: 100%;
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.commit-composer {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border-default);
+  background: var(--surface-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.commit-composer-heading,
+.commit-composer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.commit-input {
+  width: 100%;
+  min-height: 34px;
+  padding: 7px var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  outline: 0;
+  background: var(--surface-input);
+  color: var(--text-primary);
+  font: inherit;
+  user-select: text;
+}
+
+.commit-input:focus {
+  border-color: var(--border-focus);
+}
+
+.commit-body {
+  min-height: 58px;
+  max-height: 130px;
+  resize: vertical;
+}
+
+.commit-options,
+.commit-author-fields {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.commit-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.commit-options input {
+  accent-color: var(--primary);
+}
+
+.commit-author-fields .commit-input {
+  flex: 1;
+}
+
+.working-diff {
+  min-width: max-content;
+}
+
+.working-diff-hunk {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.working-diff-hunk-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  background: var(--diff-hunk);
+}
+
+.working-diff-hunk-header code {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+@media (max-width: 1250px) {
+  .workspace-mode-switch .btn span:not(.mode-count) {
+    display: none;
+  }
+}
+
+@media (max-height: 720px) {
+  .commit-body {
+    min-height: 36px;
+    max-height: 60px;
+  }
+
+  .commit-options {
+    flex-wrap: wrap;
+    row-gap: var(--space-1);
+  }
+}

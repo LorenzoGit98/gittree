@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitTree Design System"
+  short_description: "Build and audit GitTree's premium bento UI"
+  default_prompt: "Use $gittree-design-system to implement or review this GitTree interface change."
