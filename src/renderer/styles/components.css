@@ -61,7 +61,8 @@ input:focus-visible {
   color: var(--text-inverse);
 }
 
-:root[data-theme="dark"] .btn-primary {
+:root[data-theme="dark"] .btn-primary,
+:root[data-theme="black"] .btn-primary {
   color: var(--surface-primary);
 }
 
@@ -71,7 +72,8 @@ input:focus-visible {
   color: var(--text-inverse);
 }
 
-:root[data-theme="dark"] .btn-primary:hover {
+:root[data-theme="dark"] .btn-primary:hover,
+:root[data-theme="black"] .btn-primary:hover {
   color: var(--surface-primary);
 }
 

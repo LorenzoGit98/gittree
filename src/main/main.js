@@ -95,9 +95,14 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle('app:set-theme', (_event, theme) => {
-    const safeTheme = theme === 'dark' ? 'dark' : 'light';
-    nativeTheme.themeSource = safeTheme;
-    if (mainWindow) mainWindow.setBackgroundColor(safeTheme === 'dark' ? '#121a27' : '#f7f9fc');
+    const safeTheme = ['dark', 'black'].includes(theme) ? theme : 'light';
+    nativeTheme.themeSource = safeTheme === 'light' ? 'light' : 'dark';
+    if (mainWindow) {
+      const background = safeTheme === 'black'
+        ? '#000000'
+        : (safeTheme === 'dark' ? '#121a27' : '#f7f9fc');
+      mainWindow.setBackgroundColor(background);
+    }
     return safeTheme;
   });
 

@@ -32,7 +32,8 @@
   background: var(--primary);
 }
 
-:root[data-theme="dark"] .welcome-brand {
+:root[data-theme="dark"] .welcome-brand,
+:root[data-theme="black"] .welcome-brand {
   color: var(--surface-primary);
 }
 
@@ -70,6 +71,30 @@
   color: var(--error-text);
 }
 
+.workspace-command-bar {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-1) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-primary);
+}
+
+.workspace-command-group,
+.detail-panel-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.workspace-command-bar .btn.active {
+  border-color: var(--border-strong);
+  background: var(--primary-soft);
+  color: var(--text-primary);
+}
+
 .workspace-body {
   --left-panel: var(--sidebar-width);
   --right-panel: var(--detail-width);
@@ -79,6 +104,30 @@
   min-height: 0;
   gap: 0;
   padding: var(--space-3);
+}
+
+.workspace-body.inspector-closed {
+  grid-template-columns: var(--left-panel) 10px minmax(360px, 1fr);
+}
+
+.workspace-body.inspector-closed > #resize-handle-right,
+.workspace-body.inspector-closed > .inspector {
+  display: none;
+}
+
+.workspace-body.inspector-maximized {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.workspace-body.inspector-maximized > .sidebar,
+.workspace-body.inspector-maximized > .main,
+.workspace-body.inspector-maximized > .resize-handle-v {
+  display: none;
+}
+
+.workspace-body.inspector-maximized > .inspector {
+  display: flex;
+  grid-column: 1;
 }
 
 .bento-panel {
@@ -116,6 +165,22 @@
   font-size: var(--text-lg);
   font-weight: var(--weight-semibold);
   letter-spacing: -0.025em;
+}
+
+.detail-title-wrap {
+  min-width: 0;
+  flex: 1;
+}
+
+.detail-panel-header h2 {
+  overflow: hidden;
+  font-size: var(--text-base);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-panel-controls {
+  flex: 0 0 auto;
 }
 
 .eyebrow {
@@ -209,7 +274,7 @@
 .toolbar {
   min-height: var(--toolbar-height);
   display: grid;
-  grid-template-columns: auto minmax(220px, 1fr) auto;
+  grid-template-columns: auto minmax(220px, 1fr);
   align-items: center;
   gap: var(--space-4);
   padding: var(--space-3) var(--space-4);
@@ -219,12 +284,6 @@
 
 .toolbar-title {
   min-width: 132px;
-}
-
-.toolbar-right {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
 }
 
 .content-area,
@@ -311,8 +370,8 @@
     grid-template-columns: auto minmax(180px, 1fr);
   }
 
-  .toolbar-right {
-    grid-column: 1 / -1;
+  .workspace-body.inspector-maximized {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

@@ -2,6 +2,7 @@ class GitTreeApp {
   constructor() {
     this.state = { repo: null, activeRepoIndex: -1, currentBranch: null };
     this.components = {};
+    this.inspectorState = 'open';
     this._events = {};
   }
 
@@ -23,6 +24,7 @@ class GitTreeApp {
     this.components.search.init();
     this.components.welcome.init(this);
     this.setupResize();
+    this.setupWorkspaceState();
     this.setupGlobalShortcuts();
     await this.components.repoTabs.init();
 
@@ -31,6 +33,7 @@ class GitTreeApp {
       const active = await window.gitTree.getActiveRepo();
       if (active) {
         this.state.activeRepoIndex = repos.findIndex(r => r.path === active.path);
+        this.components.repoTabs.render();
         await this.openRepo(active);
         return;
       }
@@ -259,6 +262,100 @@ class GitTreeApp {
     bindHandle(rightHandle, 'right', 300, 620);
   }
 
+  setupWorkspaceState() {
+    const savedInspectorState = localStorage.getItem('gittree.workspace.inspector') || 'open';
+    this.setInspectorState(savedInspectorState, false);
+
+    document.getElementById('btn-toggle-inspector').onclick = () => {
+      const hiddenByResponsiveLayout =
+        this.inspectorState !== 'closed' &&
+        getComputedStyle(document.getElementById('detail-panel')).display === 'none';
+      if (this.inspectorState === 'closed') {
+        this.setInspectorState(window.innerWidth <= 1120 ? 'maximized' : 'open');
+      } else if (hiddenByResponsiveLayout) {
+        this.setInspectorState('maximized');
+      } else {
+        this.setInspectorState('closed');
+      }
+    };
+    document.getElementById('btn-close-inspector').onclick = () => {
+      this.setInspectorState('closed');
+    };
+    document.getElementById('btn-maximize-inspector').onclick = () => {
+      this.setInspectorState(this.inspectorState === 'maximized' ? 'open' : 'maximized');
+    };
+    document.querySelector('.detail-panel-header').addEventListener('dblclick', event => {
+      if (event.target.closest('button')) return;
+      this.setInspectorState(this.inspectorState === 'maximized' ? 'open' : 'maximized');
+    });
+
+    this.setupPersistentSidebarSections();
+  }
+
+  setInspectorState(state, persist = true) {
+    const safeState = ['open', 'closed', 'maximized'].includes(state) ? state : 'open';
+    const workspace = document.getElementById('workspace-body');
+    const panel = document.getElementById('detail-panel');
+    const toggleButton = document.getElementById('btn-toggle-inspector');
+    const maximizeButton = document.getElementById('btn-maximize-inspector');
+    const isOpen = safeState !== 'closed';
+    const isMaximized = safeState === 'maximized';
+
+    this.inspectorState = safeState;
+    workspace.classList.toggle('inspector-closed', safeState === 'closed');
+    workspace.classList.toggle('inspector-maximized', isMaximized);
+    panel.setAttribute('aria-hidden', String(!isOpen));
+    toggleButton.classList.toggle('active', isOpen);
+    toggleButton.setAttribute('aria-pressed', String(isOpen));
+
+    const maximizeIcon = maximizeButton.querySelector('i');
+    maximizeIcon.className = isMaximized ? 'ph ph-arrows-in-simple' : 'ph ph-arrows-out-simple';
+    maximizeButton.dataset.i18nTitle = isMaximized ? 'details.restore' : 'details.maximize';
+    maximizeButton.title = t(maximizeButton.dataset.i18nTitle);
+
+    if (persist) localStorage.setItem('gittree.workspace.inspector', safeState);
+  }
+
+  setupPersistentSidebarSections() {
+    const storageKey = 'gittree.sidebar.sections';
+    let savedSections = null;
+    try {
+      const parsed = JSON.parse(localStorage.getItem(storageKey));
+      if (Array.isArray(parsed)) savedSections = new Set(parsed);
+    } catch {}
+
+    const headers = document.querySelectorAll('.sidebar-section-header.collapsible');
+    headers.forEach(header => {
+      const section = header.parentElement;
+      const sectionId = section.dataset.section;
+      const body = section.querySelector('.sidebar-section-body');
+      const arrow = header.querySelector('.collapse-arrow');
+      if (!sectionId || !body || !arrow) return;
+
+      const collapsed = savedSections
+        ? savedSections.has(sectionId)
+        : body.classList.contains('collapsed');
+      body.classList.toggle('collapsed', collapsed);
+      arrow.classList.toggle('collapsed', collapsed);
+      header.classList.toggle('collapsed', collapsed);
+      header.setAttribute('aria-expanded', String(!collapsed));
+
+      header.addEventListener('click', () => {
+        const nextCollapsed = !body.classList.contains('collapsed');
+        body.classList.toggle('collapsed', nextCollapsed);
+        arrow.classList.toggle('collapsed', nextCollapsed);
+        header.classList.toggle('collapsed', nextCollapsed);
+        header.setAttribute('aria-expanded', String(!nextCollapsed));
+
+        const collapsedSections = [...headers]
+          .filter(item => item.classList.contains('collapsed'))
+          .map(item => item.parentElement.dataset.section)
+          .filter(Boolean);
+        localStorage.setItem(storageKey, JSON.stringify(collapsedSections));
+      });
+    });
+  }
+
   setupGlobalShortcuts() {
     document.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') {
@@ -266,23 +363,15 @@ class GitTreeApp {
         this.components.welcome.openRepo();
       }
       if (e.key === 'F5') { e.preventDefault(); this.refresh(); }
-    });
-
-    document.querySelectorAll('.sidebar-section-header.collapsible').forEach(header => {
-      header.addEventListener('click', () => {
-        const section = header.parentElement;
-        const body = section.querySelector('.sidebar-section-body');
-        const arrow = header.querySelector('.collapse-arrow');
-        if (!body || !arrow) return;
-        const collapsed = !body.classList.contains('collapsed');
-        body.classList.toggle('collapsed', collapsed);
-        arrow.classList.toggle('collapsed', collapsed);
-        header.classList.toggle('collapsed', collapsed);
-      });
+      if (e.key === 'Escape' && this.inspectorState === 'maximized') {
+        this.setInspectorState('open');
+      }
     });
   }
 
   refreshLocalizedView() {
+    Theme.syncControls();
+    this.setInspectorState(this.inspectorState, false);
     if (this.state.repo) {
       this.components.branchList.render();
       this.components.graphView.render();

@@ -19,6 +19,9 @@ const I18n = {
               close: 'Close',
               minimize: 'Minimize',
               maximize: 'Maximize',
+              nextLightTheme: 'Switch to light theme',
+              nextDarkTheme: 'Switch to dark theme',
+              nextBlackTheme: 'Switch to black theme',
               cancel: 'Cancel',
               loading: 'Loading…',
               error: 'Error'
@@ -65,8 +68,13 @@ const I18n = {
             details: {
               eyebrow: 'Inspector',
               title: 'Commit details',
+              changesIn: 'Changes in {{hash}}',
               unified: 'Unified',
               split: 'Split',
+              diffLayout: 'Diff layout',
+              maximize: 'Maximize inspector',
+              restore: 'Restore inspector',
+              close: 'Close inspector',
               placeholder: 'Select a commit to inspect its changes.',
               loading: 'Loading diff…',
               noChanges: 'No changes'
@@ -76,6 +84,7 @@ const I18n = {
               pull: 'Pull',
               push: 'Push',
               refresh: 'Refresh',
+              repositoryActions: 'Repository actions',
               previous: 'Previous',
               next: 'Next'
             },
@@ -100,6 +109,9 @@ const I18n = {
               close: 'Chiudi',
               minimize: 'Riduci a icona',
               maximize: 'Ingrandisci',
+              nextLightTheme: 'Passa al tema chiaro',
+              nextDarkTheme: 'Passa al tema scuro',
+              nextBlackTheme: 'Passa al tema nero',
               cancel: 'Annulla',
               loading: 'Caricamento…',
               error: 'Errore'
@@ -146,8 +158,13 @@ const I18n = {
             details: {
               eyebrow: 'Inspector',
               title: 'Dettagli commit',
+              changesIn: 'Modifiche in {{hash}}',
               unified: 'Unificato',
               split: 'Affiancato',
+              diffLayout: 'Layout del diff',
+              maximize: 'Massimizza inspector',
+              restore: 'Ripristina inspector',
+              close: 'Chiudi inspector',
               placeholder: 'Seleziona un commit per esaminare le modifiche.',
               loading: 'Caricamento diff…',
               noChanges: 'Nessuna modifica'
@@ -157,6 +174,7 @@ const I18n = {
               pull: 'Pull',
               push: 'Push',
               refresh: 'Aggiorna',
+              repositoryActions: 'Azioni repository',
               previous: 'Precedente',
               next: 'Successivo'
             },
@@ -203,6 +221,9 @@ const I18n = {
     });
     root.querySelectorAll('[data-i18n-title]').forEach(element => {
       element.title = this.t(element.dataset.i18nTitle);
+    });
+    root.querySelectorAll('[data-i18n-aria-label]').forEach(element => {
+      element.setAttribute('aria-label', this.t(element.dataset.i18nAriaLabel));
     });
   },
 

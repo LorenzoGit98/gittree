@@ -4,8 +4,10 @@ class BranchListView {
     this.app = app;
     this.data = null;
     this.filter = '';
-    this.collapsedFolders = new Set();
-    this.collapsedGroups = new Set();
+    this.collapsedFolders = this.restoreSet('gittree.sidebar.branchFolders');
+    this.collapsedGroups = this.restoreSet('gittree.sidebar.branchGroups');
+    this.selectedBranchKey = null;
+    this.selectedBranchElement = null;
     this.searchInput = document.getElementById('branch-search');
     if (this.searchInput) {
       this.searchInput.addEventListener('input', () => {
@@ -13,6 +15,21 @@ class BranchListView {
         this.render();
       });
     }
+    this.container.addEventListener('click', event => {
+      const row = event.target.closest('.branch-item');
+      if (row && this.container.contains(row)) this.selectBranchRow(row);
+    });
+    this.container.addEventListener('dblclick', event => {
+      const row = event.target.closest('.branch-item');
+      if (row && this.container.contains(row)) this.activateBranchRow(row);
+    });
+    this.container.addEventListener('keydown', event => {
+      if (event.key !== 'Enter') return;
+      const row = event.target.closest('.branch-item');
+      if (!row || !this.container.contains(row)) return;
+      event.preventDefault();
+      this.activateBranchRow(row);
+    });
   }
 
   async load(repoPath) {
@@ -22,12 +39,15 @@ class BranchListView {
       this.data = result;
       if (this.searchInput) this.searchInput.value = '';
       this.filter = '';
+      this.selectedBranchKey = null;
+      this.selectedBranchElement = null;
       this.render();
     } catch { this.container.innerHTML = ''; }
   }
 
   render() {
     this.container.innerHTML = '';
+    this.selectedBranchElement = null;
     if (!this.data) return;
     const branches = this.data.branches || {};
     const current = this.data.current;
@@ -77,6 +97,7 @@ class BranchListView {
     header.onclick = () => {
       if (this.collapsedGroups.has(groupId)) this.collapsedGroups.delete(groupId);
       else this.collapsedGroups.add(groupId);
+      this.persistSet('gittree.sidebar.branchGroups', this.collapsedGroups);
       this.render();
     };
     frag.appendChild(header);
@@ -100,7 +121,8 @@ class BranchListView {
     root.forEach(b => frag.appendChild(this.branchRow(b, current, isRemote)));
 
     for (const [folder, items] of folders) {
-      const fCollapsed = this.collapsedFolders.has(folder);
+      const folderKey = `${groupId}:${folder}`;
+      const fCollapsed = this.collapsedFolders.has(folderKey);
 
       const folderHeader = document.createElement('div');
       folderHeader.className = 'branch-folder-header';
@@ -111,29 +133,42 @@ class BranchListView {
         <span class="branch-folder-count">${items.length}</span>
       `;
       folderHeader.onclick = () => {
-        if (this.collapsedFolders.has(folder)) this.collapsedFolders.delete(folder);
-        else this.collapsedFolders.add(folder);
+        if (this.collapsedFolders.has(folderKey)) this.collapsedFolders.delete(folderKey);
+        else this.collapsedFolders.add(folderKey);
+        this.persistSet('gittree.sidebar.branchFolders', this.collapsedFolders);
         this.render();
       };
       frag.appendChild(folderHeader);
 
       if (!fCollapsed) {
-        items.forEach(b => frag.appendChild(this.branchRow(b, current, isRemote)));
+        items.forEach(b => {
+          const leafName = b.name.slice(folder.length + 1);
+          frag.appendChild(this.branchRow(b, current, isRemote, leafName));
+        });
       }
     }
   }
 
-  branchRow(branch, current, isRemote = false) {
+  branchRow(branch, current, isRemote = false, displayName = branch.name) {
     const el = document.createElement('div');
     el.className = 'branch-item';
+    el.tabIndex = 0;
+    el.dataset.branchName = branch.name;
+    el.dataset.remote = String(isRemote);
     if (!isRemote && branch.name === current) el.classList.add('active');
+    const selectionKey = `${isRemote ? 'remote' : 'local'}:${branch.name}`;
+    el.dataset.selectionKey = selectionKey;
+    if (selectionKey === this.selectedBranchKey) {
+      el.classList.add('selected');
+      this.selectedBranchElement = el;
+    }
 
     const icon = document.createElement('i');
     icon.className = `ph ${isRemote ? 'ph-cloud' : 'ph-git-branch'} branch-icon`;
 
     const name = document.createElement('span');
     name.className = 'branch-name';
-    name.textContent = branch.name;
+    name.textContent = displayName;
     name.title = isRemote ? `remotes/${branch.name}` : branch.name;
 
     const meta = document.createElement('span');
@@ -148,14 +183,26 @@ class BranchListView {
     el.appendChild(icon);
     el.appendChild(name);
     el.appendChild(meta);
-    el.onclick = () => {
-      if (isRemote) {
-        this.checkoutRemote(branch.name.split('/').pop(), branch.name);
-      } else {
-        this.checkout(branch.name);
-      }
-    };
     return el;
+  }
+
+  selectBranchRow(row) {
+    if (this.selectedBranchElement && this.selectedBranchElement !== row) {
+      this.selectedBranchElement.classList.remove('selected');
+    }
+    this.selectedBranchKey = row.dataset.selectionKey;
+    this.selectedBranchElement = row;
+    row.classList.add('selected');
+  }
+
+  activateBranchRow(row) {
+    const branchName = row.dataset.branchName;
+    if (!branchName) return;
+    if (row.dataset.remote === 'true') {
+      this.checkoutRemote(branchName.split('/').pop(), branchName);
+    } else {
+      this.checkout(branchName);
+    }
   }
 
   async checkout(name) {
@@ -185,6 +232,19 @@ class BranchListView {
   }
 
   get current() { return this.data?.current; }
+
+  restoreSet(storageKey) {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(storageKey));
+      return new Set(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      return new Set();
+    }
+  }
+
+  persistSet(storageKey, values) {
+    localStorage.setItem(storageKey, JSON.stringify([...values]));
+  }
 
   esc(value) {
     const element = document.createElement('div');

@@ -95,6 +95,29 @@
       </div>
     </header>
 
+    <div class="workspace-command-bar" role="toolbar" aria-label="Repository actions" data-i18n-aria-label="actions.repositoryActions">
+      <div class="workspace-command-group">
+        <button id="btn-fetch" class="btn btn-toolbar">
+          <i class="ph ph-cloud-arrow-down"></i><span data-i18n="actions.fetch">Fetch</span>
+        </button>
+        <button id="btn-pull" class="btn btn-toolbar">
+          <i class="ph ph-download-simple"></i><span data-i18n="actions.pull">Pull</span>
+        </button>
+        <button id="btn-push" class="btn btn-toolbar">
+          <i class="ph ph-upload-simple"></i><span data-i18n="actions.push">Push</span>
+        </button>
+        <button id="btn-refresh" class="btn-icon" title="Refresh" data-i18n-title="actions.refresh">
+          <i class="ph ph-arrows-clockwise"></i>
+        </button>
+      </div>
+      <div class="workspace-command-group">
+        <button id="btn-toggle-inspector" class="btn btn-toolbar active" type="button" aria-pressed="true">
+          <i class="ph ph-sidebar-simple"></i>
+          <span data-i18n="details.eyebrow">Inspector</span>
+        </button>
+      </div>
+    </div>
+
     <div class="workspace-body" id="workspace-body">
       <aside id="sidebar" class="bento-panel sidebar">
         <div class="panel-heading">
@@ -157,20 +180,6 @@
             <span data-i18n="search.trigger">Search commits, branches and files</span>
             <kbd>Ctrl P</kbd>
           </button>
-          <div class="toolbar-right">
-            <button id="btn-fetch" class="btn btn-toolbar">
-              <i class="ph ph-cloud-arrow-down"></i><span data-i18n="actions.fetch">Fetch</span>
-            </button>
-            <button id="btn-pull" class="btn btn-toolbar">
-              <i class="ph ph-download-simple"></i><span data-i18n="actions.pull">Pull</span>
-            </button>
-            <button id="btn-push" class="btn btn-toolbar">
-              <i class="ph ph-upload-simple"></i><span data-i18n="actions.push">Push</span>
-            </button>
-            <button id="btn-refresh" class="btn-icon" title="Refresh" data-i18n-title="actions.refresh">
-              <i class="ph ph-arrows-clockwise"></i>
-            </button>
-          </div>
         </div>
 
         <div class="content-area" id="main-content-area">
@@ -193,13 +202,21 @@
 
       <aside id="detail-panel" class="bento-panel inspector">
         <div class="detail-panel-header">
-          <div>
+          <div class="detail-title-wrap">
             <span class="eyebrow" data-i18n="details.eyebrow">Inspector</span>
             <h2 id="detail-title" data-i18n="details.title">Commit details</h2>
           </div>
-          <div class="segmented-control" aria-label="Diff layout">
-            <button id="btn-diff-unified" class="btn btn-small active" data-i18n="details.unified">Unified</button>
-            <button id="btn-diff-split" class="btn btn-small" data-i18n="details.split">Split</button>
+          <div class="detail-panel-controls">
+            <div class="segmented-control" aria-label="Diff layout" data-i18n-aria-label="details.diffLayout">
+              <button id="btn-diff-unified" class="btn btn-small active" data-i18n="details.unified">Unified</button>
+              <button id="btn-diff-split" class="btn btn-small" data-i18n="details.split">Split</button>
+            </div>
+            <button id="btn-maximize-inspector" class="btn-icon" type="button" title="Maximize inspector" data-i18n-title="details.maximize">
+              <i class="ph ph-arrows-out-simple"></i>
+            </button>
+            <button id="btn-close-inspector" class="btn-icon" type="button" title="Close inspector" data-i18n-title="details.close">
+              <i class="ph ph-x"></i>
+            </button>
           </div>
         </div>
         <div id="detail-body" class="detail-panel-body">

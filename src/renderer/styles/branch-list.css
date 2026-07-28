@@ -143,6 +143,7 @@
   content-visibility: auto;
   contain: layout paint style;
   contain-intrinsic-size: 34px;
+  user-select: none;
 }
 
 .branch-item:hover {
@@ -150,9 +151,29 @@
   color: var(--text-primary);
 }
 
+.branch-item.selected:not(.active) {
+  background: var(--surface-active);
+  color: var(--text-primary);
+  box-shadow: inset 3px 0 0 var(--border-focus);
+}
+
+.branch-item:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: -2px;
+}
+
 .branch-item.active {
   background: var(--primary-soft);
   color: var(--text-primary);
+}
+
+.branch-item.active::after {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: var(--primary);
+  content: "";
 }
 
 .branch-icon {

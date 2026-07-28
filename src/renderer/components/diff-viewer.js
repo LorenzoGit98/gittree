@@ -17,7 +17,10 @@ class DiffViewer {
   }
 
   async showDiffForCommit(repoPath, hash) {
-    document.getElementById('detail-title').textContent = `Changes in ${hash.substring(0, 7)}`;
+    const title = document.getElementById('detail-title');
+    const compactTitle = t('details.changesIn', { hash: hash.substring(0, 7) });
+    title.textContent = compactTitle;
+    title.title = compactTitle;
     this.body.innerHTML = `<div class="diff-placeholder"><i class="ph ph-circle-notch"></i>${t('details.loading')}</div>`;
     try {
       const detail = await window.gitTree.getCommitDetail(repoPath, hash);
@@ -26,9 +29,7 @@ class DiffViewer {
       this.render(detail.diff);
 
       if (detail.files?.length) {
-        const files = detail.files.slice(0, 3).join(', ');
-        const more = detail.files.length > 3 ? ` +${detail.files.length - 3} more` : '';
-        document.getElementById('detail-title').textContent = `Changes in ${hash.substring(0, 7)} — ${files}${more}`;
+        title.title = `${compactTitle} — ${detail.files.join(', ')}`;
       }
     } catch (e) {
       this.body.innerHTML = `<div class="diff-placeholder">${e.message}</div>`;
@@ -155,6 +156,8 @@ class DiffViewer {
   clear() {
     this.currentDiff = null;
     this.body.innerHTML = `<div class="diff-placeholder"><i class="ph ph-cursor-click"></i>${t('details.placeholder')}</div>`;
-    document.getElementById('detail-title').textContent = t('details.title');
+    const title = document.getElementById('detail-title');
+    title.textContent = t('details.title');
+    title.title = '';
   }
 }
