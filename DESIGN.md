@@ -57,6 +57,16 @@ Semantic status colors are muted and always paired with text or an icon. Never r
 - Use 140ms for control feedback and 220ms for panel/state changes.
 - Animate only `transform` and `opacity`.
 - Keep motion functional and honor `prefers-reduced-motion`.
+- Do not animate backgrounds on dense scroll rows. Immediate hover feedback avoids repeated paint work while scrolling.
+
+### Performance
+
+- Treat renderer performance as a product requirement; preserve all features while reducing layout and paint work.
+- Dense lists must isolate offscreen rows with `content-visibility` and layout/paint containment.
+- Do not attach shadows to every bento panel or graph node. Use borders and solid tonal separation on scroll-heavy surfaces.
+- Resizable panels must use a transform-only separator preview during pointer movement and commit the actual grid width once on release.
+- Selection changes must update the affected rows in place; never rebuild the full commit list for a single selection.
+- Run the deterministic renderer benchmark after changes to layout, scrolling, lists, diff rendering, or panel resizing.
 
 ## Workspace architecture
 
@@ -143,3 +153,4 @@ The desktop window is frameless. The repository tabs are the first visible row o
 - Buttons, fields, tabs, dialogs, lists, empty states, and error states use shared contracts.
 - Keyboard focus, overflow, narrow layouts, and long repository/branch names are tested.
 - `npm run audit:design` passes.
+- `npm run perf:renderer` passes against a local Electron instance launched with `npx electron . --remote-debugging-port=9222`.

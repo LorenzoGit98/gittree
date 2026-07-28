@@ -22,7 +22,7 @@ function createWindow() {
     height: 820,
     minWidth: 900,
     minHeight: 600,
-    backgroundColor: '#f3f6fb',
+    backgroundColor: '#f7f9fc',
     frame: false,
     autoHideMenuBar: true,
     webPreferences: {
@@ -97,7 +97,7 @@ function registerIpcHandlers() {
   ipcMain.handle('app:set-theme', (_event, theme) => {
     const safeTheme = theme === 'dark' ? 'dark' : 'light';
     nativeTheme.themeSource = safeTheme;
-    if (mainWindow) mainWindow.setBackgroundColor(safeTheme === 'dark' ? '#121a27' : '#f3f6fb');
+    if (mainWindow) mainWindow.setBackgroundColor(safeTheme === 'dark' ? '#121a27' : '#f7f9fc');
     return safeTheme;
   });
 
