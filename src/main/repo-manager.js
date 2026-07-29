@@ -2,6 +2,10 @@ const path = require('path');
 const fs = require('fs');
 const { app } = require('electron');
 
+function repositoryName(repoPath) {
+  return path.basename(String(repoPath).replace(/[\\/]+$/, '').replace(/\\/g, '/'));
+}
+
 class RepoManager {
   constructor() {
     this.repos = [];
@@ -44,7 +48,7 @@ class RepoManager {
     if (existing) {
       this.activeRepoIndex = this.repos.indexOf(existing);
     } else {
-      const name = path.basename(repoPath);
+      const name = repositoryName(repoPath);
       this.repos.push({ path: repoPath, name, addedAt: new Date().toISOString() });
       this.activeRepoIndex = this.repos.length - 1;
     }
@@ -78,7 +82,7 @@ class RepoManager {
 
       const repo = {
         path: normalizedPath,
-        name: path.basename(normalizedPath),
+        name: repositoryName(normalizedPath),
         addedAt: new Date().toISOString()
       };
       this.repos.push(repo);
