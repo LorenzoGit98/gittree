@@ -7,9 +7,10 @@ on:
       - "v*.*.*-*"
 
 permissions:
-  contents: write
+  contents: read
 
 env:
+  GH_REPO: ${{ github.repository }}
   GITTREE_GITHUB_CLIENT_ID: ${{ vars.GITTREE_GITHUB_CLIENT_ID }}
   GITTREE_GITLAB_CLIENT_ID: ${{ vars.GITTREE_GITLAB_CLIENT_ID }}
 
@@ -33,14 +34,51 @@ jobs:
       - run: npm run release:check
       - run: npm run validate
 
-  windows:
-    name: Windows x64
+  prepare-release:
+    name: Create atomic draft
     needs: validate
-    runs-on: windows-latest
-    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      EP_PRE_RELEASE: ${{ contains(github.ref_name, '-') }}
+
+    steps:
+      - name: Create or reuse draft release
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            is_draft="$(gh release view "$tag" --json isDraft --jq .isDraft)"
+            if [[ "$is_draft" != "true" ]]; then
+              echo "Release $tag is already published and cannot be overwritten." >&2
+              exit 1
+            fi
+            gh release edit "$tag" --draft --title "GitTree $tag"
+            while IFS= read -r asset; do
+              if [[ -n "$asset" ]]; then
+                gh release delete-asset "$tag" "$asset" --yes
+              fi
+            done < <(gh release view "$tag" --json assets --jq '.assets[].name')
+          else
+            gh release create "$tag" \
+              --verify-tag \
+              --draft \
+              --generate-notes \
+              --title "GitTree $tag"
+          fi
+
+  windows:
+    name: Windows x64
+    needs: prepare-release
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
       CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
 
@@ -52,21 +90,25 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run prepare:assets
-      - run: npx electron-builder --win --x64 --publish always
+      - run: npx electron-builder --win --x64 --publish never
+      - name: Validate and upload Windows OTA assets
+        run: node scripts/release-assets.js --platform win --directory dist --tag "$env:GITHUB_REF_NAME"
 
   macos:
-    name: macOS universal artifacts
-    needs: validate
+    name: macOS x64 and arm64 artifacts
+    needs: prepare-release
     runs-on: macos-latest
     timeout-minutes: 40
+    permissions:
+      contents: write
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      EP_PRE_RELEASE: ${{ contains(github.ref_name, '-') }}
       CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
       CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD }}
       APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
       APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
       APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+      MACOS_OTA_ENABLED: ${{ secrets.MACOS_CSC_LINK != '' && secrets.APPLE_API_KEY != '' && secrets.APPLE_API_KEY_ID != '' && secrets.APPLE_API_ISSUER != '' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -76,16 +118,29 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run prepare:assets
-      - run: npx electron-builder --mac --x64 --arm64 --publish always
+      - run: npx electron-builder --mac --x64 --arm64 --publish never
+      - name: Validate and upload macOS OTA assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          platform="mac-manual"
+          if [[ "$MACOS_OTA_ENABLED" == "true" ]]; then
+            platform="mac"
+          fi
+          node scripts/release-assets.js \
+            --platform "$platform" \
+            --directory dist \
+            --tag "$GITHUB_REF_NAME"
 
   linux:
     name: Linux x64
-    needs: validate
+    needs: prepare-release
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: write
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      EP_PRE_RELEASE: ${{ contains(github.ref_name, '-') }}
 
     steps:
       - uses: actions/checkout@v4
@@ -95,4 +150,28 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run prepare:assets
-      - run: npx electron-builder --linux --x64 --publish always
+      - run: npx electron-builder --linux --x64 --publish never
+      - name: Validate and upload Linux OTA assets
+        run: node scripts/release-assets.js --platform linux --directory dist --tag "$GITHUB_REF_NAME"
+
+  publish:
+    name: Publish complete release
+    needs: [windows, macos, linux]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Publish stable release or prerelease
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          if [[ "$tag" == *-* ]]; then
+            gh release edit "$tag" --draft=false --prerelease
+          else
+            gh release edit "$tag" --draft=false --latest
+          fi

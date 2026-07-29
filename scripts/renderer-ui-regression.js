@@ -56,7 +56,11 @@ async function waitForRenderer(client) {
     const ready = await evaluate(client, `Boolean(
       window.app?.state?.repo &&
       document.querySelector('.repo-tab') &&
-      window.app?.components?.branchList?.data
+      window.app?.components?.branchList?.data &&
+      window.app?.components?.graphView?.loading === false &&
+      window.app?.components?.graphView?.rows?.length >= 2 &&
+      document.querySelectorAll('.graph-row').length >= 2 &&
+      document.getElementById('workspace')?.getAttribute('aria-busy') === 'false'
     )`);
     if (ready) return;
     await new Promise(resolve => setTimeout(resolve, 250));

@@ -11,6 +11,7 @@
   --surface-active: #e3eaf5;
   --surface-input: #f6f8fb;
   --surface-overlay: #eef2f8;
+  --surface-selected: #e3edf7;
 
   --text-primary: #101828;
   --text-secondary: #475467;
@@ -35,6 +36,10 @@
   --error-text: #912018;
   --info: #245d92;
   --info-soft: #e7f1fb;
+  --signal: #176b7a;
+  --signal-soft: #e0f4f6;
+  --signal-text: #105c68;
+  --focus-ring: #176b7a;
 
   --graph-line: #c7d2e1;
   --graph-node: #73839a;
@@ -151,6 +156,7 @@
   --surface-active: #2c3c50;
   --surface-input: #141e2b;
   --surface-overlay: #111a27;
+  --surface-selected: #163744;
 
   --text-primary: #f4f7fb;
   --text-secondary: #b8c3d2;
@@ -164,36 +170,40 @@
   --primary-soft: #2a4059;
   --primary-muted: #36516f;
 
-  --success: #66b78a;
-  --success-soft: #203f33;
-  --success-text: #8cd0aa;
+  --success: #39e58c;
+  --success-soft: #123c2b;
+  --success-text: #7fffb2;
   --warning: #e0ad43;
   --warning-soft: #493a1d;
   --warning-text: #edc66e;
-  --error: #f08077;
-  --error-soft: #4d2a2b;
-  --error-text: #f5a39d;
-  --info: #7fb4e7;
-  --info-soft: #243d57;
+  --error: #ff5c6c;
+  --error-soft: #431c25;
+  --error-text: #ff9aa5;
+  --info: #00dce6;
+  --info-soft: #073940;
+  --signal: #00f5ff;
+  --signal-soft: #073940;
+  --signal-text: #00f5ff;
+  --focus-ring: #00f5ff;
 
   --graph-line: #3b4b60;
   --graph-node: #708096;
   --graph-active: #dce9f8;
-  --graph-highlight: #8dbcea;
-  --graph-head: #f4f7fb;
-  --graph-lane-1: #64a4e3;
-  --graph-lane-2: #e77882;
-  --graph-lane-3: #6fbd89;
-  --graph-lane-4: #e0ad55;
-  --graph-lane-5: #a58bd3;
-  --graph-lane-6: #55b8b8;
-  --graph-lane-7: #d17fbd;
-  --graph-lane-8: #a4b45e;
+  --graph-highlight: #00f5ff;
+  --graph-head: #00f5ff;
+  --graph-lane-1: #00d9ff;
+  --graph-lane-2: #ff4d6d;
+  --graph-lane-3: #39e58c;
+  --graph-lane-4: #ff9f1c;
+  --graph-lane-5: #a970ff;
+  --graph-lane-6: #00f5c4;
+  --graph-lane-7: #ff5fd2;
+  --graph-lane-8: #d7f542;
 
   --border-subtle: #2a394b;
   --border-default: #38495d;
   --border-strong: #4b5e75;
-  --border-focus: #8dbcea;
+  --border-focus: #00f5ff;
 
   --diff-add-bg: #203c31;
   --diff-add-line: #1c332b;
@@ -221,6 +231,7 @@
   --surface-active: #202020;
   --surface-input: #050505;
   --surface-overlay: #000000;
+  --surface-selected: #002f33;
 
   --text-primary: #f7f7f8;
   --text-secondary: #b8b8bd;
@@ -234,36 +245,40 @@
   --primary-soft: #20252b;
   --primary-muted: #343b44;
 
-  --success: #6fc092;
-  --success-soft: #172a21;
-  --success-text: #93d5af;
+  --success: #42f59a;
+  --success-soft: #102c20;
+  --success-text: #89ffb9;
   --warning: #e2b24f;
   --warning-soft: #302713;
   --warning-text: #f0cd82;
-  --error: #ef8179;
-  --error-soft: #321b1c;
-  --error-text: #f5aaa4;
-  --info: #88bceb;
-  --info-soft: #17283a;
+  --error: #ff5263;
+  --error-soft: #351419;
+  --error-text: #ff99a3;
+  --info: #00ffff;
+  --info-soft: #002f33;
+  --signal: #00ffff;
+  --signal-soft: #002f33;
+  --signal-text: #00ffff;
+  --focus-ring: #00ffff;
 
   --graph-line: #30343a;
   --graph-node: #747b85;
   --graph-active: #f1f5f9;
-  --graph-highlight: #9dc7ef;
-  --graph-head: #ffffff;
-  --graph-lane-1: #6daeea;
-  --graph-lane-2: #ef7d87;
-  --graph-lane-3: #75c991;
-  --graph-lane-4: #e6b45b;
-  --graph-lane-5: #ad94dc;
-  --graph-lane-6: #59c0c0;
-  --graph-lane-7: #da85c5;
-  --graph-lane-8: #acbc64;
+  --graph-highlight: #00ffff;
+  --graph-head: #00ffff;
+  --graph-lane-1: #00e5ff;
+  --graph-lane-2: #ff4f72;
+  --graph-lane-3: #42f59a;
+  --graph-lane-4: #ffa31a;
+  --graph-lane-5: #b278ff;
+  --graph-lane-6: #00ffd0;
+  --graph-lane-7: #ff61d8;
+  --graph-lane-8: #dcff4f;
 
   --border-subtle: #202020;
   --border-default: #303030;
   --border-strong: #4a4a4a;
-  --border-focus: #a9cbed;
+  --border-focus: #00ffff;
 
   --diff-add-bg: #16271f;
   --diff-add-line: #122019;

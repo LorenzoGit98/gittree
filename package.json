@@ -1,6 +1,6 @@
 {
   "name": "gittree-minimal",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A fast, visual and privacy-first Git desktop client with a SourceTree-style graph.",
   "main": "src/main/main.js",
   "scripts": {
@@ -17,7 +17,7 @@
     "dist:mac": "npm run prepare:assets && electron-builder --mac --publish never",
     "dist:linux": "npm run prepare:assets && electron-builder --linux --publish never",
     "release:check": "node scripts/check-release-version.js",
-    "release:publish": "npm run release:check && npm run prepare:assets && electron-builder --publish always"
+    "release:assets": "node scripts/release-assets.js"
   },
   "repository": {
     "type": "git",

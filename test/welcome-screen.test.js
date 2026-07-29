@@ -62,3 +62,25 @@ test('a fresh install adds the first repository through the registered tabs comp
   assert.deepEqual(added, [selectedPath]);
   assert.deepEqual(errors, []);
 });
+
+test('bulk repository import persists once and selects the first newly added repository', () => {
+  const RepoManager = require('../src/main/repo-manager');
+  const manager = Object.create(RepoManager.prototype);
+  manager.repos = [
+    { path: 'C:\\workspace\\existing', name: 'existing', addedAt: 'before' }
+  ];
+  manager.activeRepoIndex = 0;
+  let saves = 0;
+  manager.saveRepos = () => { saves += 1; };
+
+  const result = manager.addRepos([
+    'C:\\workspace\\existing',
+    'C:\\workspace\\alpha',
+    'C:\\workspace\\beta'
+  ]);
+
+  assert.equal(saves, 1);
+  assert.deepEqual(result.added.map(item => item.name), ['alpha', 'beta']);
+  assert.deepEqual(result.existing.map(item => item.name), ['existing']);
+  assert.equal(result.activeRepo.name, 'alpha');
+});

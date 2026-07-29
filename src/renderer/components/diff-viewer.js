@@ -79,40 +79,27 @@ class DiffViewer {
   }
 
   renderUnified(diffText) {
-    const lines = diffText.split('\n');
+    const lines = DiffParser.parseUnified(diffText);
     const frag = document.createDocumentFragment();
+    this.body.style.setProperty('--diff-gutter-digits', DiffParser.maxDigits(lines));
 
     lines.forEach(line => {
-      if (line.startsWith('diff --git')) {
+      if (line.kind === 'file') {
         const hdr = document.createElement('div');
         hdr.className = 'diff-file-header';
-        hdr.innerHTML = `<span class="diff-file-path">${this.esc(this.extractPath(line) || line)}</span>`;
+        hdr.innerHTML = `<span class="diff-file-path">${this.esc(this.extractPath(line.content) || line.content)}</span>`;
         frag.appendChild(hdr);
-        return;
-      }
-      if (line.startsWith('index ') || line.startsWith('--- ') || line.startsWith('+++ ') ||
-          line.startsWith('new file') || line.startsWith('deleted file') || line.startsWith('similarity')) {
-        const el = document.createElement('div');
-        el.className = 'diff-line header';
-        el.textContent = line;
-        frag.appendChild(el);
         return;
       }
 
       const el = document.createElement('div');
-      el.className = 'diff-line';
-      if (line.startsWith('@@')) el.classList.add('hunk');
-      else if (line.startsWith('+')) el.classList.add('add');
-      else if (line.startsWith('-')) el.classList.add('del');
-      else el.classList.add('context');
-
-      const num = document.createElement('span');
-      num.className = 'diff-line-num';
-      el.appendChild(num);
+      el.className = `diff-line ${line.kind === 'no-newline' ? 'header' : line.kind}`;
+      el.appendChild(this.lineNumber(line.oldLine, 'old'));
+      el.appendChild(this.lineNumber(line.newLine, 'new'));
 
       const content = document.createElement('span');
       content.className = 'diff-line-content';
-      content.textContent = line;
+      content.textContent = line.content;
       el.appendChild(content);
 
       frag.appendChild(el);
@@ -134,25 +121,34 @@ class DiffViewer {
       return columns;
     };
 
-    this.parseSplitRows(diffText).forEach(row => {
+    const parsedRows = this.parseSplitRows(diffText);
+    this.body.style.setProperty('--diff-gutter-digits', DiffParser.maxDigits(parsedRows));
+    parsedRows.forEach(row => {
       if (row.type === 'full') {
         columns = null;
         const el = document.createElement('div');
         if (row.kind === 'file') {
           el.className = 'diff-file-header';
           el.innerHTML = `<span class="diff-file-path">${
-            this.esc(this.extractPath(row.text) || row.text)
+            this.esc(this.extractPath(row.content) || row.content)
           }</span>`;
         } else {
           el.className = `diff-line ${row.kind}`;
-          el.textContent = row.text;
+          el.append(
+            this.lineNumber(null, 'old'),
+            this.lineNumber(null, 'new')
+          );
+          const content = document.createElement('span');
+          content.className = 'diff-line-content';
+          content.textContent = row.content;
+          el.appendChild(content);
         }
         wrapper.appendChild(el);
         return;
       }
       const target = ensureColumns();
-      target.appendChild(this.splitLine(row.left.text, row.left.kind));
-      target.appendChild(this.splitLine(row.right.text, row.right.kind));
+      target.appendChild(this.splitLine(row.left, 'old'));
+      target.appendChild(this.splitLine(row.right, 'new'));
     });
 
     this.body.innerHTML = '';
@@ -160,73 +156,25 @@ class DiffViewer {
   }
 
   parseSplitRows(diffText) {
-    const rows = [];
-    let deletions = [];
-    let additions = [];
-    const flushChanges = () => {
-      const length = Math.max(deletions.length, additions.length);
-      for (let index = 0; index < length; index += 1) {
-        rows.push({
-          type: 'pair',
-          left: {
-            text: deletions[index] || '',
-            kind: deletions[index] ? 'del' : 'context'
-          },
-          right: {
-            text: additions[index] || '',
-            kind: additions[index] ? 'add' : 'context'
-          }
-        });
-      }
-      deletions = [];
-      additions = [];
-    };
-
-    diffText.split('\n').forEach(line => {
-      if (line.startsWith('diff --git')) {
-        flushChanges();
-        rows.push({ type: 'full', kind: 'file', text: line });
-      } else if (
-        line.startsWith('index ') ||
-        line.startsWith('--- ') ||
-        line.startsWith('+++ ') ||
-        line.startsWith('new file') ||
-        line.startsWith('deleted file') ||
-        line.startsWith('similarity')
-      ) {
-        flushChanges();
-        rows.push({ type: 'full', kind: 'header', text: line });
-      } else if (line.startsWith('@@')) {
-        flushChanges();
-        rows.push({ type: 'full', kind: 'hunk', text: line });
-      } else if (line.startsWith('-')) {
-        deletions.push(line);
-      } else if (line.startsWith('+')) {
-        additions.push(line);
-      } else {
-        flushChanges();
-        rows.push({
-          type: 'pair',
-          left: { text: line, kind: 'context' },
-          right: { text: line, kind: 'context' }
-        });
-      }
-    });
-    flushChanges();
-    return rows;
+    return DiffParser.parseSplit(diffText);
   }
 
-  splitLine(text, cls) {
+  splitLine(line, side) {
     const el = document.createElement('div');
-    el.className = `diff-line ${cls}`;
-    const num = document.createElement('span');
-    num.className = 'diff-line-num';
-    el.appendChild(num);
+    el.className = `diff-line ${line.kind}`;
+    el.appendChild(this.lineNumber(side === 'old' ? line.oldLine : line.newLine, side));
     const content = document.createElement('span');
     content.className = 'diff-line-content';
-    content.textContent = text;
+    content.textContent = line.content;
     el.appendChild(content);
     return el;
+  }
+
+  lineNumber(value, side) {
+    const number = document.createElement('span');
+    number.className = `diff-line-num is-${side}`;
+    number.textContent = Number.isInteger(value) ? String(value) : '';
+    return number;
   }
 
   extractPath(line) {

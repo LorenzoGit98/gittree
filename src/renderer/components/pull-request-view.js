@@ -438,6 +438,7 @@ class PullRequestView {
       return;
     }
     const lines = this.parsePatchLines(file.patch);
+    viewport.style.setProperty('--diff-gutter-digits', DiffParser.maxDigits(lines));
     const rowHeight = 22;
     const spacer = document.createElement('div');
     spacer.className = 'changes-file-spacer';
@@ -460,19 +461,22 @@ class PullRequestView {
         row.style.top = `${index * rowHeight}px`;
         row.style.left = '0';
         row.style.right = '0';
+        const oldNumber = document.createElement('span');
+        oldNumber.className = 'diff-line-num is-old';
+        oldNumber.textContent = Number.isInteger(line.oldLine) ? String(line.oldLine) : '';
         const number = document.createElement('button');
-        number.className = 'diff-line-num';
+        number.className = 'diff-line-num is-new';
         number.type = 'button';
-        number.textContent = line.newLine || '';
-        number.disabled = !line.newLine;
-        number.title = line.newLine ? t('pullRequests.addInline') : '';
-        if (line.newLine) {
+        number.textContent = Number.isInteger(line.newLine) ? String(line.newLine) : '';
+        number.disabled = !Number.isInteger(line.newLine);
+        number.title = Number.isInteger(line.newLine) ? t('pullRequests.addInline') : '';
+        if (Number.isInteger(line.newLine)) {
           number.onclick = () => this.addInlineComment(file.path, line.newLine);
         }
         const content = document.createElement('span');
         content.className = 'diff-line-content';
         content.textContent = line.content;
-        row.append(number, content);
+        row.append(oldNumber, number, content);
         fragment.appendChild(row);
       }
       spacer.replaceChildren(fragment);
@@ -484,26 +488,12 @@ class PullRequestView {
   }
 
   parsePatchLines(patch) {
-    let oldLine = 0;
-    let newLine = 0;
-    return patch.split('\n').map(content => {
-      const header = content.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)/);
-      if (header) {
-        oldLine = Number(header[1]);
-        newLine = Number(header[2]);
-        return { content, oldLine: null, newLine: null, type: 'hunk' };
-      }
-      if (content.startsWith('+')) {
-        return { content, oldLine: null, newLine: newLine++, type: 'add' };
-      }
-      if (content.startsWith('-')) {
-        return { content, oldLine: oldLine++, newLine: null, type: 'del' };
-      }
-      const line = { content, oldLine, newLine, type: 'context' };
-      oldLine += 1;
-      newLine += 1;
-      return line;
-    });
+    return DiffParser.parseUnified(patch).map(line => ({
+      ...line,
+      type: ['file', 'header', 'no-newline'].includes(line.kind)
+        ? 'header'
+        : line.kind
+    }));
   }
 
   async addInlineComment(filePath, line) {

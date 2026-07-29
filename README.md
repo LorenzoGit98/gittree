@@ -54,6 +54,8 @@ The interface combines calm, system-native clarity with a concrete bento workspa
 ### Multi-repository workspace
 
 - Open repositories as integrated tabs.
+- Add one repository or recursively discover a workspace folder and import selected working trees in one operation.
+- Recognize regular repositories and Git worktrees while excluding bare repositories, submodules, symlinks and dependency/output folders.
 - Restore the active repository at startup.
 - Persist repository tabs and layout state.
 - Resize the branch navigator, history columns and Inspector.
@@ -127,6 +129,7 @@ The Changes view provides:
 - stage and unstage individual files;
 - stage and unstage individual text hunks;
 - working-tree diffs in the Inspector;
+- exact old/new line-number gutters in Unified and Split diffs;
 - support for new, deleted, renamed, binary and conflicted files;
 - immutable status snapshots that reject stale renderer requests;
 - hunk patches regenerated in the main process;
@@ -153,11 +156,13 @@ GitTree never accepts arbitrary patches or raw Git commands from the renderer. S
 - Create lightweight or annotated tags directly from a commit context menu.
 - Keep merge commits out of the initial cherry-pick flow until a mainline picker exists.
 - Detect merge, rebase and cherry-pick operations after an application restart.
-- Read base, ours and theirs from Git index stages.
-- Edit text conflict results in a real three-panel resolver.
-- Accept ours, accept theirs or edit the result manually.
-- Resolve binary conflicts by choosing ours or theirs.
-- Stage resolved files explicitly.
+- Read Base, Current and Incoming from the real Git index stages.
+- Edit text conflicts in a native Incoming / Current / Result Merge Editor with an optional Base view.
+- Navigate conflict blocks and choose Current, Incoming, Both or a conservative Smart Combination.
+- Keep every choice in memory until **Mark as resolved** is explicitly confirmed.
+- Reject stale saves and unresolved conflict markers in the main process.
+- Resolve binary conflicts by selecting Current or Incoming before explicitly marking the file resolved.
+- Show exact line numbers in source, base and result panes and synchronize source scrolling.
 - Enable Continue only when no unmerged files remain.
 - Provide Skip for rebase and cherry-pick.
 - Protect Abort with confirmation.
@@ -246,8 +251,8 @@ These profiles are author identities, not credential storage. GitTree does not i
 ### Themes and localization
 
 - Light theme.
-- Dark theme.
-- Black theme with fully dark surfaces.
+- Dark theme with a high-contrast solid cyan informational signal.
+- Black theme with fully dark surfaces and a vivid solid cyan informational signal.
 - English interface with fallback strings.
 - Italian interface.
 - Persistent theme, language and workspace state.
@@ -352,6 +357,7 @@ npm start
 | npm run test:renderer-ui | Verify renderer UI contracts through CDP |
 | npm run perf:renderer | Run the renderer benchmark |
 | npm run prepare:assets | Validate and prepare release assets |
+| npm run release:assets | Validate and upload one platform's release assets |
 | npm run build | Produce an unpacked application directory |
 | npm run dist:win | Build the Windows installer |
 | npm run dist:mac | Build macOS DMG and ZIP |
@@ -396,6 +402,8 @@ git push origin main --follow-tags
 
 GitHub Actions builds Windows, macOS and Linux on their native runners.
 
+Every tagged release is assembled atomically: GitHub first creates a draft, native jobs upload only validated installers and update metadata, and a final job publishes it after all platforms succeed. Failed builds remain invisible drafts and can be rebuilt safely.
+
 Production builds require these public OAuth client IDs:
 
 - GITTREE_GITHUB_CLIENT_ID;
@@ -415,6 +423,8 @@ The OTA foundation uses electron-updater:
 - installation happens after an explicit restart;
 - downgrades are disabled;
 - platform manifests are generated with each release.
+
+GitHub Releases is the update host; no application server or embedded publication token is required. Windows and Linux OTA can operate without paid infrastructure. Unsigned macOS builds are published as manual DMG downloads without an OTA manifest, because macOS auto-update requires signing and notarization.
 
 Trustworthy distribution additionally requires signed installers and macOS notarization. See [docs/UPDATES.md](docs/UPDATES.md) for the update model and security notes.
 

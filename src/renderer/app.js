@@ -64,7 +64,7 @@ class GitTreeApp {
     this.on('commit:selected', (hash) => this.onCommitSelected(hash));
     this.on('refresh', () => this.refresh());
 
-    document.getElementById('btn-add-repo-tab').onclick = () => this.components.welcome.openRepo();
+    document.getElementById('btn-add-repo-tab').onclick = () => this.components.welcome.openRepositoryPicker();
     document.querySelectorAll('.settings-open').forEach(button => {
       button.onclick = () => this.components.settings.open();
     });

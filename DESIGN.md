@@ -10,7 +10,7 @@ The interface must feel bright, stable, precise, and calm. Visual hierarchy come
 
 - Use opaque surfaces for every functional component.
 - Use gradients only on the outer application canvas through `--canvas-gradient`.
-- Never use glassmorphism, backdrop blur, translucent overlays, glow, neon, reflections, neumorphism, or frosted effects.
+- Never use glassmorphism, backdrop blur, translucent overlays, glow effects, illuminated borders, reflections, neumorphism, or frosted effects.
 - Never apply gradients to panels, cards, controls, tables, dialogs, overlays, or navigation.
 - Use semantic tokens from `src/renderer/styles/variables.css`; do not add raw colors elsewhere in renderer code.
 - Use Phosphor regular icons. Do not use emoji, Unicode pictograms, or mixed icon weights.
@@ -21,7 +21,7 @@ The interface must feel bright, stable, precise, and calm. Visual hierarchy come
 
 ### Color
 
-Light theme is the product default. Dark theme is an equal, opaque alternative.
+Light theme is the product default. Dark and Black are equal, fully opaque alternatives.
 
 | Role | Light | Dark |
 | --- | --- | --- |
@@ -33,8 +33,9 @@ Light theme is the product default. Dark theme is an equal, opaque alternative.
 | Secondary text | `#475467` | `#B8C3D2` |
 | Primary action | `#102A4C` | `#DCE9F8` |
 | Subtle border | `#E3E8EF` | `#2A394B` |
+| Informational signal | `#176B7A` | `#00F5FF` |
 
-Semantic status colors are muted and always paired with text or an icon. Never rely on color alone.
+Semantic status colors are always paired with text or an icon. Never rely on color alone. Dark and Black may use a high-chroma solid cyan for informational signals, sync state, HEAD, and non-critical selection. This is a semantic color—not a neon effect—and must never be paired with glow, colored shadows, transparency, or illuminated borders. Amber remains reserved for real warnings, dirty state, and risky actions.
 
 ### Typography
 
@@ -147,7 +148,7 @@ The desktop window is frameless. The repository tabs are the first visible row o
 - Outer canvas is the only gradient-bearing surface.
 - Every component surface is fully opaque.
 - No raw renderer colors exist outside `variables.css`.
-- No glass, blur, glow, emoji, or Unicode icons are present.
+- No glass, blur, glow effects, emoji, or Unicode icons are present.
 - Light and dark themes both preserve hierarchy and contrast.
 - English and Italian keys are present for new user-facing copy.
 - Buttons, fields, tabs, dialogs, lists, empty states, and error states use shared contracts.

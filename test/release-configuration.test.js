@@ -34,7 +34,7 @@ test('the master application icon is release ready', () => {
   assert.equal(icon[25], 6);
 });
 
-test('release workflow builds each operating system on its native runner', () => {
+test('release workflow publishes one atomic draft after every native build succeeds', () => {
   const workflow = fs.readFileSync(
     path.join(root, '.github', 'workflows', 'release.yml'),
     'utf8'
@@ -42,7 +42,17 @@ test('release workflow builds each operating system on its native runner', () =>
   assert.match(workflow, /runs-on:\s*windows-latest/);
   assert.match(workflow, /runs-on:\s*macos-latest/);
   assert.match(workflow, /runs-on:\s*ubuntu-latest/);
-  assert.match(workflow, /--publish always/g);
+  assert.doesNotMatch(workflow, /--publish always/);
+  assert.equal((workflow.match(/--publish never/g) || []).length, 3);
+  assert.match(workflow, /gh release create[\s\S]+--draft/);
+  assert.match(workflow, /gh release delete-asset[\s\S]+--yes/);
+  assert.equal((workflow.match(/scripts\/release-assets\.js/g) || []).length, 3);
+  assert.match(workflow, /name:\s*Publish complete release/);
+  assert.match(workflow, /needs:\s*\[windows,\s*macos,\s*linux\]/);
+  assert.match(workflow, /gh release edit[\s\S]+--draft=false/);
+  assert.match(workflow, /GH_REPO:\s*\${{\s*github\.repository\s*}}/);
+  assert.match(workflow, /MACOS_OTA_ENABLED:/);
+  assert.match(workflow, /platform="mac-manual"/);
   assert.match(workflow, /GITTREE_GITHUB_CLIENT_ID/);
   assert.match(workflow, /GITTREE_GITLAB_CLIENT_ID/);
 });

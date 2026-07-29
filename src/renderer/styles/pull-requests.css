@@ -205,6 +205,25 @@
   background: var(--surface-primary);
 }
 
+.pr-patch button.diff-line-num {
+  height: 22px;
+  border: 0;
+  border-right: 1px solid var(--border-subtle);
+  border-radius: 0;
+  background: var(--surface-primary);
+  cursor: pointer;
+}
+
+.pr-patch button.diff-line-num:not(:disabled):hover,
+.pr-patch button.diff-line-num:not(:disabled):focus-visible {
+  color: var(--signal);
+  background: var(--signal-soft);
+}
+
+.pr-patch button.diff-line-num:disabled {
+  cursor: default;
+}
+
 .pr-thread {
   display: grid;
   gap: var(--space-2);

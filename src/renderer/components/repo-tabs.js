@@ -120,4 +120,17 @@ class RepoTabs {
       this.app.showToast(`${t('common.error')}: ${e.message}`, 'error');
     }
   }
+
+  async addRepos(repoPaths) {
+    const result = await window.gitTree.addRepos(repoPaths);
+    this.repos = await window.gitTree.getRepos();
+    if (result?.activeRepo) {
+      this.app.state.activeRepoIndex = this.repos.findIndex(
+        repo => repo.path === result.activeRepo.path
+      );
+      this.render();
+      this.app.emit('repo:changed', result.activeRepo);
+    }
+    return result;
+  }
 }

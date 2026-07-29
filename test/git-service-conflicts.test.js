@@ -37,9 +37,16 @@ test('merge conflicts expose real stage content and continue after a manual reso
   assert.equal(conflict.base, 'base\n');
   assert.equal(conflict.ours, 'main\n');
   assert.equal(conflict.theirs, 'feature\n');
+  assert.equal(conflict.current, 'main\n');
+  assert.equal(conflict.incoming, 'feature\n');
+  assert.match(conflict.snapshotId, /^[a-f0-9]{64}$/);
+  assert.equal(conflict.blocks.length, 1);
+  assert.equal(conflict.blocks[0].current.trim(), 'main');
+  assert.equal(conflict.blocks[0].incoming.trim(), 'feature');
 
   await service.resolveConflict('conflict.txt', {
     strategy: 'manual',
+    snapshotId: conflict.snapshotId,
     content: 'resolved\n'
   });
   assert.equal((await service.getOperationState()).canContinue, true);
@@ -73,7 +80,10 @@ test('rebase conflicts use Git stage semantics and can continue with the rebased
   assert.equal(conflict.ours, 'main\n');
   assert.equal(conflict.theirs, 'feature\n');
 
-  await service.resolveConflict('conflict.txt', { strategy: 'theirs' });
+  await service.resolveConflict('conflict.txt', {
+    strategy: 'theirs',
+    snapshotId: conflict.snapshotId
+  });
   await service.continueOperation();
 
   assert.equal((await service.getOperationState()).type, null);
@@ -99,9 +109,39 @@ test('binary conflicts reject manual text and repository paths cannot escape the
   await assert.rejects(service.merge('feature', 'noff'));
   assert.equal((await service.readConflict('image.bin')).binary, true);
   await assert.rejects(
-    service.resolveConflict('image.bin', { strategy: 'manual', content: 'text' }),
+    service.resolveConflict('image.bin', {
+      strategy: 'manual',
+      snapshotId: (await service.readConflict('image.bin')).snapshotId,
+      content: 'text'
+    }),
     /Binary conflicts/
   );
   await assert.rejects(service.readConflict('../outside.txt'), /outside the repository/);
+  await service.abortOperation();
+});
+
+test('conflict resolution rejects stale snapshots and unresolved markers', async t => {
+  const repo = createConflictingRepository(t);
+  const service = new GitService(repo.repository);
+  await assert.rejects(service.merge('feature', 'noff'));
+  const conflict = await service.readConflict('conflict.txt');
+
+  await assert.rejects(
+    service.resolveConflict('conflict.txt', {
+      strategy: 'manual',
+      snapshotId: '0'.repeat(64),
+      content: 'resolved\n'
+    }),
+    /changed externally/i
+  );
+  await assert.rejects(
+    service.resolveConflict('conflict.txt', {
+      strategy: 'manual',
+      snapshotId: conflict.snapshotId,
+      content: conflict.result
+    }),
+    /unresolved conflict markers/i
+  );
+  assert.deepEqual((await service.getOperationState()).conflicts, ['conflict.txt']);
   await service.abortOperation();
 });

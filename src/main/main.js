@@ -10,8 +10,10 @@ const {
 } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('node:crypto');
 const GitService = require('./git-service');
 const RepoManager = require('./repo-manager');
+const { scanRepositories } = require('./repository-scanner');
 const UpdateService = require('./update-service');
 const CredentialVault = require('./credential-vault');
 const HostingService = require('./hosting-service');
@@ -24,6 +26,7 @@ let updateService;
 let hostingService;
 
 const gitServices = new Map();
+const repositoryScans = new Map();
 
 function getGitService(repoPath) {
   if (!gitServices.has(repoPath)) {
@@ -45,6 +48,17 @@ async function getHostingRepository(repoPath, provider) {
     throw new Error(`No supported ${provider} remote was found in this repository`);
   }
   return { ...remote.provider, remoteName: remote.name };
+}
+
+async function isWorkingTreeRepository(repoPath) {
+  if (typeof repoPath !== 'string' || !path.isAbsolute(repoPath)) return false;
+  try {
+    const git = new GitService(repoPath);
+    await git.git.checkIsRepo();
+    return (await git.git.raw(['rev-parse', '--is-inside-work-tree'])).trim() === 'true';
+  } catch {
+    return false;
+  }
 }
 
 function createWindow() {
@@ -119,8 +133,9 @@ async function openRepoDialog() {
   if (!result.canceled && result.filePaths.length > 0) {
     const dirPath = result.filePaths[0];
     try {
-      const testGit = new GitService(dirPath);
-      await testGit.git.checkIsRepo();
+      if (!await isWorkingTreeRepository(dirPath)) {
+        throw new Error('Not a working tree');
+      }
       const repo = repoManager.addRepo(dirPath);
       sendToRenderer('repo:added', repo);
     } catch {
@@ -212,13 +227,7 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle('git:is-repo', async (_event, repoPath) => {
-    try {
-      const git = getGitService(repoPath);
-      await git.git.checkIsRepo();
-      return true;
-    } catch {
-      return false;
-    }
+    return isWorkingTreeRepository(repoPath);
   });
 
   ipcMain.handle('git:log', async (_event, repoPath, maxCount, branch) => {
@@ -835,13 +844,79 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle('repo:add', async (_event, repoPath) => {
-    try {
-      const testGit = new GitService(repoPath);
-      await testGit.git.checkIsRepo();
-    } catch {
+    if (!await isWorkingTreeRepository(repoPath)) {
       return { error: 'Not a valid Git repository' };
     }
     return repoManager.addRepo(repoPath);
+  });
+
+  ipcMain.handle('repo:scan-start', (_event, rootPath) => {
+    const scanId = crypto.randomUUID();
+    const controller = new AbortController();
+    repositoryScans.set(scanId, controller);
+    let lastProgressAt = 0;
+
+    scanRepositories(rootPath, {
+      signal: controller.signal,
+      onProgress(progress) {
+        const now = Date.now();
+        if (progress.repository || now - lastProgressAt >= 50) {
+          lastProgressAt = now;
+          sendToRenderer('repo:scan-progress', { scanId, ...progress });
+        }
+      }
+    }).then(result => {
+      sendToRenderer('repo:scan-complete', { scanId, ...result });
+    }).catch(error => {
+      sendToRenderer('repo:scan-complete', {
+        scanId,
+        repositories: [],
+        scannedDirectories: 0,
+        skipped: 0,
+        canceled: controller.signal.aborted,
+        error: error.message
+      });
+    }).finally(() => {
+      repositoryScans.delete(scanId);
+    });
+
+    return { scanId };
+  });
+
+  ipcMain.handle('repo:scan-cancel', (_event, scanId) => {
+    const controller = repositoryScans.get(scanId);
+    if (!controller) return { success: false };
+    controller.abort();
+    return { success: true };
+  });
+
+  ipcMain.handle('repo:add-many', async (_event, repoPaths) => {
+    if (!Array.isArray(repoPaths) || repoPaths.length > 10000) {
+      return { added: [], existing: [], failed: [], activeRepo: null, error: 'Invalid repository list' };
+    }
+
+    const valid = [];
+    const failed = [];
+    for (const repoPath of repoPaths) {
+      if (typeof repoPath !== 'string' || !path.isAbsolute(repoPath)) {
+        failed.push({ path: String(repoPath || ''), error: 'Invalid repository path' });
+        continue;
+      }
+      try {
+        const git = new GitService(repoPath);
+        await git.git.checkIsRepo();
+        const insideWorkTree = (await git.git.raw(['rev-parse', '--is-inside-work-tree'])).trim();
+        if (insideWorkTree !== 'true') throw new Error('Bare repositories are not supported');
+        valid.push(repoPath);
+      } catch (error) {
+        failed.push({ path: repoPath, error: error.message || 'Not a valid Git repository' });
+      }
+    }
+
+    return {
+      ...repoManager.addRepos(valid),
+      failed
+    };
   });
 
   ipcMain.handle('repo:remove', (_event, repoPath) => {

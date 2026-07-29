@@ -5,6 +5,12 @@ const { execFile, spawn } = require('child_process');
 const { promisify } = require('util');
 const crypto = require('crypto');
 const { parseRemoteUrl } = require('./provider-links');
+const {
+  MAX_CONFLICT_RESULT_BYTES,
+  conflictSnapshot,
+  hasUnresolvedMarkers,
+  parseConflictBlocks
+} = require('./conflict-model');
 
 const execFileAsync = promisify(execFile);
 
@@ -758,14 +764,22 @@ class GitService {
     const buffers = [base, ours, theirs, result];
     const binary = buffers.some(buffer => buffer.includes(0));
     const decode = buffer => binary ? '' : buffer.toString('utf8');
+    const resultText = decode(result);
+    const snapshotId = conflictSnapshot(buffers);
 
     return {
+      snapshotId,
       path: relativePath,
       binary,
+      eol: resultText.includes('\r\n') ? 'crlf' : 'lf',
       base: decode(base),
+      current: decode(ours),
+      incoming: decode(theirs),
+      result: resultText,
+      blocks: binary ? [] : parseConflictBlocks(resultText),
+      // Compatibility aliases for integrations that still use Git's ours/theirs labels.
       ours: decode(ours),
-      theirs: decode(theirs),
-      result: decode(result)
+      theirs: decode(theirs)
     };
   }
 
@@ -777,12 +791,24 @@ class GitService {
     }
 
     const strategy = resolution?.strategy;
+    const conflict = await this.readConflict(relativePath);
+    if (
+      typeof resolution?.snapshotId !== 'string' ||
+      resolution.snapshotId !== conflict.snapshotId
+    ) {
+      throw new Error('The conflicted file changed externally. Reload it before resolving.');
+    }
     if (strategy === 'manual') {
       if (typeof resolution.content !== 'string') {
         throw new Error('Manual conflict resolution requires text content');
       }
-      const conflict = await this.readConflict(relativePath);
       if (conflict.binary) throw new Error('Binary conflicts cannot be edited as text');
+      if (Buffer.byteLength(resolution.content, 'utf8') > MAX_CONFLICT_RESULT_BYTES) {
+        throw new Error('Conflict result is too large');
+      }
+      if (hasUnresolvedMarkers(resolution.content)) {
+        throw new Error('The result still contains unresolved conflict markers');
+      }
       await fs.promises.writeFile(
         path.resolve(this.repoPath, relativePath),
         resolution.content,

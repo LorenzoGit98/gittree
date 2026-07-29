@@ -247,6 +247,27 @@ contextBridge.exposeInMainWorld('gitTree', {
   addRepo: (repoPath) =>
     ipcRenderer.invoke('repo:add', repoPath),
 
+  addRepos: (repoPaths) =>
+    ipcRenderer.invoke('repo:add-many', repoPaths),
+
+  startRepositoryScan: (rootPath) =>
+    ipcRenderer.invoke('repo:scan-start', rootPath),
+
+  cancelRepositoryScan: (scanId) =>
+    ipcRenderer.invoke('repo:scan-cancel', scanId),
+
+  onRepositoryScanProgress: (callback) => {
+    const listener = (_event, progress) => callback(progress);
+    ipcRenderer.on('repo:scan-progress', listener);
+    return () => ipcRenderer.removeListener('repo:scan-progress', listener);
+  },
+
+  onRepositoryScanComplete: (callback) => {
+    const listener = (_event, result) => callback(result);
+    ipcRenderer.on('repo:scan-complete', listener);
+    return () => ipcRenderer.removeListener('repo:scan-complete', listener);
+  },
+
   removeRepo: (repoPath) =>
     ipcRenderer.invoke('repo:remove', repoPath),
 

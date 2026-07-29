@@ -2,6 +2,15 @@
 
 This guide covers the repository actions available from the workspace toolbar and their keyboard-first workflow.
 
+## Opening one repository or a workspace
+
+The welcome action and the `+` repository-tab button offer two choices:
+
+- **Open single repository** selects one existing Git working tree.
+- **Scan workspace folder** searches a root folder recursively and shows results progressively.
+
+Workspace scanning is manual and cancellable. It does not create a watcher or retain the selected root. GitTree recognizes normal repositories and worktrees, stops below every repository it finds, and skips bare repositories, symlinks, dependency caches and common build-output folders. All new repositories are selected by default; repositories already open remain visible but disabled. Search, **Select all** and **Select none** can refine the import.
+
 ## Keyboard shortcuts
 
 | Action | Windows and Linux | macOS |
@@ -97,3 +106,17 @@ The branch context menu can open a prefilled pull request page for GitHub, GitLa
 The Inspector supports Unified and Split layouts. Maximizing it automatically opens the Split layout so deletions stay on the left and additions stay on the right.
 
 Changed line groups are paired row by row. File headers and hunk headers span both columns. Restoring the Inspector returns to the previous diff layout unless the layout was changed manually while maximized.
+
+Unified diffs show old and new line-number gutters together. Split diffs show the old number on the left and the new number on the right. The same numbering rules apply to staged/unstaged changes and Pull Request patches; clicking an available new-line number in a provider diff starts an inline review comment.
+
+## Resolving conflicts in the Merge Editor
+
+When merge, rebase or cherry-pick stops on a conflict, GitTree opens its native Merge Editor:
+
+- **Incoming** is shown on the left and **Current** on the right.
+- **Result** remains editable below them; a vertical layout is also available.
+- **Base** is available as an optional expandable reference.
+- Previous/next controls navigate conflict blocks.
+- Each block supports Current, Incoming, Both and a Smart Combination only when the base makes that combination provably safe.
+
+Selections only update the in-memory Result. GitTree writes and stages the file only after **Mark as resolved** and its confirmation. If the file changed outside GitTree, the saved snapshot is rejected and the latest conflict is reloaded. Unresolved conflict markers are never staged. Binary conflicts use the same explicit final confirmation but offer only Current or Incoming.

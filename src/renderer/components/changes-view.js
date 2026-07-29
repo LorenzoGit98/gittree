@@ -289,7 +289,13 @@ class ChangesView {
     }
     const wrapper = document.createElement('div');
     wrapper.className = 'working-diff';
-    diff.hunks.forEach(hunk => {
+    const numberedHunks = diff.hunks.map(hunk => ({
+      hunk,
+      lines: DiffParser.numberHunk(hunk)
+    }));
+    const allLines = numberedHunks.flatMap(item => item.lines);
+    wrapper.style.setProperty('--diff-gutter-digits', DiffParser.maxDigits(allLines));
+    numberedHunks.forEach(({ hunk, lines }) => {
       const section = document.createElement('section');
       section.className = 'working-diff-hunk';
       const header = document.createElement('div');
@@ -303,17 +309,19 @@ class ChangesView {
       action.onclick = () => this.mutateHunk(diff.path, staged, hunk.id);
       header.append(code, action);
       section.appendChild(header);
-      hunk.lines.forEach(line => {
+      lines.forEach(line => {
         const row = document.createElement('div');
-        row.className = `diff-line ${
-          line.type === 'add' ? 'add' : line.type === 'delete' ? 'del' : 'context'
-        }`;
-        const number = document.createElement('span');
-        number.className = 'diff-line-num';
+        row.className = `diff-line ${line.kind}`;
+        const oldNumber = document.createElement('span');
+        oldNumber.className = 'diff-line-num is-old';
+        oldNumber.textContent = Number.isInteger(line.oldLine) ? String(line.oldLine) : '';
+        const newNumber = document.createElement('span');
+        newNumber.className = 'diff-line-num is-new';
+        newNumber.textContent = Number.isInteger(line.newLine) ? String(line.newLine) : '';
         const content = document.createElement('span');
         content.className = 'diff-line-content';
         content.textContent = line.content;
-        row.append(number, content);
+        row.append(oldNumber, newNumber, content);
         section.appendChild(row);
       });
       wrapper.appendChild(section);

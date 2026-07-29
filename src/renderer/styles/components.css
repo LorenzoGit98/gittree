@@ -258,11 +258,11 @@ kbd {
 }
 
 .sync-indicator-part.is-ahead {
-  color: var(--info);
+  color: var(--signal);
 }
 
 .sync-indicator-part.is-behind {
-  color: var(--warning-text);
+  color: var(--signal);
 }
 
 .sync-indicator-part.is-synced {

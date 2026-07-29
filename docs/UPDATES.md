@@ -26,14 +26,18 @@ Gli errori manuali passano a `error`; gli errori dei controlli periodici non int
 
 ## Artefatti richiesti
 
-electron-builder pubblica:
+La pipeline atomica valida e pubblica:
 
 - `latest.yml` per Windows;
-- `latest-mac.yml` e ZIP per macOS;
+- `latest-mac.yml` e ZIP per macOS soltanto quando firma e notarizzazione sono configurate;
 - `latest-linux.yml` per Linux;
 - installer, AppImage, DMG e relativi file `.blockmap`.
 
 Non rinominare o rimuovere manualmente i manifest da una release.
+
+Ogni release nasce come draft. Windows, macOS e Linux caricano i rispettivi asset direttamente nella draft; il job finale la pubblica solo quando tutti i job sono riusciti. Una build fallita non è quindi visibile a `electron-updater`.
+
+Le build macOS non firmate pubblicano esclusivamente il DMG manuale. Omettere il manifest impedisce che i client ricevano un aggiornamento che macOS rifiuterebbe.
 
 ## Sicurezza
 
@@ -43,7 +47,12 @@ Non rinominare o rimuovere manualmente i manifest da una release.
 - Le prerelease sono accettate solo da una versione che appartiene già a un canale prerelease.
 - La firma del codice deve essere configurata prima della distribuzione pubblica.
 - Nessun token di pubblicazione o aggiornamento viene distribuito dentro l’app: il repository di aggiornamento deve rimanere pubblico per questo modello.
+- Il token GitHub Actions ha permesso di scrittura soltanto nei job che creano o aggiornano la release.
 - I client ID OAuth pubblici inclusi nella build non autorizzano la pubblicazione di release e sono separati dai token utente cifrati a runtime.
+
+## Costi operativi
+
+Con un repository pubblico, GitHub Releases ospita installer e manifest e GitHub Actions esegue le build sui runner standard senza richiedere un server applicativo. Windows può partire unsigned e candidarsi successivamente alla firma gratuita SignPath per progetti open source. Linux non richiede un certificato commerciale. La firma e notarizzazione macOS richiedono invece l’adesione Apple appropriata.
 
 ## Rollback
 

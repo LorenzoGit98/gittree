@@ -10,7 +10,8 @@ Questa guida descrive il percorso supportato per produrre installer locali o pub
 - Versione SemVer coerente in `package.json`.
 - Per le release ufficiali: repository GitHub `lorenzogit98/gittree-minimal`.
 - Client ID pubblici di GitHub App e GitLab OAuth Application.
-- Per una distribuzione attendibile: certificati di firma Windows e macOS e credenziali Apple per la notarizzazione.
+- Per macOS OTA: certificato Developer ID e credenziali Apple per la notarizzazione.
+- Per eliminare gli avvisi Windows: certificato Authenticode oppure adesione a un servizio gratuito per progetti open source come SignPath Foundation.
 
 ## Controlli prima della release
 
@@ -65,8 +66,13 @@ Sostituire `patch` con `minor` o `major` quando appropriato. Il workflow `.githu
 1. verifica che il tag `vX.Y.Z` coincida con `package.json`;
 2. verifica la presenza dei client ID OAuth pubblici;
 3. esegue test e audit;
-4. costruisce Windows, macOS e Linux sui rispettivi runner;
-5. pubblica installer, blockmap e manifest OTA nella stessa GitHub Release.
+4. crea una sola GitHub Release in stato draft;
+5. costruisce Windows, macOS e Linux sui rispettivi runner;
+6. valida separatamente installer, payload e manifest OTA;
+7. carica gli asset direttamente nella draft;
+8. pubblica la release soltanto dopo il successo di tutte le piattaforme.
+
+Se una build fallisce, la release resta draft e non viene rilevata dai client. Un nuovo avvio dello stesso workflow riutilizza la draft, elimina gli asset incompleti e ricostruisce tutto. Una release già pubblicata non viene mai sovrascritta.
 
 Non creare manualmente un tag che non corrisponde alla versione del pacchetto: `release:check` bloccherebbe la pipeline.
 
@@ -82,10 +88,17 @@ La release fallisce se mancano o contengono valori non validi. Il file generato 
 | Sistema | Artefatti | OTA |
 | --- | --- | --- |
 | Windows x64 | Installer NSIS assistito | Sì |
-| macOS x64/arm64 | DMG e ZIP | Sì, lo ZIP è obbligatorio |
+| macOS x64/arm64 firmato | DMG, ZIP e manifest | Sì |
+| macOS x64/arm64 non firmato | DMG | No, download manuale |
 | Linux x64 | AppImage e DEB | AppImage |
 
 I nomi seguono lo schema `GitTree-versione-sistema-architettura.estensione`.
+
+La selezione degli asset è intenzionalmente restrittiva: file di debug e configurazioni interne di electron-builder non vengono caricati. Per verificare una build Windows locale senza pubblicarla:
+
+```powershell
+npm run release:assets -- --platform win --directory dist --tag v0.1.0 --dry-run
+```
 
 ## Firma e notarizzazione
 
@@ -99,11 +112,15 @@ Configurare i seguenti GitHub Actions secrets:
 - `APPLE_API_KEY_ID`
 - `APPLE_API_ISSUER`
 
-La pipeline può tecnicamente produrre build non firmate, ma non devono essere considerate release pubbliche definitive. La firma riduce gli avvisi del sistema operativo ed è un requisito fondamentale della catena di fiducia degli aggiornamenti.
+Windows e Linux possono utilizzare gli aggiornamenti GitHub senza un servizio a pagamento. Una build Windows non firmata può mostrare SmartScreen; GitTree può candidarsi alla firma gratuita di [SignPath Foundation](https://signpath.org/) dopo la prima release pubblica documentata.
+
+Su macOS `electron-updater` richiede un’app firmata. Quando i secret macOS non sono configurati, la pipeline carica soltanto i DMG per l’installazione manuale e omette deliberatamente ZIP e `latest-mac.yml`: non viene quindi pubblicato un feed OTA destinato a fallire. L’OTA macOS si abilita automaticamente quando sono presenti tutti i secret di firma e notarizzazione.
+
+La quota Apple Developer resta l’unico costo non eliminabile se si vuole distribuire un OTA macOS ufficiale.
 
 ## Release candidate e prerelease
 
-Versioni come `1.2.0-beta.1` sono riconosciute dal runtime come prerelease. Una build stabile non accetta automaticamente downgrade o prerelease. Prima di introdurre canali beta pubblici separati, creare release di prova e verificare la generazione dei relativi manifest.
+Versioni come `1.2.0-beta.1` vengono pubblicate automaticamente come prerelease. Una build stabile non accetta automaticamente downgrade o prerelease; una build beta continua invece a controllare il proprio canale prerelease.
 
 ## Verifica post-release
 

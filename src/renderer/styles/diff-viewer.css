@@ -64,13 +64,22 @@
 }
 
 .diff-line-num {
-  width: 36px;
+  width: calc((var(--diff-gutter-digits, 3) * 1ch) + 14px);
   flex-shrink: 0;
-  padding-right: var(--space-2);
+  padding: 0 7px;
+  border-right: 1px solid var(--border-subtle);
   color: var(--text-tertiary);
   font-size: 9.5px;
   text-align: right;
   user-select: none;
+}
+
+.diff-line-num.is-new {
+  margin-right: var(--space-2);
+}
+
+.diff-split-columns .diff-line-num {
+  margin-right: var(--space-2);
 }
 
 .diff-line-content {

@@ -14,6 +14,10 @@ function loadDiffViewer() {
     'diff-viewer.js'
   );
   const source = fs.readFileSync(filename, 'utf8');
+  const parserSource = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'renderer', 'components', 'diff-parser.js'),
+    'utf8'
+  );
   const buttons = new Map();
   const storage = new Map();
   const context = {
@@ -36,7 +40,10 @@ function loadDiffViewer() {
     t: key => key
   };
   vm.createContext(context);
-  vm.runInContext(`${source}\nthis.DiffViewerUnderTest = DiffViewer;`, context);
+  vm.runInContext(
+    `${parserSource}\nvar DiffParser = window.DiffParser;\n${source}\nthis.DiffViewerUnderTest = DiffViewer;`,
+    context
+  );
   return context.DiffViewerUnderTest;
 }
 
@@ -69,14 +76,16 @@ test('split diff pairs deletions and additions on the same visual rows', () => {
 
   assert.deepEqual(pairs[0], {
     type: 'pair',
-    left: { text: '-old one', kind: 'del' },
-    right: { text: '+new one', kind: 'add' }
+    left: { content: '-old one', kind: 'del', oldLine: 1, newLine: null },
+    right: { content: '+new one', kind: 'add', oldLine: null, newLine: 1 }
   });
   assert.deepEqual(pairs[1], {
     type: 'pair',
-    left: { text: '-old two', kind: 'del' },
-    right: { text: '', kind: 'context' }
+    left: { content: '-old two', kind: 'del', oldLine: 2, newLine: null },
+    right: { content: '', kind: 'empty', oldLine: null, newLine: null }
   });
-  assert.equal(pairs[2].left.text, ' context');
-  assert.equal(pairs[2].right.text, ' context');
+  assert.equal(pairs[2].left.content, ' context');
+  assert.equal(pairs[2].right.content, ' context');
+  assert.equal(pairs[2].left.oldLine, 3);
+  assert.equal(pairs[2].right.newLine, 2);
 });
