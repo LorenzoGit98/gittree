@@ -58,7 +58,7 @@ La release ufficiale parte da un tag Git:
 
 ```powershell
 npm version patch
-git push origin main --follow-tags
+git push origin master --follow-tags
 ```
 
 Sostituire `patch` con `minor` o `major` quando appropriato. Il workflow `.github/workflows/release.yml`:
