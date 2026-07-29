@@ -7,7 +7,7 @@
 .branch-folder-arrow {
   flex: 0 0 14px;
   font-size: 12px;
-  transition: transform var(--transition-fast);
+  transition: transform var(--duration-fast) var(--spring-gentle);
 }
 
 .collapse-arrow.collapsed,
@@ -46,7 +46,7 @@
   background: var(--surface-input);
   color: var(--text-primary);
   font-size: var(--text-xs);
-  transition: background var(--transition-fast), border-color var(--transition-fast);
+  transition: background var(--duration-fast) var(--ease-smooth), border-color var(--duration-fast) var(--ease-smooth), box-shadow var(--duration-fast) var(--ease-smooth);
 }
 
 .branch-search-input::placeholder {
@@ -56,6 +56,7 @@
 .branch-search-input:focus {
   border-color: var(--border-focus);
   background: var(--surface-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--border-focus) 18%, transparent);
 }
 
 .branch-list {
@@ -148,11 +149,15 @@
   contain: layout paint style;
   contain-intrinsic-size: 34px;
   user-select: none;
+  transition: background var(--duration-fast) var(--ease-smooth), color var(--duration-fast) var(--ease-smooth), transform var(--duration-fast) var(--ease-smooth);
+  animation: motion-item-reveal var(--duration-normal) var(--ease-decel) both;
+  animation-delay: calc(var(--item-index, 0) * 18ms);
 }
 
 .branch-item:hover {
   background: var(--surface-hover);
   color: var(--text-primary);
+  transform: translateX(3px);
 }
 
 .branch-item.selected:not(.active) {

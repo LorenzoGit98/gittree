@@ -18,6 +18,7 @@
   background: var(--surface-primary);
   box-shadow: var(--shadow-lg);
   -webkit-app-region: drag;
+  animation: motion-scale-in-spring var(--duration-slower) var(--spring-gentle);
 }
 
 .welcome-brand {
@@ -84,13 +85,21 @@
   border-radius: var(--radius-md);
   background: var(--surface-secondary);
   cursor: pointer;
-  transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+  transition: background var(--duration-fast) var(--ease-smooth), border-color var(--duration-fast) var(--ease-smooth), transform var(--duration-fast) var(--spring-gentle), box-shadow var(--duration-fast) var(--ease-smooth);
+  animation: motion-item-reveal var(--duration-normal) var(--ease-decel) both;
+  animation-delay: calc(var(--item-index, 0) * 40ms);
 }
 
 .welcome-recent-item:hover {
   border-color: var(--border-default);
   background: var(--surface-hover);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.welcome-recent-item:active {
+  transform: scale(0.98);
+  box-shadow: none;
 }
 
 .welcome-recent-item .recent-name {

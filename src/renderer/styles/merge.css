@@ -110,9 +110,9 @@
   gap: var(--space-2);
   padding: var(--space-2);
   border-radius: var(--radius-sm);
-  transition: background var(--transition-fast);
+  transition: background var(--duration-fast) var(--ease-smooth), transform var(--duration-fast) var(--ease-smooth);
 }
-.merge-risk-item:hover { background: var(--bg-hover); }
+.merge-risk-item:hover { background: var(--bg-hover); transform: translateX(2px); }
 
 .merge-risk-icon {
   font-size: 14px;
@@ -177,7 +177,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  transition: color var(--transition-fast);
+  transition: color var(--duration-fast) var(--ease-smooth);
 }
 .merge-advanced-toggle:hover { color: var(--text-secondary); }
 
@@ -201,10 +201,10 @@
   border-radius: var(--radius-sm);
   cursor: pointer;
   border: 1px solid var(--border);
-  transition: all var(--transition-fast);
+  transition: border-color var(--duration-fast) var(--ease-smooth), background var(--duration-fast) var(--ease-smooth), transform var(--duration-fast) var(--spring-gentle), box-shadow var(--duration-fast) var(--ease-smooth);
 }
-.merge-option:hover { border-color: var(--border-light); background: var(--bg-hover); }
-.merge-option.selected { border-color: var(--accent); background: var(--accent-soft); }
+.merge-option:hover { border-color: var(--border-light); background: var(--bg-hover); transform: translateY(-1px); }
+.merge-option.selected { border-color: var(--accent); background: var(--accent-soft); box-shadow: var(--shadow-sm); }
 .merge-option-label { font-size: 11px; color: var(--text-secondary); }
 .merge-option-desc { font-size: 9.5px; color: var(--text-tertiary); margin-top: 1px; }
 

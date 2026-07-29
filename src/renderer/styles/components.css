@@ -22,7 +22,7 @@
   font-weight: var(--weight-medium);
   line-height: 1;
   white-space: nowrap;
-  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+  transition: background var(--duration-fast) var(--ease-smooth), border-color var(--duration-fast) var(--ease-smooth), color var(--duration-fast) var(--ease-smooth), transform var(--duration-fast) var(--spring-gentle), box-shadow var(--duration-fast) var(--ease-smooth);
 }
 
 .btn i {
@@ -33,11 +33,15 @@
   border-color: var(--border-strong);
   background: var(--surface-hover);
   color: var(--text-primary);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
 }
 
 .btn:active {
   background: var(--surface-active);
-  transform: scale(0.98);
+  transform: scale(0.97) translateY(0);
+  box-shadow: none;
+  transition-duration: var(--duration-instant);
 }
 
 .btn:focus-visible,
@@ -133,17 +137,19 @@ input:focus-visible {
   color: var(--text-secondary);
   cursor: pointer;
   font-size: 17px;
-  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+  transition: background var(--duration-fast) var(--ease-smooth), border-color var(--duration-fast) var(--ease-smooth), color var(--duration-fast) var(--ease-smooth), transform var(--duration-fast) var(--spring-gentle), box-shadow var(--duration-fast) var(--ease-smooth);
 }
 
 .btn-icon:hover {
   border-color: var(--border-default);
   background: var(--surface-hover);
   color: var(--text-primary);
+  transform: scale(1.06);
 }
 
 .btn-icon:active {
-  transform: scale(0.94);
+  transform: scale(0.92);
+  transition-duration: var(--duration-instant);
 }
 
 .btn-small {
@@ -210,10 +216,16 @@ kbd {
   background: var(--surface-secondary);
 }
 
+.segmented-control .btn:hover {
+  transform: none;
+  box-shadow: none;
+}
+
 .segmented-control .btn.active {
   background: var(--surface-primary);
   color: var(--text-primary);
   box-shadow: var(--shadow-sm);
+  animation: motion-scale-in var(--duration-fast) var(--spring-gentle);
 }
 
 .badge {
@@ -226,6 +238,7 @@ kbd {
   font-weight: var(--weight-medium);
   line-height: 1;
   white-space: nowrap;
+  animation: motion-badge-pop var(--duration-normal) var(--spring-gentle);
 }
 
 .badge-branch {
@@ -313,6 +326,7 @@ kbd {
   color: var(--text-secondary);
   cursor: pointer;
   font-size: var(--text-xs);
+  transition: background var(--duration-fast) var(--ease-smooth), border-color var(--duration-fast) var(--ease-smooth), color var(--duration-fast) var(--ease-smooth), transform var(--duration-fast) var(--spring-gentle);
 }
 
 .chip:hover,
@@ -320,6 +334,14 @@ kbd {
   border-color: var(--border-strong);
   background: var(--primary-soft);
   color: var(--text-link);
+}
+
+.chip:hover {
+  transform: translateY(-1px);
+}
+
+.chip:active {
+  transform: scale(0.96);
 }
 
 .empty-state,
@@ -335,12 +357,14 @@ kbd {
   color: var(--text-tertiary);
   font-size: var(--text-sm);
   text-align: center;
+  animation: motion-fade-in-up var(--duration-slow) var(--ease-decel);
 }
 
 .empty-state i,
 .diff-placeholder i {
   font-size: 28px;
   color: var(--border-strong);
+  animation: motion-pulse-soft 2.4s var(--ease-smooth) infinite;
 }
 
 .toast {
@@ -358,13 +382,13 @@ kbd {
   font-size: var(--text-sm);
   opacity: 0;
   pointer-events: none;
-  transform: translateY(8px);
-  transition: opacity var(--transition-normal), transform var(--transition-normal);
+  transform: translateY(16px) scale(0.95);
+  transition: opacity var(--duration-normal) var(--ease-decel), transform var(--duration-normal) var(--spring-gentle);
 }
 
 .toast.show {
   opacity: 1;
-  transform: translateY(0);
+  transform: translateY(0) scale(1);
 }
 
 .toast.error {
@@ -388,6 +412,7 @@ kbd {
   justify-content: center;
   padding: var(--space-6);
   background: var(--surface-overlay);
+  animation: motion-backdrop-in var(--duration-fast) var(--ease-smooth);
 }
 
 .confirm-dialog {
@@ -397,6 +422,7 @@ kbd {
   border-radius: var(--radius-xl);
   background: var(--surface-primary);
   box-shadow: var(--shadow-lg);
+  animation: motion-scale-in-spring var(--duration-normal) var(--ease-spring);
 }
 
 .confirm-dialog > h3 {

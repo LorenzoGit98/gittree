@@ -300,9 +300,10 @@ class WelcomeScreen {
       const repos = await window.gitTree.getRepos();
       if (!repos || !repos.length) { this.recentList.innerHTML = ''; return; }
       this.recentList.innerHTML = `<div class="welcome-recent-title">${t('welcome.recent')}</div>`;
-      repos.slice(0, 5).forEach(repo => {
+      repos.slice(0, 5).forEach((repo, index) => {
         const el = document.createElement('div');
         el.className = 'welcome-recent-item';
+        el.style.setProperty('--item-index', index);
         el.innerHTML = `<div class="recent-name">${this.esc(repo.name)}</div><div class="recent-path">${this.esc(repo.path)}</div>`;
         el.addEventListener('click', () => {
           this.app.components.repoTabs.addRepo(repo.path);

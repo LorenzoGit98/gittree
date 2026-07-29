@@ -111,6 +111,7 @@ class BranchListView {
   render() {
     this.container.innerHTML = '';
     this.selectedBranchElement = null;
+    this.rowStaggerIndex = 0;
     if (!this.data) return;
     const branches = this.data.branches || {};
     const current = this.data.current;
@@ -215,6 +216,8 @@ class BranchListView {
   branchRow(branch, current, isRemote = false, displayName = branch.name) {
     const el = document.createElement('div');
     el.className = 'branch-item';
+    el.style.setProperty('--item-index', Math.min(this.rowStaggerIndex || 0, 14));
+    this.rowStaggerIndex = (this.rowStaggerIndex || 0) + 1;
     if (displayName !== branch.name) el.classList.add('is-nested');
     el.tabIndex = 0;
     el.dataset.branchName = branch.name;

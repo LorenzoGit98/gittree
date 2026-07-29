@@ -38,9 +38,10 @@
   border-radius: var(--radius-sm);
   cursor: pointer;
   color: var(--text-tertiary);
-  transition: all var(--transition-fast);
+  transition: background var(--duration-fast) var(--ease-smooth), color var(--duration-fast) var(--ease-smooth), transform var(--duration-normal) var(--spring-gentle);
 }
 .compare-swap:hover { background: var(--bg-hover); color: var(--text-primary); }
+.compare-swap:active { transform: rotate(180deg); }
 
 .compare-summary {
   display: flex;
@@ -87,11 +88,11 @@
   padding: var(--space-1) var(--space-4);
   border-bottom: 1px solid var(--border-subtle);
   cursor: pointer;
-  transition: background var(--transition-fast);
+  transition: background var(--duration-fast) var(--ease-smooth), transform var(--duration-fast) var(--ease-smooth);
   min-height: 30px;
   gap: var(--space-3);
 }
-.compare-commit-item:hover { background: var(--bg-hover); }
+.compare-commit-item:hover { background: var(--bg-hover); transform: translateX(2px); }
 
 .compare-commit-hash {
   font-family: var(--font-mono);
@@ -170,12 +171,13 @@
 .compare-matrix td.compare-matrix-cell {
   cursor: pointer;
   color: var(--text-primary);
-  transition: background var(--transition-fast);
+  transition: background var(--duration-fast) var(--ease-smooth), color var(--duration-fast) var(--ease-smooth), transform var(--duration-fast) var(--spring-gentle);
 }
 
 .compare-matrix td.compare-matrix-cell:hover {
   background: var(--bg-hover);
   color: var(--text-link);
+  transform: scale(1.04);
 }
 
 .compare-matrix td.compare-matrix-error {

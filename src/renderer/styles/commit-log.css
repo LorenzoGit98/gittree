@@ -30,7 +30,7 @@
   padding: 6px 12px;
   border-bottom: 1px solid var(--border);
   cursor: pointer;
-  transition: background 0.1s;
+  transition: background var(--duration-fast) var(--ease-smooth), color var(--duration-fast) var(--ease-smooth);
   font-size: 12px;
   color: var(--text-secondary);
 }

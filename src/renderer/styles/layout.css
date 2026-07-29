@@ -112,15 +112,23 @@
   min-height: 0;
   gap: 0;
   padding: var(--space-3);
+  transition: grid-template-columns var(--duration-slow) var(--ease-smooth);
 }
 
 .workspace-body.inspector-closed {
-  grid-template-columns: var(--left-panel) 10px minmax(360px, 1fr);
+  grid-template-columns: var(--left-panel) 10px minmax(360px, 1fr) 0px 0px;
 }
 
-.workspace-body.inspector-closed > #resize-handle-right,
+.workspace-body.inspector-closed > #resize-handle-right {
+  pointer-events: none;
+}
+
 .workspace-body.inspector-closed > .inspector {
-  display: none;
+  opacity: 0;
+  transform: translateX(28px) scale(0.98);
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity var(--duration-normal) var(--ease-accel), transform var(--duration-normal) var(--ease-accel), visibility 0s var(--duration-normal);
 }
 
 .workspace-body.inspector-maximized {
@@ -136,6 +144,7 @@
 .workspace-body.inspector-maximized > .inspector {
   display: flex;
   grid-column: 1;
+  animation: motion-overlay-in var(--duration-slow) var(--spring-gentle);
 }
 
 .bento-panel {
@@ -146,11 +155,40 @@
   border-radius: var(--radius-lg);
   background: var(--surface-primary);
   contain: layout paint;
+  animation: motion-fade-in var(--duration-normal) var(--ease-decel);
 }
 
 .sidebar {
   display: flex;
   flex-direction: column;
+}
+
+.sidebar-branches-area {
+  flex: 1 1 0%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows var(--duration-slow) var(--ease-smooth), flex-grow var(--duration-slow) var(--ease-smooth);
+}
+
+.sidebar-branches-inner {
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar.branches-collapsed .sidebar-branches-area {
+  flex-grow: 0;
+  grid-template-rows: 0fr;
+}
+
+.sidebar.branches-collapsed #btn-collapse-sidebar i {
+  transform: rotate(180deg);
+}
+
+#btn-collapse-sidebar i {
+  transition: transform var(--duration-normal) var(--spring-gentle);
 }
 
 .panel-heading,
@@ -194,7 +232,8 @@
 }
 
 @keyframes project-loading-spin {
-  to { transform: rotate(360deg); }
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .panel-heading h2,
@@ -292,6 +331,10 @@
   pointer-events: none;
 }
 
+.workspace-body.is-resizing {
+  transition: none;
+}
+
 .resize-handle-v::after {
   content: "";
   position: absolute;
@@ -302,7 +345,7 @@
   border-radius: var(--radius-pill);
   background: var(--border-default);
   transform: translate(-50%, -50%);
-  transition: background var(--transition-fast), height var(--transition-fast);
+  transition: background var(--duration-fast) var(--ease-smooth), height var(--duration-fast) var(--ease-smooth);
 }
 
 .resize-handle-v:hover::after,
@@ -352,12 +395,17 @@
 .inspector {
   display: flex;
   flex-direction: column;
+  transition: opacity var(--duration-normal) var(--ease-decel), transform var(--duration-normal) var(--spring-gentle), visibility 0s;
 }
 
 .detail-panel-body {
   flex: 1;
   min-height: 0;
   overflow: auto;
+}
+
+.content-refresh {
+  animation: motion-content-in var(--duration-normal) var(--ease-decel);
 }
 
 .status-bar {
@@ -399,6 +447,7 @@
   border-radius: var(--radius-xl);
   background: var(--surface-shell);
   box-shadow: var(--shadow-lg);
+  animation: motion-overlay-in var(--duration-slow) var(--spring-gentle);
 }
 
 @media (max-width: 1120px) {
@@ -450,36 +499,3 @@
   }
 }
 
-/* Sidebar collapse (placed after media queries to win specificity) */
-.workspace-body.sidebar-collapsed {
-  grid-template-columns: 0px 0px minmax(360px, 1fr) 10px var(--right-panel);
-}
-
-.workspace-body.sidebar-collapsed > #sidebar,
-.workspace-body.sidebar-collapsed > #resize-handle-left {
-  display: none;
-}
-
-.workspace-body.sidebar-collapsed.inspector-closed {
-  grid-template-columns: 0px 0px minmax(360px, 1fr);
-}
-
-.workspace-body.sidebar-collapsed.inspector-maximized {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.sidebar-expand-fab {
-  position: absolute;
-  left: var(--space-3);
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 10;
-  background: var(--surface-primary);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-}
-
-.sidebar-expand-fab.is-hidden {
-  display: none;
-}

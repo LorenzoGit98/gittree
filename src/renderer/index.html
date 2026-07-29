@@ -139,10 +139,6 @@
     </div>
 
     <div class="workspace-body" id="workspace-body">
-      <button id="btn-expand-sidebar" class="btn-icon sidebar-expand-fab is-hidden" type="button"
-        title="Expand sidebar" data-i18n-title="sidebar.expand">
-        <i class="ph ph-caret-right"></i>
-      </button>
       <aside id="sidebar" class="bento-panel sidebar">
         <div class="panel-heading">
           <div>
@@ -165,21 +161,25 @@
           </div>
         </div>
 
-        <div class="branch-search-wrapper">
-          <i class="ph ph-magnifying-glass"></i>
-          <input type="text" id="branch-search" class="branch-search-input" placeholder="Filter branches" data-i18n-placeholder="sidebar.filter">
-        </div>
+        <div class="sidebar-branches-area" id="sidebar-branches-area">
+          <div class="sidebar-branches-inner">
+            <div class="branch-search-wrapper">
+              <i class="ph ph-magnifying-glass"></i>
+              <input type="text" id="branch-search" class="branch-search-input" placeholder="Filter branches" data-i18n-placeholder="sidebar.filter">
+            </div>
 
-        <div class="sidebar-scroll" id="sidebar-scroll">
-          <div id="branch-list" class="branch-list"></div>
+            <div class="sidebar-scroll" id="sidebar-scroll">
+              <div id="branch-list" class="branch-list"></div>
+            </div>
+
+            <button id="branch-create-row" class="create-branch-row">
+              <i class="ph ph-git-branch"></i>
+              <span data-i18n="sidebar.createBranch">Create branch</span>
+            </button>
+          </div>
         </div>
 
         <div class="sidebar-pinned-bottom">
-          <button id="branch-create-row" class="create-branch-row">
-            <i class="ph ph-git-branch"></i>
-            <span data-i18n="sidebar.createBranch">Create branch</span>
-          </button>
-
           <div class="sidebar-section" data-section="stashes">
             <button class="sidebar-section-header collapsible collapsed" type="button">
               <i class="ph ph-caret-down collapse-arrow collapsed"></i>

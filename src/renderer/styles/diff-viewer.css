@@ -14,6 +14,8 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--surface-primary);
+  animation: motion-fade-in-up var(--duration-normal) var(--ease-decel) both;
+  animation-delay: calc(var(--file-index, 0) * 35ms);
 }
 
 .diff-file-header {
@@ -31,6 +33,7 @@
   cursor: pointer;
   font-family: var(--font-sans);
   font-size: var(--text-xs);
+  transition: background var(--duration-fast) var(--ease-smooth);
 }
 
 .diff-file-header:hover {

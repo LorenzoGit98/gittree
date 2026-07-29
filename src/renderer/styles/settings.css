@@ -3,6 +3,7 @@
   max-height: min(760px, calc(100vh - 48px));
   padding: 0;
   overflow: hidden;
+  animation: motion-scale-in-spring var(--duration-normal) var(--spring-gentle);
 }
 
 .settings-header {
@@ -276,6 +277,7 @@
   border-radius: var(--radius-pill);
   background: var(--surface-tertiary);
   cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-smooth), border-color var(--duration-fast) var(--ease-smooth);
 }
 
 .settings-switch span::after {
@@ -285,7 +287,7 @@
   border-radius: 50%;
   background: var(--text-tertiary);
   content: "";
-  transition: transform var(--transition-fast);
+  transition: transform var(--duration-normal) var(--spring-gentle), background var(--duration-fast) var(--ease-smooth);
 }
 
 .settings-switch input:checked + span {
@@ -296,6 +298,10 @@
 .settings-switch input:checked + span::after {
   background: var(--primary);
   transform: translateX(14px);
+}
+
+.settings-switch:active span::after {
+  width: 15px;
 }
 
 .settings-switch input:focus-visible + span {

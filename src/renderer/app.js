@@ -385,9 +385,17 @@ class GitTreeApp {
     } catch {}
   }
 
+  animateContentRefresh(element) {
+    if (!element) return;
+    element.classList.remove('content-refresh');
+    void element.offsetWidth;
+    element.classList.add('content-refresh');
+  }
+
   async onCommitSelected(hash) {
     if (!this.state.repo) return;
     await this.components.diffViewer.showDiffForCommit(this.state.repo.path, hash);
+    this.animateContentRefresh(document.getElementById('detail-body'));
   }
 
   async afterBranchCheckout(result = {}) {
@@ -402,6 +410,7 @@ class GitTreeApp {
       this.components.changes.load(repo.path),
       this.updateStatus(repo.path)
     ]);
+    this.animateContentRefresh(this.components.graphView.body);
 
     const currentBranchMetadata = (this.components.branchList.metadata?.branches || [])
       .find(branch => branch.kind === 'local' && branch.name === branchName);
@@ -476,7 +485,6 @@ class GitTreeApp {
 
     const bindHandle = (handle, side, min, max) => {
       handle.addEventListener('pointerdown', event => {
-        if (side === 'left' && document.getElementById('workspace-body').classList.contains('sidebar-collapsed')) return;
         event.preventDefault();
         const startX = event.clientX;
         const panel = side === 'left'
@@ -569,14 +577,14 @@ class GitTreeApp {
   setupSidebarToggle() {
     const collapsed = localStorage.getItem('gittree.sidebar.collapsed') === 'true';
     this.setSidebarCollapsed(collapsed, false);
-    document.getElementById('btn-collapse-sidebar').onclick = () => this.setSidebarCollapsed(true);
-    document.getElementById('btn-expand-sidebar').onclick = () => this.setSidebarCollapsed(false);
+    document.getElementById('btn-collapse-sidebar').onclick = () => {
+      const isCollapsed = document.getElementById('sidebar').classList.contains('branches-collapsed');
+      this.setSidebarCollapsed(!isCollapsed);
+    };
   }
 
   setSidebarCollapsed(collapsed, persist = true) {
-    const workspace = document.getElementById('workspace-body');
-    workspace.classList.toggle('sidebar-collapsed', collapsed);
-    document.getElementById('btn-expand-sidebar').classList.toggle('is-hidden', !collapsed);
+    document.getElementById('sidebar').classList.toggle('branches-collapsed', collapsed);
     if (persist) localStorage.setItem('gittree.sidebar.collapsed', String(collapsed));
   }
 
