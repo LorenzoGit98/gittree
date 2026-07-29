@@ -281,3 +281,15 @@
     width: 100%;
   }
 }
+
+.pat-input {
+  min-height: 34px;
+  display: block;
+  width: 100%;
+  margin-bottom: var(--space-3);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-pill);
+  background: var(--surface-input);
+  color: var(--text-primary);
+}

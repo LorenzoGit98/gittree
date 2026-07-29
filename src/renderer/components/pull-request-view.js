@@ -799,8 +799,28 @@ class PullRequestView {
   }
 
   async promptPat() {
-    const value = prompt(t('pullRequests.azurePatPrompt') || 'Enter your Azure DevOps Personal Access Token:');
-    return value?.trim() || null;
+    const overlay = document.getElementById('modal-overlay');
+    const dialog = document.getElementById('modal-dialog');
+    return new Promise(resolve => {
+      dialog.innerHTML = `<h3>${this.esc(t('pullRequests.azurePatPrompt') || 'Azure DevOps PAT')}</h3>
+        <p>${this.esc(t('pullRequests.azurePatHint') || 'Create a PAT at https://dev.azure.com with Code (Read & Write) scope.')}</p>
+        <input id="pat-input" class="commit-input pat-input" type="password" maxlength="200" placeholder="PAT">
+        <div class="confirm-actions">
+          <button class="btn" data-cancel>${this.esc(t('common.cancel'))}</button>
+          <button class="btn btn-primary" data-confirm>${this.esc(t('pullRequests.connect'))}</button>
+        </div>`;
+      overlay.classList.remove('is-hidden');
+      const input = dialog.querySelector('#pat-input');
+      input.focus();
+      const finish = value => {
+        overlay.classList.add('is-hidden');
+        dialog.innerHTML = '';
+        resolve(value);
+      };
+      dialog.querySelector('[data-cancel]').onclick = () => finish(null);
+      dialog.querySelector('[data-confirm]').onclick = () => finish(input.value.trim() || null);
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') finish(input.value.trim() || null); });
+    });
   }
 
   esc(value) {
