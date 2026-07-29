@@ -9,3 +9,4 @@ builder-effective-config.yaml
 *.log
 .DS_Store
 Thumbs.db
+.qoder/

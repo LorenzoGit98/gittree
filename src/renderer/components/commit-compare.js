@@ -85,7 +85,7 @@ class CommitCompare {
   fileRow(file, index) {
     const statusClass = { A: 'added', M: 'modified', D: 'deleted', R: 'renamed', C: 'renamed' }[file.status] || 'modified';
     const statusLabel = { A: t('commitCompare.added'), M: t('commitCompare.modified'), D: t('commitCompare.deleted'), R: t('commitCompare.renamed'), C: t('commitCompare.renamed') }[file.status] || file.status;
-    const displayName = file.oldPath ? `${file.oldPath} → ${file.path}` : file.path;
+    const displayName = file.oldPath ? `${file.oldPath} \u203A ${file.path}` : file.path;
     return `
       <div class="commit-compare-file-item" data-path="${this.esc(file.path)}" data-index="${index}">
         <span class="commit-compare-file-status ${statusClass}">${this.esc(file.status)}</span>
