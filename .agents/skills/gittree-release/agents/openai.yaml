@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitTree Release"
+  short_description: "Validate and publish GitTree releases safely"
+  default_prompt: "Use $gittree-release to prepare, publish, and verify the next GitTree release."
