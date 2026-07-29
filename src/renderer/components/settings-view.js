@@ -58,6 +58,34 @@ class SettingsView {
         </button>
       </div>
       <div class="settings-scroll">
+        <section class="settings-section" data-settings-section="appearance">
+          <div class="settings-section-heading">
+            <i class="ph ph-palette" aria-hidden="true"></i>
+            <div>
+              <h3>${this.esc(t('settings.appearanceTitle'))}</h3>
+              <p>${this.esc(t('settings.appearanceHelp'))}</p>
+            </div>
+          </div>
+          <div class="settings-appearance-body">
+            <div class="settings-theme-grid" role="group" aria-label="${this.esc(t('settings.themeLabel'))}">
+              ${this.renderThemeCard('light')}
+              ${this.renderThemeCard('dark')}
+            </div>
+            <div class="settings-tone-group">
+              <span class="settings-tone-label">${this.esc(t('settings.tonesLight'))}</span>
+              <div class="settings-tone-row">
+                ${Theme.tones.light.map(tone => this.renderToneSwatch('light', tone)).join('')}
+              </div>
+            </div>
+            <div class="settings-tone-group">
+              <span class="settings-tone-label">${this.esc(t('settings.tonesDark'))}</span>
+              <div class="settings-tone-row">
+                ${Theme.tones.dark.map(tone => this.renderToneSwatch('dark', tone)).join('')}
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section class="settings-section" data-settings-section="auto-fetch">
           <div class="settings-section-heading">
             <i class="ph ph-arrows-clockwise" aria-hidden="true"></i>
@@ -141,6 +169,7 @@ class SettingsView {
     `;
     this.overlay.classList.remove('is-hidden');
     this.bindSettingsEvents(repo, metadata);
+    this.syncAppearanceState();
     this.populateVersion();
     this.dialog.querySelector('[data-settings-close]')?.focus();
   }
@@ -158,6 +187,40 @@ class SettingsView {
       const v = await window.gitTree.getAppVersion();
       el.textContent = v;
     }
+  }
+
+  renderThemeCard(theme) {
+    const label = t(theme === 'light' ? 'settings.themeLight' : 'settings.themeDark');
+    return `<button class="settings-theme-card" type="button" data-theme-choice="${theme}" aria-pressed="false">
+      <span class="settings-theme-preview settings-theme-preview-${theme}" aria-hidden="true"></span>
+      <span class="settings-theme-name">${this.esc(label)}</span>
+    </button>`;
+  }
+
+  renderToneSwatch(theme, tone) {
+    const name = tone.id.charAt(0).toUpperCase() + tone.id.slice(1);
+    return `<button class="settings-tone-swatch" type="button"
+        data-tone-theme="${theme}" data-tone-choice="${this.esc(tone.id)}"
+        title="${this.esc(name)}" aria-pressed="false">
+      <span class="settings-tone-chips" aria-hidden="true">
+        ${tone.preview.map(color => `<i style="background:${this.esc(color)}"></i>`).join('')}
+      </span>
+      <span class="settings-tone-name">${this.esc(name)}</span>
+    </button>`;
+  }
+
+  syncAppearanceState() {
+    const current = document.documentElement.dataset.theme;
+    this.dialog.querySelectorAll('[data-theme-choice]').forEach(button => {
+      const active = button.dataset.themeChoice === current;
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
+    this.dialog.querySelectorAll('[data-tone-choice]').forEach(button => {
+      const active = Theme.getTone(button.dataset.toneTheme) === button.dataset.toneChoice;
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
   }
 
   renderProjectSchedule(schedule = {}, metadata = {}) {
@@ -306,6 +369,23 @@ class SettingsView {
         window.gitTree.openExternal('https://github.com/lorenzogit98/gittree-minimal');
       };
     }
+
+    this.dialog.querySelectorAll('[data-theme-choice]').forEach(button => {
+      button.onclick = () => {
+        Theme.apply(button.dataset.themeChoice, true);
+        this.syncAppearanceState();
+      };
+    });
+    this.dialog.querySelectorAll('[data-tone-choice]').forEach(button => {
+      button.onclick = () => {
+        const toneTheme = button.dataset.toneTheme;
+        Theme.setTone(toneTheme, button.dataset.toneChoice);
+        if (document.documentElement.dataset.theme !== toneTheme) {
+          Theme.apply(toneTheme, true);
+        }
+        this.syncAppearanceState();
+      };
+    });
 
     const projectToggle = this.dialog.querySelector('[data-auto-fetch-project]');
     const projectInterval = this.dialog.querySelector('[data-auto-fetch-project-interval]');

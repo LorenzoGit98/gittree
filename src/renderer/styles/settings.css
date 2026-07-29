@@ -315,19 +315,16 @@
   outline-offset: 2px;
 }
 
-:root[data-theme="dark"] .settings-switch span,
-:root[data-theme="black"] .settings-switch span {
+:root[data-theme="dark"] .settings-switch span {
   border-color: var(--border-strong);
   background: var(--surface-active);
 }
 
-:root[data-theme="dark"] .settings-switch span::after,
-:root[data-theme="black"] .settings-switch span::after {
+:root[data-theme="dark"] .settings-switch span::after {
   background: var(--text-secondary);
 }
 
-:root[data-theme="dark"] .settings-switch input:checked + span,
-:root[data-theme="black"] .settings-switch input:checked + span {
+:root[data-theme="dark"] .settings-switch input:checked + span {
   border-color: var(--primary-muted);
   background: var(--primary-soft);
 }
@@ -450,4 +447,178 @@
 .settings-update-status {
   font-size: var(--text-sm);
   color: var(--text-secondary);
+}
+
+/* ─── Appearance: theme cards and tone swatches ─── */
+
+.settings-appearance-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.settings-theme-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.settings-theme-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--surface-primary);
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-smooth), box-shadow var(--duration-fast) var(--ease-smooth), transform var(--duration-fast) var(--ease-smooth);
+}
+
+.settings-theme-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+.settings-theme-card:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.settings-theme-card.is-active {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 1px var(--border-focus);
+}
+
+/* Theme previews mock a miniature app window, so they intentionally use
+   fixed colors instead of live tokens: each card must always depict its
+   own theme regardless of the active one. */
+.settings-theme-preview {
+  position: relative;
+  height: 64px;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+}
+
+.settings-theme-preview::before {
+  position: absolute;
+  inset: 6px auto 6px 6px;
+  width: 26px;
+  border-radius: 6px;
+  content: "";
+}
+
+.settings-theme-preview::after {
+  position: absolute;
+  inset: 6px 6px 6px 38px;
+  border-radius: 6px;
+  content: "";
+}
+
+.settings-theme-preview-light {
+  background: linear-gradient(135deg, #eef3ff 0%, #f8f4ff 48%, #eef9f7 100%);
+}
+
+.settings-theme-preview-light::before {
+  background: #e9eef5;
+}
+
+.settings-theme-preview-light::after {
+  border: 1px solid #d5dce6;
+  background: #ffffff;
+}
+
+.settings-theme-preview-dark {
+  background: #000000;
+}
+
+.settings-theme-preview-dark::before {
+  background: #121212;
+}
+
+.settings-theme-preview-dark::after {
+  border: 1px solid #303030;
+  background: #050505;
+}
+
+.settings-theme-name {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.settings-tone-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.settings-tone-label {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.settings-tone-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.settings-tone-swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-primary);
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-smooth), box-shadow var(--duration-fast) var(--ease-smooth), transform var(--duration-fast) var(--ease-smooth);
+}
+
+.settings-tone-swatch:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+.settings-tone-swatch:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.settings-tone-swatch.is-active {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 1px var(--border-focus);
+}
+
+.settings-tone-chips {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-secondary);
+}
+
+.settings-tone-chips i {
+  width: 18px;
+  height: 26px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 4px;
+}
+
+.settings-tone-name {
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.settings-tone-swatch.is-active .settings-tone-name {
+  color: var(--text-primary);
+  font-weight: var(--weight-medium);
 }

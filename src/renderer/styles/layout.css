@@ -32,8 +32,7 @@
   background: var(--primary);
 }
 
-:root[data-theme="dark"] .welcome-brand,
-:root[data-theme="black"] .welcome-brand {
+:root[data-theme="dark"] .welcome-brand {
   color: var(--surface-primary);
 }
 

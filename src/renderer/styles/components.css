@@ -65,19 +65,16 @@ input:focus-visible {
   color: var(--text-inverse);
 }
 
-:root[data-theme="dark"] .btn-primary,
-:root[data-theme="black"] .btn-primary {
+:root[data-theme="dark"] .btn-primary {
   color: var(--surface-primary);
 }
 
-:root[data-theme="dark"] .btn-primary:disabled,
-:root[data-theme="black"] .btn-primary:disabled {
+:root[data-theme="dark"] .btn-primary:disabled {
   color: var(--surface-secondary);
   background: var(--surface-secondary);
 }
 
-:root[data-theme="dark"] #btn-commit.btn-primary:not(:hover):not(:disabled),
-:root[data-theme="black"] #btn-commit.btn-primary:not(:hover):not(:disabled) {
+:root[data-theme="dark"] #btn-commit.btn-primary:not(:hover):not(:disabled) {
   color: var(--primary);
 }
 
@@ -87,28 +84,15 @@ input:focus-visible {
   color: var(--text-inverse);
 }
 
-:root[data-theme="dark"] .btn-primary:hover,
-:root[data-theme="black"] .btn-primary:hover {
+:root[data-theme="dark"] .btn-primary:hover {
   color: var(--surface-primary);
 }
 
-:root[data-theme="dark"] .search-trigger,
-:root[data-theme="black"] .search-trigger {
+:root[data-theme="dark"] .search-trigger {
   border-color: var(--border-strong);
 }
 
-:root[data-theme="dark"] .search-trigger:focus,
-:root[data-theme="black"] .search-trigger:focus {
-  border-color: var(--border-focus);
-}
-
-:root[data-theme="dark"] .search-trigger,
-:root[data-theme="black"] .search-trigger {
-  border-color: var(--border-strong);
-}
-
-:root[data-theme="dark"] .search-trigger:focus,
-:root[data-theme="black"] .search-trigger:focus {
+:root[data-theme="dark"] .search-trigger:focus {
   border-color: var(--border-focus);
 }
 
@@ -531,14 +515,12 @@ input[type="checkbox"]:focus-visible {
   outline-offset: 2px;
 }
 
-:root[data-theme="dark"] input[type="checkbox"],
-:root[data-theme="black"] input[type="checkbox"] {
+:root[data-theme="dark"] input[type="checkbox"] {
   background: var(--surface-input);
   border-color: var(--border-default);
 }
 
-:root[data-theme="dark"] input[type="checkbox"]:checked,
-:root[data-theme="black"] input[type="checkbox"]:checked {
+:root[data-theme="dark"] input[type="checkbox"]:checked {
   background: var(--primary);
   border-color: var(--primary);
 }

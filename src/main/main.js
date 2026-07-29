@@ -175,14 +175,14 @@ function registerIpcHandlers() {
     mainWindow?.close();
   });
 
-  ipcMain.handle('app:set-theme', (_event, theme) => {
-    const safeTheme = ['dark', 'black'].includes(theme) ? theme : 'light';
-    nativeTheme.themeSource = safeTheme === 'light' ? 'light' : 'dark';
+  ipcMain.handle('app:set-theme', (_event, theme, background) => {
+    const safeTheme = theme === 'dark' ? 'dark' : 'light';
+    nativeTheme.themeSource = safeTheme;
     if (mainWindow) {
-      const background = safeTheme === 'black'
-        ? '#000000'
-        : (safeTheme === 'dark' ? '#121a27' : '#f7f9fc');
-      mainWindow.setBackgroundColor(background);
+      const safeBackground = /^#[0-9a-f]{6}$/i.test(background || '')
+        ? background
+        : (safeTheme === 'dark' ? '#000000' : '#f7f9fc');
+      mainWindow.setBackgroundColor(safeBackground);
     }
     return safeTheme;
   });

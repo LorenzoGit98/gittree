@@ -21,8 +21,8 @@ contextBridge.exposeInMainWorld('gitTree', {
   closeWindow: () =>
     ipcRenderer.invoke('window:close'),
 
-  setTheme: (theme) =>
-    ipcRenderer.invoke('app:set-theme', theme),
+  setTheme: (theme, background) =>
+    ipcRenderer.invoke('app:set-theme', theme, background),
 
   getUpdateState: () =>
     ipcRenderer.invoke('update:get-state'),
