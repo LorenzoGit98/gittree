@@ -35,7 +35,10 @@
     "source-tree",
     "developer-tools"
   ],
-  "author": "Lorenzo",
+  "author": {
+    "name": "Lorenzo",
+    "email": "lorenzo.giannoccaro998@gmail.com"
+  },
   "license": "ISC",
   "desktopName": "GitTree.desktop",
   "type": "commonjs",

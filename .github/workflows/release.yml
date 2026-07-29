@@ -118,7 +118,16 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run prepare:assets
-      - run: npx electron-builder --mac --x64 --arm64 --publish never
+      - name: Build macOS installers
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$MACOS_OTA_ENABLED" == "true" ]]; then
+            unset CSC_IDENTITY_AUTO_DISCOVERY
+          else
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+          fi
+          npx electron-builder --mac --x64 --arm64 --publish never
       - name: Validate and upload macOS OTA assets
         shell: bash
         run: |
