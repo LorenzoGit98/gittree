@@ -1,6 +1,6 @@
 {
   "name": "gittree-minimal",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "A fast, visual and privacy-first Git desktop client with a SourceTree-style graph.",
   "main": "src/main/main.js",
   "scripts": {
