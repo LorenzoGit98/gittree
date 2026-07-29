@@ -802,7 +802,6 @@ class PullRequestView {
     const value = prompt(t('pullRequests.azurePatPrompt') || 'Enter your Azure DevOps Personal Access Token:');
     return value?.trim() || null;
   }
-}
 
   esc(value) {
     const element = document.createElement('div');
