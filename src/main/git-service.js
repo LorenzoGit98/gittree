@@ -1130,6 +1130,8 @@ class GitService {
           if (error.code !== 1) throw error;
           patch = error.stdout || '';
         }
+      } else if (statusFile && statusFile.index !== '?' && statusFile.working_dir !== '?') {
+        return { path: relativePath, staged: false, binary: false, hunks: [], noDiff: true, reason: 'working-tree-matches-index' };
       }
     }
     return this.parseWorkingDiff(relativePath, Boolean(staged), patch);

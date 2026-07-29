@@ -475,6 +475,7 @@ class GitTreeApp {
 
     const bindHandle = (handle, side, min, max) => {
       handle.addEventListener('pointerdown', event => {
+        if (side === 'left' && document.getElementById('workspace-body').classList.contains('sidebar-collapsed')) return;
         event.preventDefault();
         const startX = event.clientX;
         const panel = side === 'left'
@@ -559,7 +560,40 @@ class GitTreeApp {
       this.setInspectorState(this.inspectorState === 'maximized' ? 'open' : 'maximized');
     });
 
+    this.setupSidebarToggle();
+    this.setupInspectorPopout();
     this.setupPersistentSidebarSections();
+  }
+
+  setupSidebarToggle() {
+    const collapsed = localStorage.getItem('gittree.sidebar.collapsed') === 'true';
+    this.setSidebarCollapsed(collapsed, false);
+    document.getElementById('btn-collapse-sidebar').onclick = () => this.setSidebarCollapsed(true);
+    document.getElementById('btn-expand-sidebar').onclick = () => this.setSidebarCollapsed(false);
+  }
+
+  setSidebarCollapsed(collapsed, persist = true) {
+    const workspace = document.getElementById('workspace-body');
+    workspace.classList.toggle('sidebar-collapsed', collapsed);
+    document.getElementById('btn-expand-sidebar').classList.toggle('is-hidden', !collapsed);
+    if (persist) localStorage.setItem('gittree.sidebar.collapsed', String(collapsed));
+  }
+
+  setupInspectorPopout() {
+    document.getElementById('btn-popout-inspector').onclick = () => {
+      const body = document.getElementById('detail-body');
+      const title = document.getElementById('detail-title').textContent;
+      const theme = document.documentElement.dataset.theme || 'light';
+      const mode = this.components.diffViewer?.mode || 'unified';
+      const html = body.innerHTML;
+      const payload = { title, theme, mode };
+      if (html.length > 2_000_000 && this.components.diffViewer?.currentDiff) {
+        payload.diffText = this.components.diffViewer.currentDiff;
+      } else {
+        payload.html = html;
+      }
+      window.gitTree.openInspectorWindow(payload);
+    };
   }
 
   setInspectorState(state, persist = true) {

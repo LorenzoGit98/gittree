@@ -138,6 +138,10 @@
     </div>
 
     <div class="workspace-body" id="workspace-body">
+      <button id="btn-expand-sidebar" class="btn-icon sidebar-expand-fab is-hidden" type="button"
+        title="Expand sidebar" data-i18n-title="sidebar.expand">
+        <i class="ph ph-caret-right"></i>
+      </button>
       <aside id="sidebar" class="bento-panel sidebar">
         <div class="panel-heading">
           <div>
@@ -152,6 +156,10 @@
             <button id="btn-new-branch" class="btn-icon" type="button"
               title="New branch" data-shortcut-title="newBranch">
               <i class="ph ph-plus"></i>
+            </button>
+            <button id="btn-collapse-sidebar" class="btn-icon" type="button"
+              title="Collapse sidebar" data-i18n-title="sidebar.collapse">
+              <i class="ph ph-caret-left"></i>
             </button>
           </div>
         </div>
@@ -390,6 +398,9 @@
               <button id="btn-diff-unified" class="btn btn-small active" data-i18n="details.unified">Unified</button>
               <button id="btn-diff-split" class="btn btn-small" data-i18n="details.split">Split</button>
             </div>
+            <button id="btn-popout-inspector" class="btn-icon" type="button" title="Open in new window" data-i18n-title="details.popout">
+              <i class="ph ph-arrow-square-out"></i>
+            </button>
             <button id="btn-maximize-inspector" class="btn-icon" type="button" title="Maximize inspector" data-i18n-title="details.maximize">
               <i class="ph ph-arrows-out-simple"></i>
             </button>

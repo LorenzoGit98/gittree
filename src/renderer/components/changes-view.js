@@ -274,6 +274,18 @@ class ChangesView {
   renderWorkingDiff(diff, staged) {
     const body = document.getElementById('detail-body');
     body.innerHTML = '';
+    if (diff.noDiff) {
+      const empty = document.createElement('div');
+      empty.className = 'diff-placeholder';
+      const icon = document.createElement('i');
+      icon.className = 'ph ph-check-circle';
+      const text = document.createElement('span');
+      text.textContent = t('changes.noUnstagedDiff');
+      empty.append(icon, text);
+      body.appendChild(empty);
+      this.refresh(true);
+      return;
+    }
     if (diff.binary || !diff.hunks?.length) {
       const empty = document.createElement('div');
       empty.className = 'diff-placeholder';

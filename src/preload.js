@@ -288,5 +288,14 @@ contextBridge.exposeInMainWorld('gitTree', {
     ipcRenderer.invoke('app:open-external', url),
 
   getAppVersion: () =>
-    ipcRenderer.invoke('app:version')
+    ipcRenderer.invoke('app:version'),
+
+  openInspectorWindow: (payload) =>
+    ipcRenderer.invoke('window:open-inspector', payload),
+
+  onInspectorRender: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('inspector:render', listener);
+    return () => ipcRenderer.removeListener('inspector:render', listener);
+  }
 });

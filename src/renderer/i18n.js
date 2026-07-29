@@ -73,6 +73,8 @@ const I18n = {
               local: 'Local',
               remote: 'Remote',
               noBranches: 'No branches',
+              collapse: 'Collapse sidebar',
+              expand: 'Expand sidebar',
               noMatch: 'No branches match',
               quickBranchEyebrow: 'Quick branch',
               quickBranchTitle: 'Create a convention-based branch',
@@ -140,7 +142,13 @@ const I18n = {
               assigned: 'Assigned',
               useForRepository: 'Use for repository',
               deleteProfile: 'Delete profile',
-              profileApplied: 'Git profile assigned to this repository'
+              profileApplied: 'Git profile assigned to this repository',
+              checkUpdate: 'Check for updates',
+              checking: 'Checking…',
+              upToDate: 'You\'re up to date',
+              updateAvailable: 'Update available',
+              downloading: 'Downloading update…',
+              updateReady: 'Update ready to install'
             },
             history: {
               eyebrow: 'Repository activity',
@@ -186,6 +194,7 @@ const I18n = {
               noStaged: 'No staged changes',
               noTextDiff: 'No text diff is available. Stage or unstage the whole file.',
               binaryWholeFile: 'Binary files can only be staged or unstaged as a whole.',
+              noUnstagedDiff: 'No unstaged changes — file is fully staged',
               composerEyebrow: 'Create commit',
               composerTitle: 'Commit staged changes',
               summaryPlaceholder: 'Commit summary',
@@ -277,7 +286,8 @@ const I18n = {
               close: 'Close inspector',
               placeholder: 'Select a commit to inspect its changes.',
               loading: 'Loading diff…',
-              noChanges: 'No changes'
+              noChanges: 'No changes',
+              popout: 'Open in new window'
             },
             actions: {
               fetch: 'Fetch',
@@ -493,6 +503,8 @@ const I18n = {
               local: 'Locali',
               remote: 'Remoti',
               noBranches: 'Nessun branch',
+              collapse: 'Comprimi barra laterale',
+              expand: 'Espandi barra laterale',
               noMatch: 'Nessun branch corrispondente',
               quickBranchEyebrow: 'Branch rapido',
               quickBranchTitle: 'Crea branch con convenzione',
@@ -560,7 +572,13 @@ const I18n = {
               assigned: 'Assegnato',
               useForRepository: 'Usa per repository',
               deleteProfile: 'Elimina profilo',
-              profileApplied: 'Profilo Git assegnato a questo repository'
+              profileApplied: 'Profilo Git assegnato a questo repository',
+              checkUpdate: 'Verifica aggiornamenti',
+              checking: 'Verifica in corso…',
+              upToDate: 'Sei aggiornato',
+              updateAvailable: 'Aggiornamento disponibile',
+              downloading: 'Download aggiornamento…',
+              updateReady: 'Aggiornamento pronto per l\'installazione'
             },
             history: {
               eyebrow: 'Attività repository',
@@ -606,6 +624,7 @@ const I18n = {
               noStaged: 'Nessuna modifica in stage',
               noTextDiff: 'Nessun diff testuale disponibile. Usa l’azione sull’intero file.',
               binaryWholeFile: 'I file binari possono essere aggiunti o rimossi solo per intero.',
+              noUnstagedDiff: 'Nessuna modifica non in stage — file completamente in stage',
               composerEyebrow: 'Crea commit',
               composerTitle: 'Commit delle modifiche in stage',
               summaryPlaceholder: 'Titolo del commit',
@@ -697,7 +716,8 @@ const I18n = {
               close: 'Chiudi inspector',
               placeholder: 'Seleziona un commit per esaminare le modifiche.',
               loading: 'Caricamento diff…',
-              noChanges: 'Nessuna modifica'
+              noChanges: 'Nessuna modifica',
+              popout: 'Apri in una nuova finestra'
             },
             actions: {
               fetch: 'Fetch',

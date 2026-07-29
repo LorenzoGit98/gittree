@@ -66,6 +66,17 @@ input:focus-visible {
   color: var(--surface-primary);
 }
 
+:root[data-theme="dark"] .btn-primary:disabled,
+:root[data-theme="black"] .btn-primary:disabled {
+  color: var(--surface-secondary);
+  background: var(--surface-secondary);
+}
+
+:root[data-theme="dark"] #btn-commit.btn-primary:not(:hover):not(:disabled),
+:root[data-theme="black"] #btn-commit.btn-primary:not(:hover):not(:disabled) {
+  color: var(--primary);
+}
+
 .btn-primary:hover {
   border-color: var(--primary-hover);
   background: var(--primary-hover);
@@ -75,6 +86,26 @@ input:focus-visible {
 :root[data-theme="dark"] .btn-primary:hover,
 :root[data-theme="black"] .btn-primary:hover {
   color: var(--surface-primary);
+}
+
+:root[data-theme="dark"] .search-trigger,
+:root[data-theme="black"] .search-trigger {
+  border-color: var(--border-strong);
+}
+
+:root[data-theme="dark"] .search-trigger:focus,
+:root[data-theme="black"] .search-trigger:focus {
+  border-color: var(--border-focus);
+}
+
+:root[data-theme="dark"] .search-trigger,
+:root[data-theme="black"] .search-trigger {
+  border-color: var(--border-strong);
+}
+
+:root[data-theme="dark"] .search-trigger:focus,
+:root[data-theme="black"] .search-trigger:focus {
+  border-color: var(--border-focus);
 }
 
 .btn-primary:active {
@@ -437,4 +468,51 @@ kbd {
 
 .system-alert-warning {
   border-color: var(--warning);
+}
+
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  background: var(--surface-input);
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+}
+
+input[type="checkbox"]:checked {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 5px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--text-inverse);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+:root[data-theme="dark"] input[type="checkbox"],
+:root[data-theme="black"] input[type="checkbox"] {
+  background: var(--surface-input);
+  border-color: var(--border-default);
+}
+
+:root[data-theme="dark"] input[type="checkbox"]:checked,
+:root[data-theme="black"] input[type="checkbox"]:checked {
+  background: var(--primary);
+  border-color: var(--primary);
 }

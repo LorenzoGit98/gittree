@@ -216,6 +216,38 @@ function registerIpcHandlers() {
     return updateService?.install() || { success: false, error: 'Updater is not ready' };
   });
 
+  let inspectorWindow = null;
+  ipcMain.handle('window:open-inspector', (_event, payload) => {
+    if (inspectorWindow && !inspectorWindow.isDestroyed()) {
+      inspectorWindow.focus();
+      inspectorWindow.webContents.send('inspector:render', payload);
+      return;
+    }
+    const iconPath = app.isPackaged
+      ? path.join(app.getAppPath(), 'icon.png')
+      : path.join(__dirname, '..', '..', 'icon.png');
+    inspectorWindow = new BrowserWindow({
+      width: 820,
+      height: 620,
+      minWidth: 480,
+      minHeight: 360,
+      parent: mainWindow,
+      title: payload?.title || 'Inspector',
+      icon: iconPath,
+      backgroundColor: '#f7f9fc',
+      webPreferences: {
+        preload: path.join(__dirname, '..', 'preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false
+      }
+    });
+    inspectorWindow.loadFile(path.join(__dirname, '..', 'renderer', 'inspector-window.html'));
+    inspectorWindow.webContents.once('did-finish-load', () => {
+      inspectorWindow.webContents.send('inspector:render', payload);
+    });
+    inspectorWindow.on('closed', () => { inspectorWindow = null; });
+  });
+
   ipcMain.handle('dialog:select-directory', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openDirectory']

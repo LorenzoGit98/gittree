@@ -8,6 +8,9 @@ class DiffViewer {
     this.inspectorExpanded = false;
     this.currentDiff = null;
 
+    const savedPad = localStorage.getItem('gittree.diff.gutterPad');
+    if (savedPad) document.documentElement.style.setProperty('--diff-gutter-pad', savedPad + 'px');
+
     document.getElementById('btn-diff-unified').onclick = () => this.setMode('unified');
     document.getElementById('btn-diff-split').onclick = () => this.setMode('split');
     this.syncModeButtons();

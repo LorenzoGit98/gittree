@@ -64,7 +64,8 @@
 }
 
 .diff-line-num {
-  width: calc((var(--diff-gutter-digits, 3) * 1ch) + 14px);
+  width: calc((var(--diff-gutter-digits, 3) * 1ch) + var(--diff-gutter-pad, 20px));
+  min-width: calc(3ch + 20px);
   flex-shrink: 0;
   padding: 0 7px;
   border-right: 1px solid var(--border-subtle);

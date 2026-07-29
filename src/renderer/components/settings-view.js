@@ -128,6 +128,13 @@ class SettingsView {
             <p class="settings-about-repo">
               <a href="#" id="about-repo-link">github.com/LorenzoGit98/gittree-minimal</a>
             </p>
+            <div class="settings-update-row">
+              <button class="btn btn-small" id="btn-check-update" type="button">
+                <i class="ph ph-arrows-clockwise" aria-hidden="true"></i>
+                <span data-i18n="settings.checkUpdate">Check for updates</span>
+              </button>
+              <span id="check-update-status" class="settings-update-status"></span>
+            </div>
           </div>
         </section>
       </div>
@@ -352,6 +359,39 @@ class SettingsView {
         this.open();
       };
     });
+
+    const checkUpdateBtn = this.dialog.querySelector('#btn-check-update');
+    const checkUpdateStatus = this.dialog.querySelector('#check-update-status');
+    if (checkUpdateBtn) {
+      checkUpdateBtn.onclick = async () => {
+        checkUpdateBtn.disabled = true;
+        checkUpdateStatus.textContent = t('settings.checking');
+        try {
+          const result = await window.gitTree.checkForUpdates();
+          if (result?.error) {
+            checkUpdateStatus.textContent = result.error;
+          } else {
+            checkUpdateStatus.textContent = t('settings.upToDate');
+            this.app.showToast(t('settings.upToDate'), 'success');
+          }
+        } catch (err) {
+          checkUpdateStatus.textContent = err.message || t('common.error');
+        } finally {
+          checkUpdateBtn.disabled = false;
+        }
+      };
+      this.unsubscribeUpdateState?.();
+      this.unsubscribeUpdateState = window.gitTree.onUpdateState(state => {
+        if (!checkUpdateStatus) return;
+        if (state.status === 'available') {
+          checkUpdateStatus.textContent = t('settings.updateAvailable');
+        } else if (state.status === 'downloading') {
+          checkUpdateStatus.textContent = t('settings.downloading');
+        } else if (state.status === 'downloaded') {
+          checkUpdateStatus.textContent = t('settings.updateReady');
+        }
+      });
+    }
   }
 
   saveProjectSchedule(repo, remote, enabled, intervalMinutes) {

@@ -181,6 +181,11 @@
 }
 .merge-advanced-toggle:hover { color: var(--text-secondary); }
 
+:root[data-theme="dark"] .merge-advanced-toggle,
+:root[data-theme="black"] .merge-advanced-toggle {
+  color: var(--text-secondary);
+}
+
 .merge-advanced-options {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
