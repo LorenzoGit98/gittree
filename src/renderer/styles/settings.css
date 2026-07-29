@@ -222,6 +222,40 @@
   font-size: 10px;
 }
 
+.settings-toolbar-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+
+.settings-toolbar-row + .settings-toolbar-row {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.settings-toolbar-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-toolbar-copy strong {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.settings-toolbar-copy small {
+  margin-top: 2px;
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
 .settings-remote {
   display: flex;
   align-items: center;

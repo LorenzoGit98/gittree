@@ -1,0 +1,161 @@
+.gitflow-dialog {
+  width: min(560px, 100%);
+  max-height: min(640px, calc(100vh - 48px));
+  display: flex;
+  flex-direction: column;
+}
+
+.gitflow-tabs {
+  margin-bottom: var(--space-4);
+  align-self: flex-start;
+}
+
+.gitflow-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.gitflow-panel[hidden] {
+  display: none;
+}
+
+.gitflow-types {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+
+.gitflow-type {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-primary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-smooth),
+    background var(--duration-fast) var(--ease-smooth),
+    box-shadow var(--duration-fast) var(--ease-smooth);
+}
+
+.gitflow-type i {
+  font-size: 18px;
+  color: var(--text-link);
+}
+
+.gitflow-type span {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.gitflow-type small {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+}
+
+.gitflow-type:hover {
+  border-color: var(--border-light);
+  background: var(--bg-hover);
+}
+
+.gitflow-type.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: var(--shadow-sm);
+}
+
+.gitflow-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.gitflow-field > span {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.gitflow-field input {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.gitflow-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.gitflow-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-secondary);
+}
+
+.gitflow-preview-label {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.gitflow-preview code {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--accent);
+}
+
+.gitflow-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.gitflow-branch-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.gitflow-branch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--duration-fast) var(--ease-smooth),
+    background var(--duration-fast) var(--ease-smooth);
+}
+
+.gitflow-branch:hover {
+  border-color: var(--border-light);
+  background: var(--bg-hover);
+}
+
+.gitflow-branch.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.gitflow-branch-name {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}

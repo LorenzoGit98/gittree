@@ -296,6 +296,12 @@ contextBridge.exposeInMainWorld('gitTree', {
   openExternal: (url) =>
     ipcRenderer.invoke('app:open-external', url),
 
+  openTerminal: (repoPath) =>
+    ipcRenderer.invoke('app:open-terminal', repoPath),
+
+  openExplorer: (repoPath) =>
+    ipcRenderer.invoke('app:open-explorer', repoPath),
+
   getAppVersion: () =>
     ipcRenderer.invoke('app:version'),
 

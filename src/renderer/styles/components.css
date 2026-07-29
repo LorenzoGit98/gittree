@@ -1,7 +1,6 @@
 .btn,
 .btn-icon,
 .search-trigger,
-.create-branch-row,
 .segmented-control button {
   -webkit-tap-highlight-color: transparent;
 }
@@ -47,7 +46,6 @@
 .btn:focus-visible,
 .btn-icon:focus-visible,
 .search-trigger:focus-visible,
-.create-branch-row:focus-visible,
 input:focus-visible {
   outline: 2px solid var(--border-focus);
   outline-offset: 2px;

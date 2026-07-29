@@ -26,6 +26,7 @@
   <link rel="stylesheet" href="styles/welcome.css">
   <link rel="stylesheet" href="styles/repository-discovery.css">
   <link rel="stylesheet" href="styles/settings.css">
+  <link rel="stylesheet" href="styles/gitflow.css">
 </head>
 <body>
 <div id="app">
@@ -125,15 +126,20 @@
           data-shortcut-title="push">
           <i class="ph ph-upload-simple"></i><span data-i18n="actions.push">Push</span>
         </button>
-        <button id="btn-refresh" class="btn-icon" type="button"
-          title="Refresh" data-shortcut-title="refresh">
-          <i class="ph ph-arrows-clockwise"></i>
-        </button>
       </div>
       <div class="workspace-command-group">
         <button id="btn-update" class="btn btn-toolbar is-hidden" type="button">
           <i class="ph ph-download-simple"></i>
           <span data-i18n="updates.available">Update available</span>
+        </button>
+        <button id="btn-gitflow" class="btn btn-toolbar" type="button" data-i18n-title="gitflow.eyebrow">
+          <i class="ph ph-git-fork"></i><span data-i18n="gitflow.eyebrow">GitFlow</span>
+        </button>
+        <button id="btn-terminal" class="btn btn-toolbar" type="button" data-i18n-title="actions.terminal">
+          <i class="ph ph-terminal-window"></i><span data-i18n="actions.terminal">Terminal</span>
+        </button>
+        <button id="btn-explorer" class="btn btn-toolbar" type="button" data-i18n-title="actions.explorer">
+          <i class="ph ph-folder-open"></i><span data-i18n="actions.explorer">Explorer</span>
         </button>
         <button id="btn-toggle-inspector" class="btn btn-toolbar active" type="button" aria-pressed="true">
           <i class="ph ph-sidebar-simple"></i>
@@ -158,6 +164,10 @@
               title="New branch" data-shortcut-title="newBranch">
               <i class="ph ph-plus"></i>
             </button>
+            <button id="btn-collapse-sidebar" class="btn-icon" type="button"
+              title="Collapse sidebar" data-i18n-title="sidebar.collapse">
+              <i class="ph ph-caret-left"></i>
+            </button>
           </div>
         </div>
 
@@ -171,11 +181,6 @@
             <div class="sidebar-scroll" id="sidebar-scroll">
               <div id="branch-list" class="branch-list"></div>
             </div>
-
-            <button id="branch-create-row" class="create-branch-row">
-              <i class="ph ph-git-branch"></i>
-              <span data-i18n="sidebar.createBranch">Create branch</span>
-            </button>
           </div>
         </div>
 
@@ -186,6 +191,10 @@
               <span data-i18n="sidebar.stashes">Stashes</span>
             </button>
             <div class="sidebar-section-body collapsed" id="stash-section-body">
+              <div class="branch-search-wrapper stash-search-wrapper">
+                <i class="ph ph-magnifying-glass"></i>
+                <input type="text" id="stash-search" class="branch-search-input" placeholder="Filter stashes" data-i18n-placeholder="sidebar.filterStashes">
+              </div>
               <div id="stash-list" class="branch-list"></div>
             </div>
           </div>
@@ -443,6 +452,7 @@
     </div>
   </div>
 
+  <div id="merge-preview-overlay" class="merge-overlay is-hidden"></div>
   <div id="merge-workspace-overlay" class="fullscreen-workspace is-hidden"></div>
   <div id="modal-overlay" class="confirm-overlay is-hidden">
     <div class="confirm-dialog" id="modal-dialog"></div>
@@ -471,6 +481,7 @@
 <script src="components/conflict-resolver.js"></script>
 <script src="components/status-bar.js"></script>
 <script src="components/welcome.js"></script>
+<script src="components/gitflow.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

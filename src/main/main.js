@@ -193,6 +193,43 @@ function registerIpcHandlers() {
     }
   });
 
+  ipcMain.handle('app:open-explorer', async (_event, repoPath) => {
+    try {
+      if (typeof repoPath !== 'string' || !repoPath) return { error: 'Invalid repository path' };
+      const error = await shell.openPath(repoPath);
+      return error ? { error } : { ok: true };
+    } catch (err) {
+      return { error: err.message || String(err) };
+    }
+  });
+
+  ipcMain.handle('app:open-terminal', (_event, repoPath) => {
+    try {
+      if (typeof repoPath !== 'string' || !repoPath) return { error: 'Invalid repository path' };
+      const { spawn } = require('child_process');
+      const launch = (command, args) => {
+        const child = spawn(command, args, { cwd: repoPath, detached: true, stdio: 'ignore' });
+        child.on('error', () => {});
+        child.unref();
+      };
+      if (process.platform === 'win32') {
+        launch('cmd.exe', ['/c', 'start', 'cmd.exe', '/K', `cd /D "${repoPath}"`]);
+      } else if (process.platform === 'darwin') {
+        launch('open', ['-a', 'Terminal', repoPath]);
+      } else {
+        launch('sh', ['-c',
+          'x-terminal-emulator --working-directory "$0" || ' +
+          'gnome-terminal --working-directory "$0" || ' +
+          'konsole --workdir "$0" || ' +
+          'xterm -e "cd \'$0\' && exec $SHELL"',
+          repoPath]);
+      }
+      return { ok: true };
+    } catch (err) {
+      return { error: err.message || String(err) };
+    }
+  });
+
   ipcMain.handle('app:version', () => {
     return app.getVersion();
   });

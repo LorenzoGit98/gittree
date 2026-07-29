@@ -259,7 +259,7 @@ const contractExpression = `
 
   const commandBar = document.querySelector('.workspace-command-bar');
   const workspaceBody = document.getElementById('workspace-body');
-  const remoteActions = ['btn-fetch', 'btn-pull', 'btn-push', 'btn-refresh']
+  const remoteActions = ['btn-fetch', 'btn-pull', 'btn-push']
     .map(id => document.getElementById(id));
 
   const originalInspectorState = window.app.inspectorState;
@@ -664,14 +664,12 @@ const contractExpression = `
     return { opens: true, preview };
   };
   const plusBranchResult = await submitQuickBranch('#btn-new-branch', 'Renderer Plus Contract');
-  const rowBranchResult = await submitQuickBranch('#branch-create-row', 'Renderer Row Contract');
   branchList.createBranch = originalCreateBranch;
   window.app.refresh = originalRefresh;
   const quickBranchContract = {
     plusOpens: plusBranchResult.opens,
-    rowOpens: rowBranchResult.opens,
-    previewsConvention: plusBranchResult.preview && rowBranchResult.preview,
-    bothCreate: createdBranches.length === 2,
+    previewsConvention: plusBranchResult.preview,
+    creates: createdBranches.length === 1,
     closesAfterSuccess:
       document.getElementById('modal-overlay').classList.contains('is-hidden')
   };

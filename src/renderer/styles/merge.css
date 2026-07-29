@@ -1,9 +1,26 @@
+.merge-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+  background: var(--surface-overlay);
+  animation: motion-backdrop-in var(--duration-fast) var(--ease-smooth);
+}
+
 .merge-workspace {
   display: flex;
   flex-direction: column;
-  flex: 1;
+  width: min(780px, 94vw);
+  max-height: min(720px, 88vh);
   overflow: hidden;
   background: var(--surface-shell);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  animation: motion-scale-in-spring var(--duration-normal) var(--ease-spring);
 }
 
 .merge-header {
@@ -246,4 +263,8 @@
 
 .merge-confirm {
   margin-left: auto;
+}
+
+.merge-pushing-spinner {
+  animation: project-loading-spin .8s linear infinite;
 }

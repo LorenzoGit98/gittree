@@ -44,6 +44,7 @@ class SettingsView {
       ? this.readProjectSchedule(schedules[repo.path], metadata)
       : {};
     const assignedProfile = repo ? assignments[repo.path] : '';
+    const toolbarVisibility = this.app.readToolbarVisibility();
 
     this.dialog.className = 'confirm-dialog settings-dialog';
     this.dialog.innerHTML = `
@@ -111,6 +112,21 @@ class SettingsView {
             </div>
             <i class="ph ph-caret-right settings-navigation-caret" aria-hidden="true"></i>
           </button>
+        </section>
+
+        <section class="settings-section" data-settings-section="toolbar">
+          <div class="settings-section-heading">
+            <i class="ph ph-toolbox" aria-hidden="true"></i>
+            <div>
+              <h3>${this.esc(t('settings.toolbarTitle'))}</h3>
+              <p>${this.esc(t('settings.toolbarHelp'))}</p>
+            </div>
+          </div>
+          <div class="settings-toolbar-rows">
+            ${this.renderToolbarRow('gitflow', t('settings.toolbarGitflow'), t('settings.toolbarGitflowDetail'), toolbarVisibility.gitflow)}
+            ${this.renderToolbarRow('terminal', t('settings.toolbarTerminal'), t('settings.toolbarTerminalDetail'), toolbarVisibility.terminal)}
+            ${this.renderToolbarRow('explorer', t('settings.toolbarExplorer'), t('settings.toolbarExplorerDetail'), toolbarVisibility.explorer)}
+          </div>
         </section>
 
         <section class="settings-section" data-settings-section="accounts">
@@ -256,6 +272,19 @@ class SettingsView {
     </div>`;
   }
 
+  renderToolbarRow(key, label, detail, checked) {
+    return `<div class="settings-toolbar-row">
+      <div class="settings-toolbar-copy">
+        <strong>${this.esc(label)}</strong>
+        <small>${this.esc(detail)}</small>
+      </div>
+      <label class="settings-switch">
+        <input type="checkbox" data-toolbar-toggle="${this.esc(key)}"${checked ? ' checked' : ''}>
+        <span aria-hidden="true"></span>
+      </label>
+    </div>`;
+  }
+
   renderProfile(profile, assignedProfile, hasRepository) {
     const assigned = profile.id === assignedProfile;
     return `<div class="settings-profile${assigned ? ' is-assigned' : ''}">
@@ -320,7 +349,6 @@ class SettingsView {
             ${this.renderShortcut(t('actions.pull'), 'pull', t('settings.pullShortcutHelp'))}
             ${this.renderShortcut(t('actions.push'), 'push', t('settings.pushShortcutHelp'))}
             ${this.renderShortcut(t('sidebar.newBranch'), 'newBranch', t('settings.branchShortcutHelp'))}
-            ${this.renderShortcut(t('actions.refresh'), 'refresh', t('settings.refreshShortcutHelp'))}
           </div>
         </section>
         <section class="settings-section">
@@ -384,6 +412,15 @@ class SettingsView {
           Theme.apply(toneTheme, true);
         }
         this.syncAppearanceState();
+      };
+    });
+
+    this.dialog.querySelectorAll('[data-toolbar-toggle]').forEach(input => {
+      input.onchange = () => {
+        const visibility = this.app.readToolbarVisibility();
+        visibility[input.dataset.toolbarToggle] = input.checked;
+        localStorage.setItem('gittree.settings.toolbar', JSON.stringify(visibility));
+        this.app.applyToolbarVisibility();
       };
     });
 

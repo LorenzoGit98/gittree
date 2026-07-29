@@ -34,6 +34,7 @@ class GitTreeApp {
     this.components.commitCompare = new CommitCompare(this);
     this.components.merge = new MergeWorkspace(this);
     this.components.conflict = new ConflictResolver(this);
+    this.components.gitflow = new GitFlow(this);
     this.components.statusBar = new StatusBar();
 
     this.bindEvents();
@@ -42,6 +43,7 @@ class GitTreeApp {
     this.components.welcome.init(this);
     this.setupResize();
     this.setupWorkspaceState();
+    this.applyToolbarVisibility();
     this.setupWorkspaceModes();
     this.setupGlobalShortcuts();
     await this.components.repoTabs.init();
@@ -70,12 +72,16 @@ class GitTreeApp {
       button.onclick = () => this.components.settings.open();
     });
 
-    document.getElementById('btn-refresh').onclick = () => this.refresh();
     document.getElementById('btn-fetch').onclick = () => this.doFetch();
     document.getElementById('btn-pull').onclick = () => this.doPull();
     document.getElementById('btn-push').onclick = () => this.doPush();
     document.getElementById('btn-new-branch').onclick = () => this.components.branchList.promptCreateBranch();
-    document.getElementById('branch-create-row').onclick = () => this.components.branchList.promptCreateBranch();
+    document.getElementById('btn-gitflow').onclick = () => this.components.gitflow.open();
+    document.getElementById('btn-terminal').onclick = () => this.openTerminal();
+    document.getElementById('btn-explorer').onclick = () => this.openExplorer();
+    document.getElementById('stash-search').addEventListener('input', event => {
+      this.renderStashes(event.target.value);
+    });
     document.querySelectorAll('.theme-toggle').forEach(button => {
       button.onclick = () => Theme.toggle();
     });
@@ -173,8 +179,7 @@ class GitTreeApp {
       fetch: { key: 'f', shift: true },
       pull: { key: 'l', shift: true },
       push: { key: 'p', shift: true },
-      newBranch: { key: 'b', shift: true },
-      refresh: { key: 'F5', primary: false }
+      newBranch: { key: 'b', shift: true }
     };
   }
 
@@ -196,8 +201,7 @@ class GitTreeApp {
       fetch: 'actions.fetch',
       pull: 'actions.pull',
       push: 'actions.push',
-      newBranch: 'sidebar.newBranch',
-      refresh: 'actions.refresh'
+      newBranch: 'sidebar.newBranch'
     };
     document.querySelectorAll('[data-shortcut-title]').forEach(element => {
       const action = element.dataset.shortcutTitle;
@@ -335,15 +339,28 @@ class GitTreeApp {
     container.innerHTML = this.projectLoadingMarkup();
     try {
       const list = await window.gitTree.getStashList(repoPath);
-      if (!list?.all?.length) { container.innerHTML = ''; return; }
-      container.innerHTML = list.all.map((s, i) => `
-        <div class="branch-item">
-          <i class="ph ph-archive branch-icon"></i>
-          <span>${s.message || `Stash ${i}`}</span>
-        </div>
-      `).join('');
-    } catch { container.innerHTML = ''; }
-    finally { container.classList.remove('is-project-loading'); }
+      this.state.stashes = list?.all || [];
+      this.renderStashes(document.getElementById('stash-search')?.value || '');
+    } catch {
+      this.state.stashes = [];
+      container.innerHTML = '';
+    } finally { container.classList.remove('is-project-loading'); }
+  }
+
+  renderStashes(filter = '') {
+    const container = document.getElementById('stash-list');
+    if (!container) return;
+    const needle = String(filter || '').trim().toLowerCase();
+    const items = (this.state.stashes || [])
+      .map((stash, index) => ({ label: stash.message || `Stash ${index}` }))
+      .filter(item => !needle || item.label.toLowerCase().includes(needle));
+    if (!items.length) { container.innerHTML = ''; return; }
+    container.innerHTML = items.map(item => `
+      <div class="branch-item">
+        <i class="ph ph-archive branch-icon"></i>
+        <span>${this.esc(item.label)}</span>
+      </div>
+    `).join('');
   }
 
   async loadTags(repoPath) {
@@ -448,6 +465,47 @@ class GitTreeApp {
     if (result.error) { this.showToast(result.error, 'error'); return; }
     this.showToast(t('feedback.pullComplete'), 'success');
     this.refresh();
+  }
+
+  async openTerminal() {
+    const repo = this.state.repo;
+    if (!repo) return;
+    const result = await window.gitTree.openTerminal(repo.path);
+    if (result?.error) this.showToast(result.error, 'error');
+  }
+
+  async openExplorer() {
+    const repo = this.state.repo;
+    if (!repo) return;
+    const result = await window.gitTree.openExplorer(repo.path);
+    if (result?.error) this.showToast(result.error, 'error');
+  }
+
+  toolbarButtons() {
+    return {
+      gitflow: 'btn-gitflow',
+      terminal: 'btn-terminal',
+      explorer: 'btn-explorer'
+    };
+  }
+
+  readToolbarVisibility() {
+    const defaults = { gitflow: true, terminal: true, explorer: true };
+    try {
+      const parsed = JSON.parse(localStorage.getItem('gittree.settings.toolbar'));
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return { ...defaults, ...parsed };
+      }
+    } catch {}
+    return defaults;
+  }
+
+  applyToolbarVisibility() {
+    const visibility = this.readToolbarVisibility();
+    for (const [key, id] of Object.entries(this.toolbarButtons())) {
+      const button = document.getElementById(id);
+      if (button) button.classList.toggle('is-hidden', visibility[key] === false);
+    }
   }
 
   async doPush() {
@@ -582,6 +640,7 @@ class GitTreeApp {
       this.setSidebarCollapsed(!isCollapsed);
     };
     document.getElementById('btn-toggle-sidebar').onclick = toggle;
+    document.getElementById('btn-collapse-sidebar').onclick = toggle;
   }
 
   setSidebarCollapsed(collapsed, persist = true) {
@@ -704,10 +763,6 @@ class GitTreeApp {
           this.components.branchList.promptCreateBranch();
         }
       }
-      if (!editable && !modalOpen && e.key === 'F5') {
-        e.preventDefault();
-        this.refresh();
-      }
       if (e.key === 'Escape' && !modalOpen && this.inspectorState === 'maximized') {
         this.setInspectorState('open');
       }
@@ -742,6 +797,12 @@ class GitTreeApp {
     toast.classList.add('show');
     clearTimeout(this._toastTimer);
     this._toastTimer = setTimeout(() => toast.classList.remove('show'), 2500);
+  }
+
+  esc(value) {
+    const element = document.createElement('div');
+    element.textContent = value ?? '';
+    return element.innerHTML;
   }
 
   on(event, cb) {

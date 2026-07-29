@@ -49,11 +49,11 @@ class MergeWorkspace {
 
   ensureContainer() {
     if (this.container) return;
-    this.container = document.getElementById('merge-workspace-overlay');
+    this.container = document.getElementById('merge-preview-overlay');
     if (!this.container) {
       this.container = document.createElement('div');
-      this.container.id = 'merge-workspace-overlay';
-      this.container.className = 'fullscreen-workspace is-hidden';
+      this.container.id = 'merge-preview-overlay';
+      this.container.className = 'merge-overlay is-hidden';
       document.getElementById('app').appendChild(this.container);
     }
   }
@@ -237,18 +237,34 @@ class MergeWorkspace {
       this.app.showToast(result.error, 'error');
       return;
     }
-    this.hide();
-    this.app.showToast('Merge completed', 'success');
-    this.app.emit('refresh');
 
-    if (andPush) {
-      this.app.showToast('Pushing...');
-      const pushResult = await window.gitTree.push(repo.path, 'origin', this.mergeData.target);
-      if (pushResult.error) {
-        this.app.showToast('Merge done, but push failed: ' + pushResult.error, 'error');
-      } else {
-        this.app.showToast('Merge & Push complete', 'success');
-      }
+    if (!andPush) {
+      this.hide();
+      this.app.showToast('Merge completed', 'success');
+      this.app.emit('refresh');
+      return;
+    }
+
+    this.setPushing(true);
+    const pushResult = await window.gitTree.push(repo.path, 'origin', this.mergeData.target);
+    this.setPushing(false);
+    this.hide();
+    if (pushResult.error) {
+      this.app.showToast('Merge done, but push failed: ' + pushResult.error, 'error');
+    } else {
+      this.app.showToast('Merge & Push complete', 'success');
+    }
+    this.app.emit('refresh');
+  }
+
+  setPushing(pushing) {
+    if (!this.container) return;
+    this.container.querySelectorAll('.merge-confirm, #merge-cancel-btn').forEach(button => {
+      button.disabled = pushing;
+    });
+    const pushButton = this.container.querySelector('#merge-push-btn');
+    if (pushButton && pushing) {
+      pushButton.innerHTML = `<i class="ph ph-circle-notch merge-pushing-spinner"></i> ${this.esc(t('mergeWorkspace.pushing'))}`;
     }
   }
 
