@@ -203,7 +203,7 @@ class SettingsView {
         data-tone-theme="${theme}" data-tone-choice="${this.esc(tone.id)}"
         title="${this.esc(name)}" aria-pressed="false">
       <span class="settings-tone-chips" aria-hidden="true">
-        ${tone.preview.map(color => `<i style="background:${this.esc(color)}"></i>`).join('')}
+        ${tone.preview.map(color => `<i style="width:${'auto'};background:${this.esc(color)}"></i>`).join('')}
       </span>
       <span class="settings-tone-name">${this.esc(name)}</span>
     </button>`;

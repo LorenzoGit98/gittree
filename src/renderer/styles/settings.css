@@ -518,29 +518,29 @@
 }
 
 .settings-theme-preview-light {
-  background: linear-gradient(135deg, #eef3ff 0%, #f8f4ff 48%, #eef9f7 100%);
+  background: rgb(243,246,251);
 }
 
 .settings-theme-preview-light::before {
-  background: #e9eef5;
+  background: rgb(233,238,245);
 }
 
 .settings-theme-preview-light::after {
-  border: 1px solid #d5dce6;
-  background: #ffffff;
+  border: 1px solid rgb(213,220,230);
+  background: rgb(255,255,255);
 }
 
 .settings-theme-preview-dark {
-  background: #000000;
+  background: rgb(0,0,0);
 }
 
 .settings-theme-preview-dark::before {
-  background: #121212;
+  background: rgb(18,18,18);
 }
 
 .settings-theme-preview-dark::after {
-  border: 1px solid #303030;
-  background: #050505;
+  border: 1px solid rgb(48,48,48);
+  background: rgb(5,5,5);
 }
 
 .settings-theme-name {

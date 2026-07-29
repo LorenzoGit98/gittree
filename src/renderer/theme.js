@@ -5,18 +5,18 @@ const Theme = {
   defaultTones: { light: 'frost', dark: 'onyx' },
   tones: {
     light: [
-      { id: 'frost', preview: ['#f3f6fb', '#ffffff', '#e9eef5'] },
-      { id: 'pure', preview: ['#f4f4f5', '#ffffff', '#eaeaec'] },
-      { id: 'sand', preview: ['#f8f4ec', '#fffdf9', '#ede6d9'] },
-      { id: 'sage', preview: ['#f2f6f0', '#fcfef9', '#e6ece1'] },
-      { id: 'lilac', preview: ['#f4f1fa', '#fdfcff', '#e9e4f1'] }
+      { id: 'frost', preview: ['rgb(243,246,251)', 'rgb(255,255,255)', 'rgb(233,238,245)'] },
+      { id: 'pure', preview: ['rgb(244,244,245)', 'rgb(255,255,255)', 'rgb(234,234,236)'] },
+      { id: 'sand', preview: ['rgb(248,244,236)', 'rgb(255,253,249)', 'rgb(237,230,217)'] },
+      { id: 'sage', preview: ['rgb(242,246,240)', 'rgb(252,254,249)', 'rgb(230,236,225)'] },
+      { id: 'lilac', preview: ['rgb(244,241,250)', 'rgb(253,252,255)', 'rgb(233,228,241)'] }
     ],
     dark: [
-      { id: 'onyx', preview: ['#000000', '#000000', '#121212'] },
-      { id: 'charcoal', preview: ['#161618', '#1c1c1f', '#2b2b2f'] },
-      { id: 'graphite', preview: ['#10141a', '#171c23', '#262e38'] },
-      { id: 'umber', preview: ['#151110', '#1c1714', '#2c2520'] },
-      { id: 'pine', preview: ['#0d120e', '#131814', '#212a23'] }
+      { id: 'onyx', preview: ['rgb(0,0,0)', 'rgb(0,0,0)', 'rgb(18,18,18)'] },
+      { id: 'charcoal', preview: ['rgb(22,22,24)', 'rgb(28,28,31)', 'rgb(43,43,47)'] },
+      { id: 'graphite', preview: ['rgb(16,20,26)', 'rgb(23,28,35)', 'rgb(38,46,56)'] },
+      { id: 'umber', preview: ['rgb(21,17,16)', 'rgb(28,23,20)', 'rgb(44,37,32)'] },
+      { id: 'pine', preview: ['rgb(13,18,14)', 'rgb(19,24,20)', 'rgb(33,42,35)'] }
     ]
   },
 
