@@ -122,12 +122,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          builder_args=()
           if [[ "$MACOS_OTA_ENABLED" == "true" ]]; then
             unset CSC_IDENTITY_AUTO_DISCOVERY
           else
+            unset CSC_LINK CSC_KEY_PASSWORD CSC_NAME APPLE_API_KEY APPLE_API_KEY_ID APPLE_API_ISSUER
             export CSC_IDENTITY_AUTO_DISCOVERY=false
+            builder_args=(-c.mac.identity=null -c.mac.hardenedRuntime=false)
           fi
-          npx electron-builder --mac --x64 --arm64 --publish never
+          npx electron-builder --mac --x64 --arm64 --publish never "${builder_args[@]}"
       - name: Validate and upload macOS OTA assets
         shell: bash
         run: |
