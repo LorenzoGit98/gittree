@@ -413,6 +413,16 @@ class GitTreeApp {
     element.classList.add('content-refresh');
   }
 
+  animateBranchSwitch(element, fromDirection) {
+    if (!element) return;
+    const next = fromDirection === 'top' ? 'content-refresh-from-top'
+      : fromDirection === 'bottom' ? 'content-refresh-from-bottom'
+      : 'content-refresh';
+    element.classList.remove('content-refresh', 'content-refresh-from-top', 'content-refresh-from-bottom');
+    void element.offsetWidth;
+    element.classList.add(next);
+  }
+
   async onCommitSelected(hash) {
     if (!this.state.repo) return;
     await this.components.diffViewer.showDiffForCommit(this.state.repo.path, hash);
@@ -431,7 +441,9 @@ class GitTreeApp {
       this.components.changes.load(repo.path),
       this.updateStatus(repo.path)
     ]);
-    this.animateContentRefresh(this.components.graphView.body);
+    const fromDirection = this.components.branchList.switchFromDirection;
+    this.components.branchList.switchFromDirection = null;
+    this.animateBranchSwitch(this.components.graphView.body, fromDirection);
 
     const currentBranchMetadata = (this.components.branchList.metadata?.branches || [])
       .find(branch => branch.kind === 'local' && branch.name === branchName);

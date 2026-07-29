@@ -411,6 +411,14 @@
   animation: motion-content-in var(--duration-normal) var(--ease-decel);
 }
 
+.content-refresh-from-top {
+  animation: motion-content-in-from-top var(--duration-normal) var(--ease-decel);
+}
+
+.content-refresh-from-bottom {
+  animation: motion-content-in-from-bottom var(--duration-normal) var(--ease-decel);
+}
+
 .status-bar {
   height: var(--statusbar-height);
   min-height: var(--statusbar-height);

@@ -14,6 +14,7 @@ class BranchListView {
     this.status = null;
     this.operationState = null;
     this.checkoutBusy = false;
+    this.switchFromDirection = null;
     this.branchMetadataByKey = new Map();
     this.searchInput = document.getElementById('branch-search');
     if (this.searchInput) {
@@ -445,11 +446,20 @@ class BranchListView {
     const branchName = row.dataset.branchName;
     if (!branchName) return;
     if (this.checkoutBusy) return;
+    this.switchFromDirection = this.detectSwitchDirection(row);
     if (row.dataset.remote === 'true') {
       this.checkoutRemote(branchName.split('/').pop(), branchName, row);
     } else {
       this.checkout(branchName, row);
     }
+  }
+
+  detectSwitchDirection(row) {
+    const activeRow = this.container.querySelector('.branch-item.active');
+    if (!activeRow || activeRow === row) return null;
+    return row.getBoundingClientRect().top > activeRow.getBoundingClientRect().top
+      ? 'top'
+      : 'bottom';
   }
 
   setRowBusy(row, busy) {
@@ -480,6 +490,7 @@ class BranchListView {
       await this.app.afterBranchCheckout(r);
     } finally {
       this.checkoutBusy = false;
+      this.switchFromDirection = null;
       this.setRowBusy(row, false);
     }
   }
@@ -498,6 +509,7 @@ class BranchListView {
       await this.app.afterBranchCheckout(r);
     } finally {
       this.checkoutBusy = false;
+      this.switchFromDirection = null;
       this.setRowBusy(row, false);
     }
   }
