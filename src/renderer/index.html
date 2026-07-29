@@ -109,6 +109,10 @@
 
     <div class="workspace-command-bar" role="toolbar" aria-label="Repository actions" data-i18n-aria-label="actions.repositoryActions">
       <div class="workspace-command-group">
+        <button id="btn-toggle-sidebar" class="btn btn-toolbar active" type="button" aria-pressed="true">
+          <i class="ph ph-git-branch"></i>
+          <span data-i18n="sidebar.branches">Branches</span>
+        </button>
         <button id="btn-fetch" class="btn btn-toolbar" type="button"
           data-shortcut-title="fetch">
           <i class="ph ph-cloud-arrow-down"></i><span data-i18n="actions.fetch">Fetch</span>
@@ -153,10 +157,6 @@
             <button id="btn-new-branch" class="btn-icon" type="button"
               title="New branch" data-shortcut-title="newBranch">
               <i class="ph ph-plus"></i>
-            </button>
-            <button id="btn-collapse-sidebar" class="btn-icon" type="button"
-              title="Collapse sidebar" data-i18n-title="sidebar.collapse">
-              <i class="ph ph-caret-left"></i>
             </button>
           </div>
         </div>

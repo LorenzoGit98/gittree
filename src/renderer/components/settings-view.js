@@ -299,6 +299,14 @@ class SettingsView {
       if (event.target === this.overlay) this.close();
     };
 
+    const repoLink = this.dialog.querySelector('#about-repo-link');
+    if (repoLink) {
+      repoLink.onclick = event => {
+        event.preventDefault();
+        window.gitTree.openExternal('https://github.com/lorenzogit98/gittree-minimal');
+      };
+    }
+
     const projectToggle = this.dialog.querySelector('[data-auto-fetch-project]');
     const projectInterval = this.dialog.querySelector('[data-auto-fetch-project-interval]');
     const projectRemote = this.dialog.querySelector('[data-auto-fetch-project-remote]');

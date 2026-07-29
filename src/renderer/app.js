@@ -577,14 +577,19 @@ class GitTreeApp {
   setupSidebarToggle() {
     const collapsed = localStorage.getItem('gittree.sidebar.collapsed') === 'true';
     this.setSidebarCollapsed(collapsed, false);
-    document.getElementById('btn-collapse-sidebar').onclick = () => {
-      const isCollapsed = document.getElementById('sidebar').classList.contains('branches-collapsed');
+    const toggle = () => {
+      const isCollapsed = document.getElementById('workspace-body').classList.contains('sidebar-collapsed');
       this.setSidebarCollapsed(!isCollapsed);
     };
+    document.getElementById('btn-toggle-sidebar').onclick = toggle;
   }
 
   setSidebarCollapsed(collapsed, persist = true) {
-    document.getElementById('sidebar').classList.toggle('branches-collapsed', collapsed);
+    const workspace = document.getElementById('workspace-body');
+    const toggleButton = document.getElementById('btn-toggle-sidebar');
+    workspace.classList.toggle('sidebar-collapsed', collapsed);
+    toggleButton.classList.toggle('active', !collapsed);
+    toggleButton.setAttribute('aria-pressed', String(!collapsed));
     if (persist) localStorage.setItem('gittree.sidebar.collapsed', String(collapsed));
   }
 
