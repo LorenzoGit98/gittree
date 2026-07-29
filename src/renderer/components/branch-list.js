@@ -13,6 +13,7 @@ class BranchListView {
     this.metadata = null;
     this.status = null;
     this.operationState = null;
+    this.checkoutBusy = false;
     this.branchMetadataByKey = new Map();
     this.searchInput = document.getElementById('branch-search');
     if (this.searchInput) {
@@ -443,27 +444,62 @@ class BranchListView {
   activateBranchRow(row) {
     const branchName = row.dataset.branchName;
     if (!branchName) return;
+    if (this.checkoutBusy) return;
     if (row.dataset.remote === 'true') {
-      this.checkoutRemote(branchName.split('/').pop(), branchName);
+      this.checkoutRemote(branchName.split('/').pop(), branchName, row);
     } else {
-      this.checkout(branchName);
+      this.checkout(branchName, row);
     }
   }
 
-  async checkout(name) {
-    const repo = this.app.state.repo;
-    if (!repo) return;
-    const r = await window.gitTree.checkoutBranch(repo.path, name);
-    if (r.error) { this.app.showToast(r.error, 'error'); return; }
-    await this.app.afterBranchCheckout(r);
+  setRowBusy(row, busy) {
+    if (!row) return;
+    row.classList.toggle('is-checking-out', busy);
+    const icon = row.querySelector('.branch-icon');
+    if (!icon) return;
+    if (busy) {
+      icon.dataset.originalIcon = icon.className;
+      icon.className = 'ph ph-circle-notch branch-icon';
+    } else if (icon.dataset.originalIcon) {
+      icon.className = icon.dataset.originalIcon;
+      delete icon.dataset.originalIcon;
+    }
   }
 
-  async checkoutRemote(localName, remoteName) {
+  async checkout(name, row = null) {
     const repo = this.app.state.repo;
-    if (!repo) return;
-    const r = await window.gitTree.checkoutTrackingBranch(repo.path, remoteName);
-    if (r.error) { this.app.showToast(r.error, 'error'); return; }
-    await this.app.afterBranchCheckout(r);
+    if (!repo || this.checkoutBusy) return;
+    row = row || this.container.querySelector(
+      `.branch-item[data-branch-kind="local"][data-branch-name="${CSS.escape(name)}"]`
+    );
+    this.checkoutBusy = true;
+    this.setRowBusy(row, true);
+    try {
+      const r = await window.gitTree.checkoutBranch(repo.path, name);
+      if (r.error) { this.app.showToast(r.error, 'error'); return; }
+      await this.app.afterBranchCheckout(r);
+    } finally {
+      this.checkoutBusy = false;
+      this.setRowBusy(row, false);
+    }
+  }
+
+  async checkoutRemote(localName, remoteName, row = null) {
+    const repo = this.app.state.repo;
+    if (!repo || this.checkoutBusy) return;
+    row = row || this.container.querySelector(
+      `.branch-item[data-branch-kind="remote"][data-branch-name="${CSS.escape(remoteName)}"]`
+    );
+    this.checkoutBusy = true;
+    this.setRowBusy(row, true);
+    try {
+      const r = await window.gitTree.checkoutTrackingBranch(repo.path, remoteName);
+      if (r.error) { this.app.showToast(r.error, 'error'); return; }
+      await this.app.afterBranchCheckout(r);
+    } finally {
+      this.checkoutBusy = false;
+      this.setRowBusy(row, false);
+    }
   }
 
   async promptCreateBranch() {

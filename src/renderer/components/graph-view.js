@@ -65,6 +65,7 @@ class GraphView {
     }
     this.generation += 1;
     const generation = this.generation;
+    const keepContent = this.repoPath === repoPath && this.rows.length > 0;
     this.repoPath = repoPath;
     this.restoreHistoryState();
     this.rows = [];
@@ -80,7 +81,9 @@ class GraphView {
     this.layoutState = { lanes: [] };
     this.laneCount = 1;
     this.renderedRange = [-1, -1];
-    this.layer.replaceChildren(this.emptyState('ph-circle-notch', t('history.loading')));
+    if (!keepContent) {
+      this.layer.replaceChildren(this.emptyState('ph-circle-notch', t('history.loading')));
+    }
     this.body.style.height = '100%';
     await this.loadNextPage(generation);
   }

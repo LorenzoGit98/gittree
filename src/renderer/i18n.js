@@ -59,7 +59,8 @@ const I18n = {
               add: 'Add repository',
               sync: 'Sync',
               syncState: '{{branch}}: {{ahead}} ahead, {{behind}} behind',
-              syncedState: '{{branch}} is synchronized'
+              syncedState: '{{branch}} is synchronized',
+              syncing: 'Syncing…'
             },
             sidebar: {
               workspace: 'Workspace',
@@ -550,7 +551,8 @@ const I18n = {
               add: 'Aggiungi repository',
               sync: 'Sync',
               syncState: '{{branch}}: {{ahead}} avanti, {{behind}} indietro',
-              syncedState: '{{branch}} è sincronizzato'
+              syncedState: '{{branch}} è sincronizzato',
+              syncing: 'Sincronizzazione…'
             },
             sidebar: {
               workspace: 'Workspace',

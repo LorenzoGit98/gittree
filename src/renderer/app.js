@@ -107,6 +107,10 @@ class GitTreeApp {
     });
 
     window.addEventListener('gittree:language-changed', () => this.refreshLocalizedView());
+
+    const toast = document.getElementById('toast');
+    toast.addEventListener('mouseenter', () => this.pauseToast());
+    toast.addEventListener('mouseleave', () => this.resumeToast());
   }
 
   setupWorkspaceModes() {
@@ -446,25 +450,38 @@ class GitTreeApp {
     if (!this.state.repo) return;
     if (!options.silent) this.showToast(t('common.loading'));
     await this.openRepo(this.state.repo, options);
+    this.components.repoTabs.refreshAllSync();
     if (!options.silent) this.showToast(t('feedback.refreshed'), 'success');
   }
 
   async doFetch() {
     if (!this.state.repo) return;
+    const repoPath = this.state.repo.path;
+    this.components.repoTabs.setSyncBusy(repoPath, true);
     this.showToast(t('feedback.fetching'));
-    const result = await window.gitTree.fetch(this.state.repo.path);
-    if (result.error) { this.showToast(result.error, 'error'); return; }
-    this.showToast(t('feedback.fetchComplete'), 'success');
-    this.refresh();
+    try {
+      const result = await window.gitTree.fetch(repoPath);
+      if (result.error) { this.showToast(result.error, 'error'); return; }
+      this.showToast(t('feedback.fetchComplete'), 'success');
+      await this.refresh();
+    } finally {
+      this.components.repoTabs.setSyncBusy(repoPath, false);
+    }
   }
 
   async doPull() {
     if (!this.state.repo) return;
+    const repoPath = this.state.repo.path;
+    this.components.repoTabs.setSyncBusy(repoPath, true);
     this.showToast(t('feedback.pulling'));
-    const result = await window.gitTree.pull(this.state.repo.path);
-    if (result.error) { this.showToast(result.error, 'error'); return; }
-    this.showToast(t('feedback.pullComplete'), 'success');
-    this.refresh();
+    try {
+      const result = await window.gitTree.pull(repoPath);
+      if (result.error) { this.showToast(result.error, 'error'); return; }
+      this.showToast(t('feedback.pullComplete'), 'success');
+      await this.refresh();
+    } finally {
+      this.components.repoTabs.setSyncBusy(repoPath, false);
+    }
   }
 
   async openTerminal() {
@@ -510,11 +527,17 @@ class GitTreeApp {
 
   async doPush() {
     if (!this.state.repo) return;
+    const repoPath = this.state.repo.path;
+    this.components.repoTabs.setSyncBusy(repoPath, true);
     this.showToast(t('feedback.pushing'));
-    const result = await window.gitTree.push(this.state.repo.path);
-    if (result.error) { this.showToast(result.error, 'error'); return; }
-    this.showToast(t('feedback.pushComplete'), 'success');
-    this.refresh();
+    try {
+      const result = await window.gitTree.push(repoPath);
+      if (result.error) { this.showToast(result.error, 'error'); return; }
+      this.showToast(t('feedback.pushComplete'), 'success');
+      await this.refresh();
+    } finally {
+      this.components.repoTabs.setSyncBusy(repoPath, false);
+    }
   }
 
   showWelcome() {
@@ -792,11 +815,56 @@ class GitTreeApp {
 
   showToast(message, type = '') {
     const toast = document.getElementById('toast');
-    toast.textContent = message;
-    toast.className = 'toast ' + type;
-    toast.classList.add('show');
+    const kind = ['success', 'warning', 'error'].includes(type) ? type : 'loading';
+    const icons = {
+      loading: 'ph-circle-notch',
+      success: 'ph-check-circle',
+      warning: 'ph-warning',
+      error: 'ph-x-circle'
+    };
+    const durations = { loading: 2500, success: 2800, warning: 4200, error: 5200 };
+    const duration = durations[kind];
+
     clearTimeout(this._toastTimer);
-    this._toastTimer = setTimeout(() => toast.classList.remove('show'), 2500);
+    toast.className = `toast toast-${kind} show`;
+    toast.setAttribute('aria-live', kind === 'error' ? 'assertive' : 'polite');
+    toast.innerHTML =
+      `<span class="toast-badge" aria-hidden="true"><i class="ph ${icons[kind]}"></i></span>` +
+      `<span class="toast-message"></span>` +
+      `<button type="button" class="toast-dismiss" aria-label="${this.esc(t('common.close'))}"><i class="ph ph-x" aria-hidden="true"></i></button>` +
+      `<span class="toast-progress" aria-hidden="true"></span>`;
+    toast.querySelector('.toast-message').textContent = message;
+    toast.querySelector('.toast-progress').style.animationDuration = `${duration}ms`;
+    toast.querySelector('.toast-dismiss').onclick = () => this.dismissToast();
+
+    this._toastRemaining = duration;
+    this._toastStarted = Date.now();
+    if (toast.matches(':hover')) {
+      toast.classList.add('paused');
+    } else {
+      this._toastTimer = setTimeout(() => this.dismissToast(), duration);
+    }
+  }
+
+  dismissToast() {
+    clearTimeout(this._toastTimer);
+    document.getElementById('toast').classList.remove('show');
+  }
+
+  pauseToast() {
+    const toast = document.getElementById('toast');
+    if (!toast.classList.contains('show') || toast.classList.contains('paused')) return;
+    clearTimeout(this._toastTimer);
+    this._toastRemaining = Math.max((this._toastRemaining || 0) - (Date.now() - this._toastStarted), 0);
+    toast.classList.add('paused');
+  }
+
+  resumeToast() {
+    const toast = document.getElementById('toast');
+    if (!toast.classList.contains('show') || !toast.classList.contains('paused')) return;
+    toast.classList.remove('paused');
+    this._toastStarted = Date.now();
+    this._toastTimer = setTimeout(() => this.dismissToast(), Math.max(this._toastRemaining, 800));
   }
 
   esc(value) {

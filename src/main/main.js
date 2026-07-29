@@ -42,13 +42,15 @@ async function getHostingRepository(repoPath, provider) {
     (
       (provider === 'github' && item.provider.host === 'github.com') ||
       (provider === 'gitlab' && item.provider.host === 'gitlab.com') ||
-      (provider === 'azure' && item.provider.host === 'dev.azure.com')
+      provider === 'azure'
     )
   ));
   if (!remote?.provider) {
     throw new Error(`No supported ${provider} remote was found in this repository`);
   }
-  return { ...remote.provider, remoteName: remote.name };
+  const repository = { ...remote.provider, remoteName: remote.name };
+  if (provider === 'azure') repository.host = 'dev.azure.com';
+  return repository;
 }
 
 async function isWorkingTreeRepository(repoPath) {
@@ -809,9 +811,16 @@ function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle('auth:set-pat', async (_event, provider, token) => {
+  ipcMain.handle('auth:set-pat', async (_event, provider, token, repoPath) => {
     try {
-      return await hostingService.setPat(provider, token);
+      let organization;
+      if (provider === 'azure' && repoPath) {
+        try {
+          const repository = await getHostingRepository(repoPath, provider);
+          organization = repository.organization;
+        } catch {}
+      }
+      return await hostingService.setPat(provider, token, organization);
     } catch (err) {
       return { error: err.message };
     }

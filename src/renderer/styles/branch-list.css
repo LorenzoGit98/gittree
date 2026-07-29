@@ -193,6 +193,15 @@
   content: "";
 }
 
+.branch-item.is-checking-out {
+  opacity: 0.7;
+}
+
+.branch-item.is-checking-out .branch-icon {
+  color: var(--primary);
+  animation: project-loading-spin 0.8s linear infinite;
+}
+
 .branch-icon {
   width: 20px;
   flex: 0 0 20px;

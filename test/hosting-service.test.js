@@ -164,3 +164,65 @@ test('GitLab partial review retries do not duplicate completed discussions', asy
   assert.equal(requests.filter(request => request.payload.body === 'first').length, 1);
   assert.equal(requests.filter(request => request.payload.body === 'second').length, 2);
 });
+
+test('azure PAT sign-in validates against the organization connectionData endpoint', async () => {
+  const requests = [];
+  let stored = null;
+  const vault = memoryVault(null);
+  vault.setAccount = async (provider, account) => { stored = { provider, account }; };
+  const token = 'a'.repeat(52);
+  const service = new HostingService({
+    vault,
+    fetch: async (url, options) => {
+      requests.push({ url, options });
+      return jsonResponse({
+        authenticatedUser: {
+          id: 'user-guid',
+          providerDisplayName: 'patricia@contoso.com',
+          customDisplayName: 'Patricia'
+        }
+      });
+    }
+  });
+
+  const result = await service.setPat('azure', token, 'contoso');
+
+  assert.equal(requests[0].url, 'https://dev.azure.com/contoso/_apis/connectionData');
+  assert.equal(
+    requests[0].options.headers.Authorization,
+    `Basic ${Buffer.from(`:${token}`).toString('base64')}`
+  );
+  assert.equal(result.user.login, 'patricia@contoso.com');
+  assert.equal(result.user.name, 'Patricia');
+  assert.equal(stored.provider, 'azure');
+  assert.equal(stored.account.accessToken, token);
+});
+
+test('azure pull request URLs keep organization and project segments', async () => {
+  const requests = [];
+  const service = new HostingService({
+    vault: memoryVault({ accessToken: 'token', user: { login: 'patricia@contoso.com' } }),
+    fetch: async (url, options) => {
+      requests.push({ url, options });
+      return jsonResponse({ value: [] });
+    }
+  });
+
+  await service.listPullRequests(
+    {
+      provider: 'azure',
+      host: 'dev.azure.com',
+      ownerPath: 'contoso/platform',
+      repository: 'widgets',
+      organization: 'contoso',
+      project: 'platform'
+    },
+    { filter: 'open', page: 1 }
+  );
+
+  assert.equal(
+    requests[0].url,
+    'https://dev.azure.com/contoso/platform/_apis/git/repositories/widgets/pullrequests?searchCriteria.status=active&$top=50&$skip=0'
+  );
+  assert.equal(requests[0].url.includes('undefined'), false);
+});

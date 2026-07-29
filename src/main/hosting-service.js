@@ -39,7 +39,13 @@ class HostingService {
     ) {
       throw new Error('Invalid hosting repository');
     }
-    return { provider, host: expectedHost, ownerPath, repository: name };
+    const value = { provider, host: expectedHost, ownerPath, repository: name };
+    if (provider === 'azure') {
+      const [organization, project] = ownerPath.split('/');
+      value.organization = String(repository.organization || organization || '');
+      value.project = String(repository.project || project || '');
+    }
+    return value;
   }
 
   validatePullRequestId(id) {
@@ -73,12 +79,12 @@ class HostingService {
     };
   }
 
-  async setPat(provider, token) {
+  async setPat(provider, token, organization) {
     this.validateProvider(provider);
     if (!token || typeof token !== 'string' || token.length < 20 || token.length > 200) {
       throw new Error('Invalid Personal Access Token');
     }
-    const user = await this.fetchCurrentUser(provider, token);
+    const user = await this.fetchCurrentUser(provider, token, organization);
     const account = {
       accessToken: token,
       refreshToken: '',
@@ -234,10 +240,12 @@ class HostingService {
     return this.readResponse(response);
   }
 
-  async fetchCurrentUser(provider, token) {
+  async fetchCurrentUser(provider, token, organization) {
     let url;
     if (provider === 'azure') {
-      url = 'https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version=7.1';
+      url = organization
+        ? `https://dev.azure.com/${encodeURIComponent(organization)}/_apis/connectionData`
+        : 'https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version=7.1';
     } else {
       url = provider === 'github'
         ? 'https://api.github.com/user'
@@ -257,10 +265,13 @@ class HostingService {
     const response = await this.fetch(url, { headers });
     const user = await this.readResponse(response);
     if (provider === 'azure') {
+      const identity = user.authenticatedUser || user;
       return {
-        id: user.id,
-        login: user.emailAddress || user.displayName || '',
-        name: user.displayName || '',
+        id: identity.id,
+        login: identity.providerDisplayName || identity.customDisplayName
+          || user.emailAddress || user.displayName || '',
+        name: identity.customDisplayName || identity.providerDisplayName
+          || user.displayName || '',
         avatarUrl: user.avatarUrl || ''
       };
     }

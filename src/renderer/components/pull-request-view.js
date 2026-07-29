@@ -164,7 +164,7 @@ class PullRequestView {
     if (this.provider === 'azure') {
       const token = await this.promptPat();
       if (!token) return;
-      const result = await window.gitTree.setPat(this.provider, token);
+      const result = await window.gitTree.setPat(this.provider, token, this.repoPath);
       if (result?.error) {
         this.showNotice(result.error, 'warning');
         return;

@@ -204,8 +204,8 @@ contextBridge.exposeInMainWorld('gitTree', {
   logoutProvider: (provider) =>
     ipcRenderer.invoke('auth:provider-logout', provider),
 
-  setPat: (provider, token) =>
-    ipcRenderer.invoke('auth:set-pat', provider, token),
+  setPat: (provider, token, repoPath) =>
+    ipcRenderer.invoke('auth:set-pat', provider, token, repoPath),
 
   onProviderState: (callback) => {
     const listener = (_event, state) => callback(state);

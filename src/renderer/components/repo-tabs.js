@@ -4,10 +4,57 @@ class RepoTabs {
     this.app = app;
     this.repos = [];
     this.syncByRepoPath = new Map();
+    this.busyRepoPaths = new Set();
+    this._syncRefreshToken = 0;
+    this._syncTimer = null;
   }
 
   async init() {
     try { this.repos = await window.gitTree.getRepos(); } catch(e) {}
+    this.render();
+    this.refreshAllSync();
+    this.startPeriodicSyncRefresh();
+  }
+
+  startPeriodicSyncRefresh() {
+    this.stopPeriodicSyncRefresh();
+    this._syncTimer = setInterval(() => this.refreshAllSync(), 60000);
+  }
+
+  stopPeriodicSyncRefresh() {
+    if (this._syncTimer) {
+      clearInterval(this._syncTimer);
+      this._syncTimer = null;
+    }
+  }
+
+  async refreshAllSync() {
+    if (!this.repos.length) return;
+    const token = ++this._syncRefreshToken;
+    const results = await Promise.all(this.repos.map(async repo => {
+      try {
+        const metadata = await window.gitTree.getBranchMetadata(repo.path);
+        if (!metadata || metadata.error || !Array.isArray(metadata.branches)) {
+          return [repo.path, null];
+        }
+        const current = metadata.branches.find(b => b.kind === 'local' && b.current);
+        return [repo.path, current
+          ? {
+              branch: current.name,
+              upstream: current.upstream,
+              ahead: current.ahead,
+              behind: current.behind
+            }
+          : null];
+      } catch {
+        return [repo.path, null];
+      }
+    }));
+    if (token !== this._syncRefreshToken) return;
+    for (const [repoPath, state] of results) {
+      if (state) this.syncByRepoPath.set(repoPath, state);
+      else this.syncByRepoPath.delete(repoPath);
+    }
     this.render();
   }
 
@@ -47,44 +94,56 @@ class RepoTabs {
     this.render();
   }
 
+  setSyncBusy(repoPath, busy) {
+    if (!repoPath) return;
+    if (busy) this.busyRepoPaths.add(repoPath);
+    else this.busyRepoPaths.delete(repoPath);
+    this.render();
+  }
+
   createSyncIndicator(repoPath) {
     const state = this.syncByRepoPath.get(repoPath);
-    if (!state) return null;
+    const busy = this.busyRepoPaths.has(repoPath);
+    if (!busy && (!state || (!state.ahead && !state.behind))) return null;
     const indicator = document.createElement('span');
     indicator.className = 'sync-indicator repo-tab-sync';
-    const synchronized = !state.ahead && !state.behind;
-    indicator.title = synchronized
-      ? t('tabs.syncedState', { branch: state.branch })
-      : t('tabs.syncState', {
-          branch: state.branch,
-          ahead: state.ahead || 0,
-          behind: state.behind || 0
-        });
+    if (busy) {
+      indicator.title = t('tabs.syncing');
+      indicator.setAttribute('aria-label', indicator.title);
+      indicator.appendChild(this.syncBusyPart());
+      return indicator;
+    }
+    indicator.title = t('tabs.syncState', {
+      branch: state.branch,
+      ahead: state.ahead || 0,
+      behind: state.behind || 0
+    });
     indicator.setAttribute('aria-label', indicator.title);
-    const label = document.createElement('span');
-    label.className = 'repo-tab-sync-label';
-    label.textContent = t('tabs.sync');
-    indicator.appendChild(label);
     if (state.ahead > 0) indicator.appendChild(this.syncPart('ahead', state.ahead));
     if (state.behind > 0) indicator.appendChild(this.syncPart('behind', state.behind));
-    if (synchronized) indicator.appendChild(this.syncPart('synced', null));
     return indicator;
+  }
+
+  syncBusyPart() {
+    const part = document.createElement('span');
+    part.className = 'sync-indicator-part is-syncing';
+    const icon = document.createElement('i');
+    icon.className = 'ph ph-circle-notch';
+    icon.setAttribute('aria-hidden', 'true');
+    part.appendChild(icon);
+    return part;
   }
 
   syncPart(direction, count) {
     const part = document.createElement('span');
     part.className = `sync-indicator-part is-${direction}`;
     const icon = document.createElement('i');
-    icon.className = direction === 'synced'
-      ? 'ph ph-check'
-      : `ph ph-arrow-${direction === 'ahead' ? 'up' : 'down'}`;
+    icon.className = `ph ph-arrow-${direction === 'ahead' ? 'up' : 'down'}`;
     icon.setAttribute('aria-hidden', 'true');
     part.appendChild(icon);
-    if (count !== null) {
-      const value = document.createElement('span');
-      value.textContent = String(count);
-      part.appendChild(value);
-    }
+    const value = document.createElement('span');
+    value.textContent = String(count);
+    part.appendChild(value);
     return part;
   }
 
@@ -100,6 +159,7 @@ class RepoTabs {
   async removeRepo(repoPath) {
     const active = await window.gitTree.removeRepo(repoPath);
     this.repos = await window.gitTree.getRepos();
+    this.syncByRepoPath.delete(repoPath);
     this.render();
     if (active) this.app.emit('repo:changed', active);
     else this.app.emit('repo:cleared');
@@ -113,6 +173,7 @@ class RepoTabs {
         this.app.state.activeRepoIndex = this.repos.findIndex(r => r.path === result.path);
         this.render();
         this.app.emit('repo:changed', result);
+        this.refreshAllSync();
       } else if (result && result.error) {
         this.app.showToast(result.error, 'error');
       }
@@ -131,6 +192,7 @@ class RepoTabs {
       this.render();
       this.app.emit('repo:changed', result.activeRepo);
     }
+    this.refreshAllSync();
     return result;
   }
 }
