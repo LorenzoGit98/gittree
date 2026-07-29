@@ -410,6 +410,9 @@ class HostingService {
         repo,
         `/pullrequests?searchCriteria.status=${status}&$top=50&$skip=${skip}`
       );
+      if (!result.data || !Array.isArray(result.data.value)) {
+        throw new Error('Failed to load pull requests');
+      }
       let items = result.data.value.map(item => this.normalizeAzureSummary(item, account.user));
       if (filter === 'authored') {
         items = items.filter(item => item.author.login === account.user?.login);

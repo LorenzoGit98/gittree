@@ -99,15 +99,53 @@ class BranchListView {
 
   setCurrentBranch(branchName) {
     if (!branchName) return;
+    const oldRow = this.container.querySelector('.branch-item.active');
+    const newRow = this.container.querySelector(
+      `.branch-item[data-remote="false"][data-branch-name="${CSS.escape(branchName)}"]`
+    );
     if (this.data) this.data.current = branchName;
     if (this.status) this.status.current = branchName;
     if (this.metadata) this.metadata.current = branchName;
     for (const branch of this.metadata?.branches || []) {
       if (branch.kind === 'local') branch.current = branch.name === branchName;
     }
+    const willSlide = Boolean(oldRow && newRow && oldRow !== newRow);
+    if (willSlide) newRow.classList.add('active-bg-animating');
     this.container.querySelectorAll('.branch-item[data-remote="false"]').forEach(row => {
       row.classList.toggle('active', row.dataset.branchName === branchName);
     });
+    if (willSlide) this.slideActiveBackground(oldRow, newRow);
+  }
+
+  slideActiveBackground(oldRow, newRow) {
+    if (this.activeGhost) {
+      this.activeGhost.animation.cancel();
+      this.activeGhost.ghost.remove();
+      this.activeGhost.newRow.classList.remove('active-bg-animating');
+      this.activeGhost = null;
+    }
+    const container = this.container;
+    const containerRect = container.getBoundingClientRect();
+    const oldRect = oldRow.getBoundingClientRect();
+    const newRect = newRow.getBoundingClientRect();
+    const ghost = document.createElement('div');
+    ghost.className = 'branch-active-ghost';
+    ghost.style.left = `${oldRect.left - containerRect.left}px`;
+    ghost.style.top = `${oldRect.top - containerRect.top}px`;
+    ghost.style.width = `${oldRect.width}px`;
+    ghost.style.height = `${newRect.height}px`;
+    container.appendChild(ghost);
+    const dy = newRect.top - oldRect.top;
+    const animation = ghost.animate(
+      [{ transform: 'translateY(0)' }, { transform: `translateY(${dy}px)` }],
+      { duration: 280, easing: 'cubic-bezier(0.0, 0.0, 0.2, 1)' }
+    );
+    this.activeGhost = { ghost, animation, newRow };
+    animation.onfinish = () => {
+      ghost.remove();
+      newRow.classList.remove('active-bg-animating');
+      this.activeGhost = null;
+    };
   }
 
   render() {

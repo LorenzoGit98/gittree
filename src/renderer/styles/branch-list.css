@@ -60,6 +60,7 @@
 }
 
 .branch-list {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -182,6 +183,17 @@
 .branch-item.active {
   background: var(--primary-soft);
   color: var(--text-primary);
+}
+
+.branch-item.active.active-bg-animating {
+  background: var(--surface-primary);
+}
+
+.branch-active-ghost {
+  position: absolute;
+  z-index: 2;
+  background: var(--primary-soft);
+  pointer-events: none;
 }
 
 .branch-item.active::after {
