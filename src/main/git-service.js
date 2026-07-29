@@ -144,6 +144,54 @@ class GitService {
     }
   }
 
+  async compareCommits(hashA, hashB) {
+    await this.assertCommitish(hashA);
+    await this.assertCommitish(hashB);
+    try {
+      const nameStatus = await this.git.raw([
+        'diff', '--name-status', '-z', `${hashA}..${hashB}`
+      ]);
+      const files = this.parseNameStatus(nameStatus);
+      const diff = await this.git.diff([`${hashA}..${hashB}`]);
+      return { base: hashA, compare: hashB, files, diff };
+    } catch (err) {
+      throw new Error(`Failed to compare commits: ${err.message}`);
+    }
+  }
+
+  parseNameStatus(raw) {
+    const parts = raw.split('\0').filter(Boolean);
+    const files = [];
+    let index = 0;
+    while (index < parts.length) {
+      const status = parts[index];
+      if (status.startsWith('R') || status.startsWith('C')) {
+        const oldPath = parts[index + 1] || '';
+        const newPath = parts[index + 2] || '';
+        files.push({ path: newPath, oldPath, status: status[0] });
+        index += 3;
+      } else {
+        files.push({ path: parts[index + 1] || '', oldPath: null, status: status[0] });
+        index += 2;
+      }
+    }
+    return files;
+  }
+
+  async getCommitFileDiff(hashA, hashB, filePath) {
+    await this.assertCommitish(hashA);
+    await this.assertCommitish(hashB);
+    const relativePath = this.validateRepositoryPath(filePath);
+    try {
+      const patch = await this.git.raw([
+        'diff', '--no-ext-diff', '--unified=3', `${hashA}..${hashB}`, '--', relativePath
+      ]);
+      return this.parseWorkingDiff(relativePath, false, patch);
+    } catch (err) {
+      throw new Error(`Failed to get commit file diff: ${err.message}`);
+    }
+  }
+
   async getCommitDetail(hash) {
     try {
       const log = await this.git.log({ maxCount: 1, '--date': 'iso', [hash]: null });
@@ -914,6 +962,26 @@ class GitService {
     } catch (err) {
       throw new Error(`Failed to delete branch: ${err.message}`);
     }
+  }
+
+  async deleteBranches(branches, force = false) {
+    await this.assertNoPendingOperation();
+    const current = (await this.git.branchLocal()).current;
+    const results = [];
+    for (const branch of branches) {
+      if (branch === current) {
+        results.push({ branch, success: false, error: 'Cannot delete the current branch' });
+        continue;
+      }
+      try {
+        await this.assertLocalBranch(branch);
+        await this.git.branch([force ? '-D' : '-d', branch]);
+        results.push({ branch, success: true });
+      } catch (err) {
+        results.push({ branch, success: false, error: err.message });
+      }
+    }
+    return { results };
   }
 
   async push(remote = 'origin', branch = null, setUpstream = false) {

@@ -96,7 +96,14 @@ const I18n = {
               aheadOfUpstream_one: '{{count}} commit ahead of {{upstream}}',
               aheadOfUpstream_other: '{{count}} commits ahead of {{upstream}}',
               behindUpstream_one: '{{count}} commit behind {{upstream}}',
-              behindUpstream_other: '{{count}} commits behind {{upstream}}'
+              behindUpstream_other: '{{count}} commits behind {{upstream}}',
+              batchDelete: 'Delete selected',
+              batchCompare: 'Compare selected',
+              batchDeleteConfirm: 'Delete {{count}} branches safely?',
+              batchForceDeleteConfirm: '{{count}} branch(es) are not fully merged. Force delete them?',
+              batchDeleteResult: '{{success}} deleted, {{failed}} failed',
+              batchDeleteAllSuccess: '{{count}} branches deleted',
+              batchSelected: '{{count}} selected'
             },
             workspace: {
               view: 'Workspace view',
@@ -335,7 +342,9 @@ const I18n = {
               forceDeleteAction: 'Force delete',
               prTitle: 'Create pull request',
               remoteLabel: 'Remote',
-              targetLabel: 'Target branch'
+              targetLabel: 'Target branch',
+              deleteMultiple: 'Delete {{count}} branches…',
+              compareMultiple: 'Compare {{count}} branches…'
             },
             mergeWorkspace: {
               localChangesTitle: 'Local changes are blocking this merge',
@@ -369,7 +378,21 @@ const I18n = {
               workingTree: 'Working tree',
               clean: 'Clean',
               dirty: 'Modified',
-              completed: 'Commit operation completed'
+              completed: 'Commit operation completed',
+              compareCommits: 'Compare selected commits',
+              compareRequiresTwo: 'Select exactly two commits to compare'
+            },
+            commitCompare: {
+              title: 'Commit comparison',
+              filesChanged: 'Files changed',
+              noDiff: 'No differences between these commits',
+              loading: 'Comparing commits…',
+              added: 'Added',
+              modified: 'Modified',
+              deleted: 'Deleted',
+              renamed: 'Renamed',
+              selectFile: 'Select a file to view its diff',
+              close: 'Close comparison'
             },
             conflicts: {
               operation: '{{operation}} in progress',
@@ -526,7 +549,14 @@ const I18n = {
               aheadOfUpstream_one: '{{count}} commit avanti rispetto a {{upstream}}',
               aheadOfUpstream_other: '{{count}} commit avanti rispetto a {{upstream}}',
               behindUpstream_one: '{{count}} commit indietro rispetto a {{upstream}}',
-              behindUpstream_other: '{{count}} commit indietro rispetto a {{upstream}}'
+              behindUpstream_other: '{{count}} commit indietro rispetto a {{upstream}}',
+              batchDelete: 'Elimina selezionati',
+              batchCompare: 'Confronta selezionati',
+              batchDeleteConfirm: 'Eliminare {{count}} branch in modalità sicura?',
+              batchForceDeleteConfirm: '{{count}} branch non sono completamente uniti. Forzare l’eliminazione?',
+              batchDeleteResult: '{{success}} eliminati, {{failed}} falliti',
+              batchDeleteAllSuccess: '{{count}} branch eliminati',
+              batchSelected: '{{count}} selezionati'
             },
             workspace: {
               view: 'Vista workspace',
@@ -765,7 +795,9 @@ const I18n = {
               forceDeleteAction: 'Forza eliminazione',
               prTitle: 'Crea pull request',
               remoteLabel: 'Remote',
-              targetLabel: 'Branch di destinazione'
+              targetLabel: 'Branch di destinazione',
+              deleteMultiple: 'Elimina {{count}} branch…',
+              compareMultiple: 'Confronta {{count}} branch…'
             },
             mergeWorkspace: {
               localChangesTitle: 'Le modifiche locali bloccano questo merge',
@@ -799,7 +831,21 @@ const I18n = {
               workingTree: 'Working tree',
               clean: 'Pulito',
               dirty: 'Modificato',
-              completed: 'Operazione sui commit completata'
+              completed: 'Operazione sui commit completata',
+              compareCommits: 'Confronta commit selezionati',
+              compareRequiresTwo: 'Seleziona esattamente due commit da confrontare'
+            },
+            commitCompare: {
+              title: 'Confronto commit',
+              filesChanged: 'File modificati',
+              noDiff: 'Nessuna differenza tra questi commit',
+              loading: 'Confronto commit in corso…',
+              added: 'Aggiunto',
+              modified: 'Modificato',
+              deleted: 'Eliminato',
+              renamed: 'Rinominato',
+              selectFile: 'Seleziona un file per vedere il diff',
+              close: 'Chiudi confronto'
             },
             conflicts: {
               operation: '{{operation}} in corso',

@@ -313,3 +313,35 @@
 .quick-branch-form.is-submitting [data-create] i {
   animation: project-loading-spin 0.8s linear infinite;
 }
+
+.branch-item.multi-selected {
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface-active));
+  box-shadow: inset 2px 0 0 var(--primary);
+}
+
+.branch-batch-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+}
+
+.branch-batch-count {
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  margin-right: auto;
+}
+
+.branch-batch-bar .btn {
+  font-size: 10.5px;
+  gap: var(--space-1);
+}
+
+.branch-batch-delete {
+  color: var(--color-danger);
+}

@@ -58,6 +58,13 @@ class CommitContextMenu {
     const cherryPick = this.previews['cherry-pick'];
     const actions = [
       {
+        action: 'compare-commits',
+        icon: 'ph-arrows-left-right',
+        label: t('commitMenu.compareCommits'),
+        disabled: this.hashes.length !== 2,
+        reason: this.hashes.length !== 2 ? t('commitMenu.compareRequiresTwo') : ''
+      },
+      {
         action: 'create-tag',
         icon: 'ph-tag',
         label: t('commitMenu.createTag'),
@@ -100,6 +107,12 @@ class CommitContextMenu {
 
   async execute(action) {
     const repo = this.app.state.repo;
+    if (action === 'compare-commits') {
+      if (!repo || this.hashes.length !== 2) return;
+      this.close();
+      this.app.components.commitCompare.open(this.hashes[0], this.hashes[1]);
+      return;
+    }
     if (action === 'create-tag') {
       if (!repo || this.hashes.length !== 1) return;
       this.close();

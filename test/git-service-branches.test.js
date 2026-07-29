@@ -214,3 +214,56 @@ test('tags can be lightweight or annotated and reject invalid or duplicate names
   await assert.rejects(service.createTag('v1.0.0', head), /already exists/);
   await assert.rejects(service.createTag('invalid tag name', head), /Invalid tag name/);
 });
+
+test('deleteBranches removes multiple branches and skips the current branch', async t => {
+  const repo = createRepository();
+  t.after(() => repo.cleanup());
+
+  repo.write('README.md', 'base\n');
+  repo.git('add', '.');
+  repo.git('commit', '-m', 'base');
+  repo.git('branch', 'feature-a');
+  repo.git('branch', 'feature-b');
+  repo.git('branch', 'feature-c');
+
+  const service = new GitService(repo.repository);
+  const result = await service.deleteBranches(['feature-a', 'feature-b', 'main', 'feature-c']);
+
+  assert.equal(result.results.length, 4);
+  assert.equal(result.results[0].success, true);
+  assert.equal(result.results[0].branch, 'feature-a');
+  assert.equal(result.results[1].success, true);
+  assert.equal(result.results[1].branch, 'feature-b');
+  assert.equal(result.results[2].success, false);
+  assert.match(result.results[2].error, /current branch/);
+  assert.equal(result.results[3].success, true);
+
+  const remaining = repo.git('branch', '--format=%(refname:short)');
+  assert.ok(remaining.includes('main'));
+  assert.ok(!remaining.includes('feature-a'));
+  assert.ok(!remaining.includes('feature-b'));
+  assert.ok(!remaining.includes('feature-c'));
+});
+
+test('deleteBranches reports failure for unmerged branches without force', async t => {
+  const repo = createRepository();
+  t.after(() => repo.cleanup());
+
+  repo.write('README.md', 'base\n');
+  repo.git('add', '.');
+  repo.git('commit', '-m', 'base');
+  repo.git('switch', '-c', 'unmerged');
+  repo.write('unmerged.txt', 'work\n');
+  repo.git('add', '.');
+  repo.git('commit', '-m', 'unmerged work');
+  repo.git('switch', 'main');
+
+  const service = new GitService(repo.repository);
+  const result = await service.deleteBranches(['unmerged'], false);
+
+  assert.equal(result.results[0].success, false);
+  assert.ok(result.results[0].error);
+
+  const forceResult = await service.deleteBranches(['unmerged'], true);
+  assert.equal(forceResult.results[0].success, true);
+});

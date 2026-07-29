@@ -63,6 +63,12 @@ contextBridge.exposeInMainWorld('gitTree', {
   compareBranches: (repoPath, baseBranch, compareBranch) =>
     ipcRenderer.invoke('git:branch-compare', repoPath, baseBranch, compareBranch),
 
+  compareCommits: (repoPath, hashA, hashB) =>
+    ipcRenderer.invoke('git:compare-commits', repoPath, hashA, hashB),
+
+  getCommitFileDiff: (repoPath, hashA, hashB, filePath) =>
+    ipcRenderer.invoke('git:commit-file-diff', repoPath, hashA, hashB, filePath),
+
   checkoutBranch: (repoPath, branch) =>
     ipcRenderer.invoke('git:checkout', repoPath, branch),
 
@@ -92,6 +98,9 @@ contextBridge.exposeInMainWorld('gitTree', {
 
   deleteBranch: (repoPath, branch, force) =>
     ipcRenderer.invoke('git:delete-branch', repoPath, branch, force),
+
+  batchDeleteBranches: (repoPath, branches, force) =>
+    ipcRenderer.invoke('git:batch-delete-branches', repoPath, branches, force),
 
   push: (repoPath, remote, branch, setUpstream = false) =>
     ipcRenderer.invoke('git:push', repoPath, remote, branch, setUpstream),

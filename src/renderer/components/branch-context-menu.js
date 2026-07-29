@@ -28,12 +28,13 @@ class BranchContextMenu {
     window.addEventListener('blur', () => this.close());
   }
 
-  open(event, branch, metadata, status, operationState) {
+  open(event, branch, metadata, status, operationState, selectedBranches = []) {
     event.preventDefault();
     this.branch = branch;
     this.metadata = metadata || { branches: [], remotes: [] };
     this.status = status || {};
     this.operationState = operationState || {};
+    this.selectedBranches = selectedBranches.length > 1 ? selectedBranches : [];
     this.render();
     this.element.classList.remove('is-hidden');
     this.place(event.clientX, event.clientY);
@@ -75,6 +76,28 @@ class BranchContextMenu {
       : mutationReason;
     const remotes = this.metadata.remotes || [];
     const remoteBranches = (this.metadata.branches || []).filter(item => item.kind === 'remote');
+
+    const isMulti = this.selectedBranches.length > 1;
+
+    if (isMulti) {
+      const localSelected = this.selectedBranches.filter(br => br.kind === 'local');
+      const actions = [
+        this.item('ph-trash', t('branchMenu.deleteMultiple', { count: localSelected.length }), 'batch-delete',
+          !localSelected.length || pending, mutationReason, true),
+        this.item('ph-arrows-left-right', t('branchMenu.compareMultiple', { count: this.selectedBranches.length }), 'batch-compare',
+          this.selectedBranches.length < 2, '')
+      ].filter(Boolean);
+
+      this.element.innerHTML = actions.map(action => this.renderItem(action)).join('');
+      this.element.querySelectorAll('[data-action]:not([aria-disabled="true"])').forEach(item => {
+        item.addEventListener('click', event => {
+          event.stopPropagation();
+          const action = item.dataset.action;
+          if (action) this.execute(action);
+        });
+      });
+      return;
+    }
 
     const actions = [
       this.item('ph-arrow-circle-right', t('branchMenu.checkout', { branch: b.name }), 'checkout',
@@ -167,6 +190,16 @@ class BranchContextMenu {
     const b = this.branch;
     if (!repo || !b) return;
     this.close();
+
+    if (action === 'batch-delete') {
+      this.app.components.branchList.batchDelete();
+      return;
+    }
+    if (action === 'batch-compare') {
+      this.app.components.branchList.batchCompare();
+      return;
+    }
+
     let result;
     try {
       if (action === 'checkout') {

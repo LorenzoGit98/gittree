@@ -322,6 +322,22 @@ function registerIpcHandlers() {
     }
   });
 
+  ipcMain.handle('git:compare-commits', async (_event, repoPath, hashA, hashB) => {
+    try {
+      return await getGitService(repoPath).compareCommits(hashA, hashB);
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:commit-file-diff', async (_event, repoPath, hashA, hashB, filePath) => {
+    try {
+      return await getGitService(repoPath).getCommitFileDiff(hashA, hashB, filePath);
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
   ipcMain.handle('git:checkout', async (_event, repoPath, branch) => {
     try {
       const git = getGitService(repoPath);
@@ -414,6 +430,17 @@ function registerIpcHandlers() {
     try {
       const git = getGitService(repoPath);
       return await git.deleteBranch(branch, force);
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:batch-delete-branches', async (_event, repoPath, branches, force) => {
+    try {
+      const git = getGitService(repoPath);
+      const result = await git.deleteBranches(branches, force);
+      sendToRenderer('operation:log', `Deleted ${result.results.filter(r => r.success).length} branch(es)`);
+      return result;
     } catch (err) {
       return { error: err.message };
     }

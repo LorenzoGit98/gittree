@@ -8,6 +8,8 @@ class BranchListView {
     this.collapsedGroups = this.restoreSet('gittree.sidebar.branchGroups');
     this.selectedBranchKey = null;
     this.selectedBranchElement = null;
+    this.selectedBranchKeys = new Set();
+    this.selectionAnchorKey = null;
     this.metadata = null;
     this.status = null;
     this.operationState = null;
@@ -21,7 +23,7 @@ class BranchListView {
     }
     this.container.addEventListener('click', event => {
       const row = event.target.closest('.branch-item');
-      if (row && this.container.contains(row)) this.selectBranchRow(row);
+      if (row && this.container.contains(row)) this.selectBranchRow(row, event);
     });
     this.container.addEventListener('dblclick', event => {
       const row = event.target.closest('.branch-item');
@@ -37,13 +39,15 @@ class BranchListView {
     this.container.addEventListener('contextmenu', event => {
       const row = event.target.closest('.branch-item');
       if (!row || !this.container.contains(row)) return;
-      this.selectBranchRow(row);
+      const key = row.dataset.selectionKey;
+      if (!this.selectedBranchKeys.has(key)) this.selectBranchRow(row, event);
       const branch = this.metadata?.branches?.find(item => (
         item.kind === row.dataset.branchKind && item.name === row.dataset.branchName
       ));
       if (!branch) return;
+      const selectedBranches = this.getSelectedBranches();
       this.app.components.branchContextMenu.open(
-        event, branch, this.metadata, this.status, this.operationState
+        event, branch, this.metadata, this.status, this.operationState, selectedBranches
       );
     });
   }
@@ -73,6 +77,8 @@ class BranchListView {
       this.filter = '';
       this.selectedBranchKey = null;
       this.selectedBranchElement = null;
+      this.selectedBranchKeys.clear();
+      this.selectionAnchorKey = null;
       this.render();
     } catch { this.container.innerHTML = ''; }
     finally { this.setLoading(false); }
@@ -217,8 +223,9 @@ class BranchListView {
     if (!isRemote && branch.name === current) el.classList.add('active');
     const selectionKey = `${isRemote ? 'remote' : 'local'}:${branch.name}`;
     el.dataset.selectionKey = selectionKey;
-    if (selectionKey === this.selectedBranchKey) {
+    if (this.selectedBranchKeys.has(selectionKey)) {
       el.classList.add('selected');
+      if (this.selectedBranchKeys.size > 1) el.classList.add('multi-selected');
       this.selectedBranchElement = el;
     }
 
@@ -275,13 +282,159 @@ class BranchListView {
     return badge;
   }
 
-  selectBranchRow(row) {
-    if (this.selectedBranchElement && this.selectedBranchElement !== row) {
-      this.selectedBranchElement.classList.remove('selected');
+  selectBranchRow(row, event = null) {
+    const key = row.dataset.selectionKey;
+    const toggle = event && this.app.isPrimaryModifier(event);
+    const shift = event && event.shiftKey;
+
+    if (shift && this.selectionAnchorKey) {
+      const allRows = [...this.container.querySelectorAll('.branch-item')];
+      const keys = allRows.map(r => r.dataset.selectionKey);
+      const startIdx = keys.indexOf(this.selectionAnchorKey);
+      const endIdx = keys.indexOf(key);
+      if (startIdx !== -1 && endIdx !== -1) {
+        if (!toggle) this.selectedBranchKeys.clear();
+        const [from, to] = startIdx < endIdx ? [startIdx, endIdx] : [endIdx, startIdx];
+        for (let i = from; i <= to; i += 1) this.selectedBranchKeys.add(keys[i]);
+      }
+    } else if (toggle) {
+      if (this.selectedBranchKeys.has(key)) this.selectedBranchKeys.delete(key);
+      else this.selectedBranchKeys.add(key);
+      this.selectionAnchorKey = key;
+    } else {
+      this.selectedBranchKeys.clear();
+      this.selectedBranchKeys.add(key);
+      this.selectionAnchorKey = key;
     }
-    this.selectedBranchKey = row.dataset.selectionKey;
-    this.selectedBranchElement = row;
-    row.classList.add('selected');
+
+    this.selectedBranchKey = key;
+    this.updateVisibleSelection();
+    this.updateBatchBar();
+  }
+
+  updateVisibleSelection() {
+    this.container.querySelectorAll('.branch-item').forEach(row => {
+      const isSelected = this.selectedBranchKeys.has(row.dataset.selectionKey);
+      row.classList.toggle('selected', isSelected);
+      row.classList.toggle('multi-selected', isSelected && this.selectedBranchKeys.size > 1);
+    });
+    this.selectedBranchElement = this.container.querySelector(
+      `.branch-item[data-selection-key="${CSS.escape(this.selectedBranchKey || '')}"]`
+    );
+  }
+
+  updateBatchBar() {
+    let bar = this.container.parentElement.querySelector('.branch-batch-bar');
+    if (this.selectedBranchKeys.size > 1) {
+      if (!bar) {
+        bar = document.createElement('div');
+        bar.className = 'branch-batch-bar';
+        this.container.parentElement.appendChild(bar);
+      }
+      const count = this.selectedBranchKeys.size;
+      bar.innerHTML = `
+        <span class="branch-batch-count">${this.esc(t('sidebar.batchSelected', { count }))}</span>
+        <button class="btn btn-small branch-batch-delete" data-batch-delete>
+          <i class="ph ph-trash"></i>${this.esc(t('sidebar.batchDelete'))}
+        </button>
+        <button class="btn btn-small branch-batch-compare" data-batch-compare>
+          <i class="ph ph-arrows-left-right"></i>${this.esc(t('sidebar.batchCompare'))}
+        </button>
+      `;
+      bar.querySelector('[data-batch-delete]').onclick = () => this.batchDelete();
+      bar.querySelector('[data-batch-compare]').onclick = () => this.batchCompare();
+    } else if (bar) {
+      bar.remove();
+    }
+  }
+
+  getSelectedBranches() {
+    const branches = [];
+    for (const key of this.selectedBranchKeys) {
+      const [kind, ...nameParts] = key.split(':');
+      const name = nameParts.join(':');
+      const branch = (this.metadata?.branches || []).find(
+        b => b.kind === kind && b.name === name
+      );
+      if (branch) branches.push(branch);
+    }
+    return branches;
+  }
+
+  async batchDelete() {
+    const repo = this.app.state.repo;
+    if (!repo) return;
+    const branches = this.getSelectedBranches().filter(b => b.kind === 'local');
+    if (!branches.length) return;
+
+    const confirmed = await this.confirmDialog(
+      t('sidebar.batchDelete'),
+      t('sidebar.batchDeleteConfirm', { count: branches.length }),
+      t('branchMenu.deleteAction')
+    );
+    if (!confirmed) return;
+
+    let result = await window.gitTree.batchDeleteBranches(
+      repo.path, branches.map(b => b.name), false
+    );
+    if (result?.error) { this.app.showToast(result.error, 'error'); return; }
+
+    const failed = (result.results || []).filter(r => !r.success);
+    const succeeded = (result.results || []).filter(r => r.success);
+
+    if (failed.length) {
+      const forceConfirmed = await this.confirmDialog(
+        t('branchMenu.forceDeleteTitle'),
+        t('sidebar.batchForceDeleteConfirm', { count: failed.length }),
+        t('branchMenu.forceDeleteAction'),
+        true
+      );
+      if (forceConfirmed) {
+        const forceResult = await window.gitTree.batchDeleteBranches(
+          repo.path, failed.map(r => r.branch), true
+        );
+        if (!forceResult?.error) {
+          succeeded.push(...(forceResult.results || []).filter(r => r.success));
+        }
+      }
+    }
+
+    if (succeeded.length) {
+      this.app.showToast(t('sidebar.batchDeleteAllSuccess', { count: succeeded.length }), 'success');
+    }
+    this.selectedBranchKeys.clear();
+    this.selectionAnchorKey = null;
+    this.updateBatchBar();
+    this.app.emit('refresh');
+  }
+
+  async batchCompare() {
+    const branches = this.getSelectedBranches();
+    if (branches.length === 2) {
+      this.app.components.compare.compare(branches[0].name, branches[1].name);
+    } else if (branches.length > 2) {
+      this.app.components.compare.compareMatrix(branches.slice(0, 8));
+    }
+  }
+
+  confirmDialog(title, message, actionLabel, danger = false) {
+    const overlay = document.getElementById('modal-overlay');
+    const dialog = document.getElementById('modal-dialog');
+    return new Promise(resolve => {
+      dialog.innerHTML = `<h3>${this.esc(title)}</h3><p>${this.esc(message)}</p>
+        <div class="confirm-actions">
+          <button class="btn" data-cancel>${this.esc(t('common.cancel'))}</button>
+          <button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" data-confirm>${this.esc(actionLabel)}</button>
+        </div>`;
+      overlay.classList.remove('is-hidden');
+      const finish = value => {
+        overlay.classList.add('is-hidden');
+        dialog.innerHTML = '';
+        resolve(value);
+      };
+      dialog.querySelector('[data-cancel]').onclick = () => finish(false);
+      dialog.querySelector('[data-confirm]').onclick = () => finish(true);
+    });
   }
 
   activateBranchRow(row) {

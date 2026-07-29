@@ -31,6 +31,7 @@ class GitTreeApp {
     this.components.diffViewer = new DiffViewer(document.getElementById('detail-body'), this);
     this.components.search = new GlobalSearch(this);
     this.components.compare = new BranchCompare(this);
+    this.components.commitCompare = new CommitCompare(this);
     this.components.merge = new MergeWorkspace(this);
     this.components.conflict = new ConflictResolver(this);
     this.components.statusBar = new StatusBar();
