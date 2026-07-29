@@ -41,7 +41,8 @@ async function getHostingRepository(repoPath, provider) {
     item.provider?.provider === provider &&
     (
       (provider === 'github' && item.provider.host === 'github.com') ||
-      (provider === 'gitlab' && item.provider.host === 'gitlab.com')
+      (provider === 'gitlab' && item.provider.host === 'gitlab.com') ||
+      (provider === 'azure' && item.provider.host === 'dev.azure.com')
     )
   ));
   if (!remote?.provider) {
@@ -803,6 +804,14 @@ function registerIpcHandlers() {
   ipcMain.handle('auth:provider-logout', async (_event, provider) => {
     try {
       return await hostingService.logout(provider);
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('auth:set-pat', async (_event, provider, token) => {
+    try {
+      return await hostingService.setPat(provider, token);
     } catch (err) {
       return { error: err.message };
     }

@@ -14,7 +14,7 @@ class HostingService {
   }
 
   validateProvider(provider) {
-    if (!['github', 'gitlab'].includes(provider)) {
+    if (!['github', 'gitlab', 'azure'].includes(provider)) {
       throw new Error(`Unsupported hosting provider: ${provider}`);
     }
     return provider;
@@ -22,7 +22,9 @@ class HostingService {
 
   validateRepository(repository) {
     const provider = this.validateProvider(repository?.provider);
-    const expectedHost = provider === 'github' ? 'github.com' : 'gitlab.com';
+    const expectedHost = provider === 'github' ? 'github.com'
+      : provider === 'gitlab' ? 'gitlab.com'
+      : 'dev.azure.com';
     if (repository.host !== expectedHost) {
       throw new Error(`${provider} review is available only for ${expectedHost}`);
     }
@@ -63,7 +65,7 @@ class HostingService {
     const security = this.vault.getSecurityState();
     return {
       provider,
-      configured: Boolean(this.oauthConfig[provider]),
+      configured: provider === 'azure' ? true : Boolean(this.oauthConfig[provider]),
       connected: Boolean(account?.accessToken),
       user: account?.user || null,
       phase: this.loginSessions.has(provider) ? 'authorizing' : 'idle',
@@ -71,8 +73,32 @@ class HostingService {
     };
   }
 
+  async setPat(provider, token) {
+    this.validateProvider(provider);
+    if (!token || typeof token !== 'string' || token.length < 20 || token.length > 200) {
+      throw new Error('Invalid Personal Access Token');
+    }
+    const user = await this.fetchCurrentUser(provider, token);
+    const account = {
+      accessToken: token,
+      refreshToken: '',
+      expiresAt: null,
+      user
+    };
+    await this.vault.setAccount(provider, account);
+    this.onAuthState({
+      provider,
+      phase: 'connected',
+      status: await this.providerStatus(provider)
+    });
+    return { success: true, provider, user, phase: 'connected' };
+  }
+
   async login(provider) {
     this.validateProvider(provider);
+    if (provider === 'azure') {
+      throw new Error('Azure DevOps uses a Personal Access Token. Use setPat to configure it.');
+    }
     const clientId = this.oauthConfig[provider];
     if (!clientId) throw new Error(`${provider} OAuth is not configured in this build`);
     await this.cancelLogin(provider);
@@ -209,19 +235,35 @@ class HostingService {
   }
 
   async fetchCurrentUser(provider, token) {
-    const response = await this.fetch(
-      provider === 'github'
+    let url;
+    if (provider === 'azure') {
+      url = 'https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version=7.1';
+    } else {
+      url = provider === 'github'
         ? 'https://api.github.com/user'
-        : 'https://gitlab.com/api/v4/user',
-      {
-        headers: {
+        : 'https://gitlab.com/api/v4/user';
+    }
+    const headers = provider === 'azure'
+      ? {
+          Accept: 'application/json',
+          Authorization: `Basic ${Buffer.from(`:${token}`).toString('base64')}`,
+          'User-Agent': 'GitTree'
+        }
+      : {
           Accept: 'application/json',
           Authorization: `Bearer ${token}`,
           'User-Agent': 'GitTree'
-        }
-      }
-    );
+        };
+    const response = await this.fetch(url, { headers });
     const user = await this.readResponse(response);
+    if (provider === 'azure') {
+      return {
+        id: user.id,
+        login: user.emailAddress || user.displayName || '',
+        name: user.displayName || '',
+        avatarUrl: user.avatarUrl || ''
+      };
+    }
     return provider === 'github'
       ? { id: user.id, login: user.login, name: user.name, avatarUrl: user.avatar_url }
       : {
@@ -253,14 +295,22 @@ class HostingService {
     const repo = this.validateRepository(repository);
     const account = await this.getAccessAccount(repo.provider);
     if (!account?.accessToken) throw new Error(`Connect ${repo.provider} first`);
-    const url = repo.provider === 'github'
-      ? `https://api.github.com${endpoint}`
-      : `https://gitlab.com/api/v4${endpoint}`;
+    let url;
+    if (repo.provider === 'azure') {
+      url = `https://dev.azure.com/${encodeURIComponent(repo.organization)}/${encodeURIComponent(repo.project)}/_apis/git/repositories/${encodeURIComponent(repo.repository)}${endpoint}`;
+    } else {
+      url = repo.provider === 'github'
+        ? `https://api.github.com${endpoint}`
+        : `https://gitlab.com/api/v4${endpoint}`;
+    }
+    const authHeader = repo.provider === 'azure'
+      ? `Basic ${Buffer.from(`:${account.accessToken}`).toString('base64')}`
+      : `Bearer ${account.accessToken}`;
     const response = await this.fetch(url, {
       method: options.method || 'GET',
       headers: {
         Accept: 'application/json',
-        Authorization: `Bearer ${account.accessToken}`,
+        Authorization: authHeader,
         'User-Agent': 'GitTree',
         ...(options.body ? { 'Content-Type': 'application/json' } : {})
       },
@@ -274,6 +324,7 @@ class HostingService {
     const account = await this.vault.getAccount(provider);
     if (!account?.accessToken) return account;
     if (
+      provider === 'azure' ||
       !account.refreshToken ||
       !account.expiresAt ||
       account.expiresAt > Date.now() + 60000
@@ -341,6 +392,31 @@ class HostingService {
       };
     }
 
+    if (repo.provider === 'azure') {
+      const skip = (page - 1) * 50;
+      const status = filter === 'all' ? 'all' : 'active';
+      result = await this.api(
+        repo,
+        `/pullrequests?searchCriteria.status=${status}&$top=50&$skip=${skip}`
+      );
+      let items = result.data.value.map(item => this.normalizeAzureSummary(item, account.user));
+      if (filter === 'authored') {
+        items = items.filter(item => item.author.login === account.user?.login);
+      }
+      if (search) {
+        items = items.filter(item => (
+          item.title.toLowerCase().includes(search)
+          || item.source.toLowerCase().includes(search)
+          || String(item.number) === search
+        ));
+      }
+      return {
+        items,
+        page,
+        hasMore: result.data.value.length >= 50
+      };
+    }
+
     const project = encodeURIComponent(`${repo.ownerPath}/${repo.repository}`);
     const query = new URLSearchParams({
       state: filter === 'all' ? 'all' : 'opened',
@@ -404,6 +480,29 @@ class HostingService {
         reviewer => reviewer.username === user?.login
       ) ? 'requested' : 'none',
       ciStatus: item.head_pipeline?.status || 'unknown'
+    };
+  }
+
+  normalizeAzureSummary(item, user) {
+    return {
+      provider: 'azure',
+      id: item.pullRequestId,
+      number: item.pullRequestId,
+      title: item.title,
+      author: {
+        login: item.createdBy?.uniqueName || item.createdBy?.displayName || '',
+        avatarUrl: item.createdBy?._links?.avatar?.href || ''
+      },
+      source: (item.sourceRefName || '').replace('refs/heads/', ''),
+      target: (item.targetRefName || '').replace('refs/heads/', ''),
+      headSha: item.lastMergeSourceCommit?.commitId || '',
+      state: item.status === 'active' || item.status === 'open' ? 'open' : item.status === 'completed' ? 'closed' : item.status,
+      draft: Boolean(item.isDraft),
+      reviewStatus: (item.reviewers || []).some(
+        reviewer => reviewer.vote === 0 && reviewer.uniqueName === user?.login
+      ) ? 'requested' : 'none',
+      ciStatus: item.mergeStatus === 'succeeded' ? 'success' : item.mergeStatus === 'conflicts' ? 'failure' : 'unknown',
+      reviewers: item.reviewers || []
     };
   }
 
@@ -507,6 +606,47 @@ class HostingService {
       };
     }
 
+    if (repo.provider === 'azure') {
+      const result = await this.api(repo, `/pullrequests/${pullRequestId}`);
+      const pr = result.data;
+      const threadsResult = await this.api(repo, `/pullrequests/${pullRequestId}/threads`);
+      const account = await this.vault.getAccount('azure');
+      const summary = this.normalizeAzureSummary(pr, account?.user);
+      return {
+        summary,
+        permissions: {
+          review: true,
+          resolveThreads: true,
+          checkout: true
+        },
+        reviewers: (pr.reviewers || []).map(reviewer => ({
+          login: reviewer.uniqueName || reviewer.displayName || '',
+          state: reviewer.vote === 10 ? 'APPROVED' : reviewer.vote === -10 ? 'CHANGES_REQUESTED' : reviewer.vote === 5 ? 'APPROVED' : reviewer.vote === 0 ? 'requested' : 'none',
+          vote: reviewer.vote
+        })),
+        checks: [],
+        files: [],
+        threads: (threadsResult.data.value || []).map(thread => ({
+          id: String(thread.id),
+          resolved: thread.status === 'closed' || thread.status === 'fixed',
+          path: thread.threadContext?.filePath || '',
+          line: thread.threadContext?.rightFileEnd?.line || null,
+          side: 'RIGHT',
+          author: thread.comments?.[0]?.author?.uniqueName || '',
+          body: thread.comments?.[0]?.content || '',
+          createdAt: thread.comments?.[0]?.publishedDate,
+          notes: (thread.comments || []).map(comment => ({
+            id: comment.id,
+            author: comment.author?.uniqueName || '',
+            body: comment.content || '',
+            createdAt: comment.publishedDate
+          }))
+        })),
+        headSha: pr.lastMergeSourceCommit?.commitId || '',
+        mergeability: pr.mergeStatus || 'unknown'
+      };
+    }
+
     const project = encodeURIComponent(`${repo.ownerPath}/${repo.repository}`);
     const prefix = `/projects/${project}/merge_requests/${pullRequestId}`;
     const [mergeRequest, approvals, pipelines, changes, discussions] = await Promise.all([
@@ -591,6 +731,10 @@ class HostingService {
     };
   }
 
+  normalizeAzureFile(commit) {
+    return null;
+  }
+
   async pullRequestDiff(repository, id, page = 1) {
     const repo = this.validateRepository(repository);
     const pullRequestId = this.validatePullRequestId(id);
@@ -606,6 +750,11 @@ class HostingService {
         hasMore: /rel="next"/.test(result.headers.get('link') || '')
       };
     }
+
+    if (repo.provider === 'azure') {
+      return { files: [], page: 1, hasMore: false };
+    }
+
     const project = encodeURIComponent(`${repo.ownerPath}/${repo.repository}`);
     const result = await this.api(
       repo,
@@ -656,6 +805,14 @@ class HostingService {
       );
       const updated = result.data?.[mutation]?.thread;
       return { success: true, resolved: Boolean(updated?.isResolved) };
+    }
+    if (repo.provider === 'azure') {
+      await this.api(
+        repo,
+        `/pullrequests/${pullRequestId}/threads/${threadId}`,
+        { method: 'PATCH', body: { status: resolved ? 'closed' : 'active' } }
+      );
+      return { success: true, resolved: Boolean(resolved) };
     }
     const noteId = Number(thread?.noteId);
     if (!Number.isSafeInteger(noteId) || noteId <= 0) {
@@ -790,6 +947,9 @@ class HostingService {
       await this.vault.removeReviewDraft(this.draftKey(repo, pullRequestId));
       return { success: true, review: { id: result.data.id, state: result.data.state } };
     }
+    if (repo.provider === 'azure') {
+      return this.submitAzureReview(repo, pullRequestId, safeDraft);
+    }
     if (safeDraft.event === 'REQUEST_CHANGES') {
       throw new Error('GitLab does not support Request changes in GitTree');
     }
@@ -848,6 +1008,57 @@ class HostingService {
         method: 'POST',
         body: { sha: draft.headSha }
       });
+      await persist('approve');
+    }
+    await this.vault.removeReviewDraft(this.draftKey(repo, id));
+    return { success: true };
+  }
+
+  async submitAzureReview(repo, id, draft) {
+    const completed = new Set(draft.completedOperations);
+    const persist = async operation => {
+      completed.add(operation);
+      await this.vault.saveReviewDraft(this.draftKey(repo, id), {
+        ...draft,
+        completedOperations: [...completed]
+      });
+    };
+    for (let index = 0; index < draft.inlineComments.length; index += 1) {
+      const operation = `inline:${index}`;
+      if (completed.has(operation)) continue;
+      const comment = draft.inlineComments[index];
+      await this.api(repo, `/pullrequests/${id}/threads`, {
+        method: 'POST',
+        body: {
+          comments: [{ parentCommentId: 0, content: comment.body, commentType: 'text' }],
+          status: 'active',
+          threadContext: { filePath: comment.path, rightFileEnd: { line: comment.line, offset: 1 } }
+        }
+      });
+      await persist(operation);
+    }
+    if (draft.body && !completed.has('summary')) {
+      await this.api(repo, `/pullrequests/${id}/threads`, {
+        method: 'POST',
+        body: {
+          comments: [{ parentCommentId: 0, content: draft.body, commentType: 'text' }],
+          status: 'active'
+        }
+      });
+      await persist('summary');
+    }
+    if (draft.event === 'APPROVE' && !completed.has('approve')) {
+      const reviewersResult = await this.api(repo, `/pullrequests/${id}/reviewers`);
+      const account = await this.vault.getAccount('azure');
+      const reviewer = (reviewersResult.data.value || []).find(
+        r => r.uniqueName === account.user?.login
+      );
+      if (reviewer) {
+        await this.api(repo, `/pullrequests/${id}/reviewers/${reviewer.id}`, {
+          method: 'PUT',
+          body: { vote: 10 }
+        });
+      }
       await persist('approve');
     }
     await this.vault.removeReviewDraft(this.draftKey(repo, id));

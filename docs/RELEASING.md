@@ -52,16 +52,26 @@ npm run dist:linux
 
 Gli artefatti vengono scritti in `dist/` e non vengono pubblicati.
 
-## Release automatica
+## Release automatica con semantic-release
 
-La release ufficiale parte da un tag Git:
+La release ufficiale viene generata automaticamente a ogni push su `master` tramite
+[semantic-release](https://semantic-release.gitbook.io/). Il sistema analizza i
+commit Conventional Commits dall'ultimo tag e determina automaticamente:
 
-```powershell
-npm version patch
-git push origin master --follow-tags
-```
+- **patch** (`fix:` o `perf:`)
+- **minor** (`feat:`)
+- **major** (`BREAKING CHANGE:` o `feat!:`)
 
-Sostituire `patch` con `minor` o `major` quando appropriato. Il workflow `.github/workflows/release.yml`:
+Se non ci sono commit `feat/fix/breaking change` non viene creata alcuna release.
+
+Il workflow `.github/workflows/versioning.yml` esegue semantic-release che:
+1. analizza i commit;
+2. determina la versione successiva;
+3. aggiorna `package.json` e `package-lock.json`;
+4. crea un commit `chore(release): vX.Y.Z` con `[skip ci]`;
+5. pusha il tag `vX.Y.Z`.
+
+Il push del tag attiva `.github/workflows/release.yml` che:
 
 1. verifica che il tag `vX.Y.Z` coincida con `package.json`;
 2. verifica la presenza dei client ID OAuth pubblici;

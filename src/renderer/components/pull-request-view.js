@@ -80,7 +80,7 @@ class PullRequestView {
       (metadata?.remotes || [])
         .map(remote => remote.provider)
         .filter(remote => (
-          remote?.host === 'github.com' || remote?.host === 'gitlab.com'
+          remote?.host === 'github.com' || remote?.host === 'gitlab.com' || remote?.host === 'dev.azure.com'
         ))
         .map(remote => remote.provider)
     );
@@ -103,7 +103,7 @@ class PullRequestView {
   }
 
   async setProvider(provider) {
-    if (!['github', 'gitlab'].includes(provider)) return;
+    if (!['github', 'gitlab', 'azure'].includes(provider)) return;
     this.provider = provider;
     localStorage.setItem('gittree.pr.provider', provider);
     this.syncProviderControls();
@@ -157,6 +157,18 @@ class PullRequestView {
       )) return;
       const result = await window.gitTree.logoutProvider(this.provider);
       if (result?.error) this.app.showToast(result.error, 'error');
+      await this.refreshStatus();
+      await this.reload();
+      return;
+    }
+    if (this.provider === 'azure') {
+      const token = await this.promptPat();
+      if (!token) return;
+      const result = await window.gitTree.setPat(this.provider, token);
+      if (result?.error) {
+        this.showNotice(result.error, 'warning');
+        return;
+      }
       await this.refreshStatus();
       await this.reload();
       return;
@@ -785,6 +797,12 @@ class PullRequestView {
     this.elements.notice.className = 'pr-notice is-hidden';
     this.elements.notice.textContent = '';
   }
+
+  async promptPat() {
+    const value = prompt(t('pullRequests.azurePatPrompt') || 'Enter your Azure DevOps Personal Access Token:');
+    return value?.trim() || null;
+  }
+}
 
   esc(value) {
     const element = document.createElement('div');
