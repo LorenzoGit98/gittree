@@ -313,12 +313,45 @@ class PullRequestView {
     copy.append(title, meta);
     const badges = document.createElement('span');
     badges.className = 'pr-row-badges';
-    if (item.draft) badges.appendChild(this.badge(t('pullRequests.draft'), 'badge'));
+    badges.appendChild(this.statusBadge(item));
     if (item.reviewStatus === 'requested') {
       badges.appendChild(this.badge(t('pullRequests.reviewRequested'), 'badge badge-head'));
     }
     row.append(avatar, copy, badges);
     return row;
+  }
+
+  statusKey(item) {
+    const state = String(item?.state || '').toLowerCase();
+    const mergeability = String(item?.mergeability || item?.ciStatus || '').toLowerCase();
+    if (item?.draft) return 'draft';
+    if (mergeability.includes('conflict')) return 'conflict';
+    if (state === 'merged' || state === 'completed') return 'merged';
+    if (state === 'closed' || state === 'abandoned') {
+      return state === 'abandoned' ? 'abandoned' : 'closed';
+    }
+    return 'open';
+  }
+
+  statusLabel(key) {
+    if (key === 'draft') return t('pullRequests.draft');
+    if (key === 'merged') return t('pullRequests.statusMerged');
+    if (key === 'closed') return t('pullRequests.statusClosed');
+    if (key === 'abandoned') return t('pullRequests.statusAbandoned');
+    if (key === 'conflict') return t('pullRequests.statusConflict');
+    return t('pullRequests.statusOpen');
+  }
+
+  statusBadge(item, mergeability) {
+    const provider = item?.provider || this.provider || 'github';
+    const key = mergeability?.toLowerCase?.().includes('conflict')
+      ? 'conflict'
+      : this.statusKey({ ...item, mergeability: mergeability || item?.mergeability });
+    const tone = key === 'abandoned' ? 'closed' : key;
+    return this.badge(
+      this.statusLabel(key),
+      `pr-status is-${provider} is-${tone}`
+    );
   }
 
   badge(text, className) {
@@ -382,6 +415,7 @@ class PullRequestView {
     const facts = document.createElement('div');
     facts.className = 'pr-detail-facts';
     facts.append(
+      this.statusBadge(this.detail.summary || this.selected, this.detail.mergeability),
       this.badge(t('pullRequests.branchRoute', {
         source: this.detail.summary?.source || '',
         target: this.detail.summary?.target || ''

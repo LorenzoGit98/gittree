@@ -41,6 +41,7 @@ class GitTreeApp {
     await this.setupUpdates();
     this.components.search.init();
     this.components.welcome.init(this);
+    this.setupClearableSearches();
     this.setupResize();
     this.setupWorkspaceState();
     this.applyToolbarVisibility();
@@ -615,6 +616,31 @@ class GitTreeApp {
     this.components.statusBar.clear();
   }
 
+  setupClearableSearches(root = document) {
+    root.querySelectorAll('.search-clearable').forEach(wrapper => {
+      if (wrapper.dataset.clearBound === '1') return;
+      const input = wrapper.querySelector('input');
+      const button = wrapper.querySelector('.search-clear-btn');
+      if (!input || !button) return;
+      wrapper.dataset.clearBound = '1';
+      const sync = () => {
+        button.classList.toggle('is-hidden', !input.value);
+        button.setAttribute('aria-label', t('common.clearSearch'));
+      };
+      input.addEventListener('input', sync);
+      input.addEventListener('change', sync);
+      button.addEventListener('click', event => {
+        event.preventDefault();
+        if (!input.value) return;
+        input.value = '';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.focus();
+        sync();
+      });
+      sync();
+    });
+  }
+
   setupResize() {
     const workspace = document.getElementById('workspace-body');
     const leftHandle = document.getElementById('resize-handle-left');
@@ -646,22 +672,21 @@ class GitTreeApp {
           return Math.min(max, Math.max(min, startWidth + (side === 'left' ? delta : -delta)));
         };
 
-        const paintPreview = () => {
+        // ponytail: realtime CSS vars + rAF; pointer-events off during drag keeps layout cheap
+        const paintWidth = () => {
           animationFrame = 0;
           pendingWidth = calculateWidth(latestX);
-          const offset = side === 'left'
-            ? pendingWidth - startWidth
-            : startWidth - pendingWidth;
-          handle.style.transform = `translate3d(${offset}px, 0, 0)`;
+          workspace.style.setProperty(`--${side}-panel`, `${Math.round(pendingWidth)}px`);
         };
 
         handle.classList.add('is-dragging');
         workspace.classList.add('is-resizing');
         document.body.style.cursor = 'col-resize';
+        handle.setPointerCapture?.(event.pointerId);
 
         const onMove = moveEvent => {
           latestX = moveEvent.clientX;
-          if (!animationFrame) animationFrame = requestAnimationFrame(paintPreview);
+          if (!animationFrame) animationFrame = requestAnimationFrame(paintWidth);
         };
 
         const onUp = upEvent => {
@@ -671,16 +696,17 @@ class GitTreeApp {
           const width = Math.round(pendingWidth);
           workspace.style.setProperty(`--${side}-panel`, `${width}px`);
           localStorage.setItem(`gittree.panel.${side}`, String(width));
-          handle.style.removeProperty('transform');
           handle.classList.remove('is-dragging');
           workspace.classList.remove('is-resizing');
           document.body.style.cursor = '';
           document.removeEventListener('pointermove', onMove);
           document.removeEventListener('pointerup', onUp);
+          document.removeEventListener('pointercancel', onUp);
         };
 
         document.addEventListener('pointermove', onMove);
         document.addEventListener('pointerup', onUp);
+        document.addEventListener('pointercancel', onUp);
       });
     };
 

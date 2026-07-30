@@ -175,9 +175,12 @@
 
         <div class="sidebar-branches-area" id="sidebar-branches-area">
           <div class="sidebar-branches-inner">
-            <div class="branch-search-wrapper">
+            <div class="branch-search-wrapper search-clearable">
               <i class="ph ph-magnifying-glass"></i>
               <input type="text" id="branch-search" class="branch-search-input" placeholder="Filter branches" data-i18n-placeholder="sidebar.filter">
+              <button type="button" class="search-clear-btn is-hidden" data-i18n-aria-label="common.clearSearch" aria-label="Clear search">
+                <i class="ph ph-x" aria-hidden="true"></i>
+              </button>
             </div>
 
             <div class="sidebar-scroll" id="sidebar-scroll">
@@ -193,9 +196,12 @@
               <span data-i18n="sidebar.stashes">Stashes</span>
             </button>
             <div class="sidebar-section-body collapsed" id="stash-section-body">
-              <div class="branch-search-wrapper stash-search-wrapper">
+              <div class="branch-search-wrapper stash-search-wrapper search-clearable">
                 <i class="ph ph-magnifying-glass"></i>
                 <input type="text" id="stash-search" class="branch-search-input" placeholder="Filter stashes" data-i18n-placeholder="sidebar.filterStashes">
+                <button type="button" class="search-clear-btn is-hidden" data-i18n-aria-label="common.clearSearch" aria-label="Clear search">
+                  <i class="ph ph-x" aria-hidden="true"></i>
+                </button>
               </div>
               <div id="stash-list" class="branch-list"></div>
             </div>
@@ -248,11 +254,14 @@
           <div id="main-view" class="graph-panel">
             <div class="history-controls" aria-label="History filters and sorting"
               data-i18n-aria-label="history.filtersLabel">
-              <label class="history-filter-search">
+              <label class="history-filter-search search-clearable">
                 <i class="ph ph-funnel" aria-hidden="true"></i>
                 <input id="history-filter-query" type="search" autocomplete="off"
                   data-i18n-placeholder="history.filterPlaceholder"
                   placeholder="Filter message, hash or author">
+                <button type="button" class="search-clear-btn is-hidden" data-i18n-aria-label="common.clearSearch" aria-label="Clear search">
+                  <i class="ph ph-x" aria-hidden="true"></i>
+                </button>
               </label>
               <select id="history-filter-author" class="history-filter-select" aria-label="Author"
                 data-i18n-aria-label="history.author">
@@ -387,7 +396,12 @@
                 <button id="btn-pr-create" class="btn btn-primary" type="button" disabled>
                   <i class="ph ph-plus"></i><span data-i18n="pullRequests.create">New pull request</span>
                 </button>
-                <input id="pr-search" class="pr-search" type="search" data-i18n-placeholder="pullRequests.search" placeholder="Search pull requests">
+                <div class="search-clearable pr-search-wrap">
+                  <input id="pr-search" class="pr-search" type="search" data-i18n-placeholder="pullRequests.search" placeholder="Search pull requests">
+                  <button type="button" class="search-clear-btn is-hidden" data-i18n-aria-label="common.clearSearch" aria-label="Clear search">
+                    <i class="ph ph-x" aria-hidden="true"></i>
+                  </button>
+                </div>
                 <button id="btn-pr-auth" class="btn btn-quiet" type="button">
                   <i class="ph ph-plugs-connected"></i><span data-i18n="pullRequests.connect">Connect</span>
                 </button>
@@ -450,9 +464,12 @@
 
   <div id="search-overlay" class="search-overlay is-hidden">
     <div class="search-panel">
-      <div class="search-panel-input">
+      <div class="search-panel-input search-clearable">
         <i class="ph ph-magnifying-glass"></i>
         <input type="text" id="search-input" placeholder="Search branches, commits, files and tags" data-i18n-placeholder="search.placeholder" autofocus>
+        <button type="button" class="search-clear-btn is-hidden" data-i18n-aria-label="common.clearSearch" aria-label="Clear search">
+          <i class="ph ph-x" aria-hidden="true"></i>
+        </button>
         <kbd>Esc</kbd>
       </div>
       <div class="search-filters" id="search-filters"></div>

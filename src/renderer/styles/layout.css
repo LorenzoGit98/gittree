@@ -327,7 +327,6 @@
 
 .resize-handle-v.is-dragging {
   z-index: 20;
-  will-change: transform;
 }
 
 .workspace-body.is-resizing .bento-panel {
@@ -336,6 +335,13 @@
 
 .workspace-body.is-resizing {
   transition: none;
+}
+
+.workspace-body.is-resizing .graph-view,
+.workspace-body.is-resizing .branch-list,
+.workspace-body.is-resizing .pr-list,
+.workspace-body.is-resizing .changes-list {
+  contain: strict;
 }
 
 .resize-handle-v::after {

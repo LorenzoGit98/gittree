@@ -69,6 +69,34 @@
   --diff-hunk: #e7f1fb;
   --diff-context: #f6f8fb;
 
+  /* Provider PR status (GitHub / Azure / GitLab brand cues, theme-safe soft/text pairs) */
+  --pr-github-open-soft: #dafbe1;
+  --pr-github-open-text: #1a7f37;
+  --pr-github-draft-soft: #eaeef2;
+  --pr-github-draft-text: #59636e;
+  --pr-github-closed-soft: #ffebe9;
+  --pr-github-closed-text: #cf222e;
+  --pr-github-merged-soft: #eae6ff;
+  --pr-github-merged-text: #8250df;
+  --pr-azure-open-soft: #deecf9;
+  --pr-azure-open-text: #0078d4;
+  --pr-azure-draft-soft: #f3f2f1;
+  --pr-azure-draft-text: #605e5c;
+  --pr-azure-closed-soft: #fde7e9;
+  --pr-azure-closed-text: #d13438;
+  --pr-azure-merged-soft: #dff6dd;
+  --pr-azure-merged-text: #107c10;
+  --pr-gitlab-open-soft: #cbe2f9;
+  --pr-gitlab-open-text: #1f75cb;
+  --pr-gitlab-draft-soft: #ececef;
+  --pr-gitlab-draft-text: #666672;
+  --pr-gitlab-closed-soft: #fdd4cd;
+  --pr-gitlab-closed-text: #dd2b0e;
+  --pr-gitlab-merged-soft: #e6d9f7;
+  --pr-gitlab-merged-text: #6b4fbb;
+  --pr-conflict-soft: var(--warning-soft);
+  --pr-conflict-text: var(--warning-text);
+
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
   --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
   --font-mono: "SFMono-Regular", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
@@ -227,6 +255,33 @@
   --diff-del-text: #f5aaa4;
   --diff-hunk: #182a3c;
   --diff-context: #090909;
+
+  --pr-github-open-soft: #0f2d1b;
+  --pr-github-open-text: #3fb950;
+  --pr-github-draft-soft: #1c2128;
+  --pr-github-draft-text: #8b949e;
+  --pr-github-closed-soft: #3d1214;
+  --pr-github-closed-text: #f85149;
+  --pr-github-merged-soft: #2a1a4a;
+  --pr-github-merged-text: #a371f7;
+  --pr-azure-open-soft: #0c2d4a;
+  --pr-azure-open-text: #4aa3ff;
+  --pr-azure-draft-soft: #1b1a19;
+  --pr-azure-draft-text: #a19f9d;
+  --pr-azure-closed-soft: #3b1216;
+  --pr-azure-closed-text: #f1707b;
+  --pr-azure-merged-soft: #0f2a14;
+  --pr-azure-merged-text: #6ccb5f;
+  --pr-gitlab-open-soft: #0d2a45;
+  --pr-gitlab-open-text: #6cb6f3;
+  --pr-gitlab-draft-soft: #1c1c20;
+  --pr-gitlab-draft-text: #a0a0ab;
+  --pr-gitlab-closed-soft: #3a1510;
+  --pr-gitlab-closed-text: #fc6d26;
+  --pr-gitlab-merged-soft: #2a1b40;
+  --pr-gitlab-merged-text: #c4a3f5;
+  --pr-conflict-soft: var(--warning-soft);
+  --pr-conflict-text: var(--warning-text);
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.36), 0 6px 16px rgba(0, 0, 0, 0.24);
   --shadow-md: 0 16px 36px rgba(0, 0, 0, 0.42);

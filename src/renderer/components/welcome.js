@@ -93,9 +93,12 @@ class WelcomeScreen {
         </button>
       </header>
       <div class="repository-scan-toolbar">
-        <label class="repository-scan-search">
+        <label class="repository-scan-search search-clearable">
           <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
           <input type="search" placeholder="${t('discovery.search')}" aria-label="${t('discovery.search')}">
+          <button type="button" class="search-clear-btn is-hidden" aria-label="${t('common.clearSearch')}">
+            <i class="ph ph-x" aria-hidden="true"></i>
+          </button>
         </label>
         <button class="btn btn-secondary btn-sm" type="button" data-action="all">${t('discovery.selectAll')}</button>
         <button class="btn btn-secondary btn-sm" type="button" data-action="none">${t('discovery.selectNone')}</button>
@@ -138,6 +141,7 @@ class WelcomeScreen {
       this.scanList.scrollTop = 0;
       this.renderRepositoryScan();
     };
+    this.app?.setupClearableSearches?.(picker);
     this.scanList = picker.querySelector('.repository-scan-list');
     this.scanList.addEventListener('scroll', () => {
       if (this.scanRenderFrame) return;

@@ -107,6 +107,7 @@
 }
 
 .repository-scan-search {
+  position: relative;
   min-width: 180px;
   flex: 1;
   display: flex;
@@ -122,6 +123,7 @@
   min-width: 0;
   flex: 1;
   height: 34px;
+  padding-right: 28px;
   border: 0;
   outline: 0;
   color: var(--text-primary);

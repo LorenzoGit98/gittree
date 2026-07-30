@@ -25,7 +25,8 @@ const I18n = {
               cancel: 'Cancel',
               continue: 'Continue',
               loading: 'Loading…',
-              error: 'Error'
+              error: 'Error',
+              clearSearch: 'Clear search'
             },
             welcome: {
               eyebrow: 'Git workspace',
@@ -260,6 +261,11 @@ const I18n = {
               azurePatHint: 'Create a PAT at https://dev.azure.com with Code (Read & Write) scope.',
               empty: 'No pull requests match the current filters',
               draft: 'Draft',
+              statusOpen: 'Open',
+              statusClosed: 'Closed',
+              statusMerged: 'Merged',
+              statusAbandoned: 'Abandoned',
+              statusConflict: 'Conflicts',
               rowMeta: '{{author}} · {{source}} into {{target}}',
               branchRoute: '{{source}} into {{target}}',
               checksCount: '{{count}} checks',
@@ -538,7 +544,8 @@ const I18n = {
               cancel: 'Annulla',
               continue: 'Continua',
               loading: 'Caricamento…',
-              error: 'Errore'
+              error: 'Errore',
+              clearSearch: 'Cancella ricerca'
             },
             welcome: {
               eyebrow: 'Spazio di lavoro Git',
@@ -773,6 +780,11 @@ const I18n = {
               azurePatHint: 'Crea un PAT su https://dev.azure.com con scope Code (Read & Write).',
               empty: 'Nessuna pull request corrisponde ai filtri',
               draft: 'Bozza',
+              statusOpen: 'Aperta',
+              statusClosed: 'Chiusa',
+              statusMerged: 'Merged',
+              statusAbandoned: 'Abbandonata',
+              statusConflict: 'Conflitti',
               rowMeta: '{{author}} · {{source}} verso {{target}}',
               branchRoute: '{{source}} verso {{target}}',
               checksCount: '{{count}} check',

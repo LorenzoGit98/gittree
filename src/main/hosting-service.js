@@ -486,7 +486,7 @@ class HostingService {
       source: item.head?.ref || '',
       target: item.base?.ref || '',
       headSha: item.head?.sha || '',
-      state: item.state,
+      state: item.merged_at || item.merged ? 'merged' : item.state,
       draft: Boolean(item.draft),
       reviewStatus: (item.requested_reviewers || []).some(
         reviewer => reviewer.login === user?.login
@@ -534,7 +534,13 @@ class HostingService {
       headSha: item.lastMergeSourceCommit?.commitId
         || item.lastMergeCommit?.commitId
         || '',
-      state: item.status === 'active' || item.status === 'open' ? 'open' : item.status === 'completed' ? 'closed' : item.status,
+      state: item.status === 'active' || item.status === 'open'
+        ? 'open'
+        : item.status === 'completed'
+          ? 'merged'
+          : item.status === 'abandoned'
+            ? 'abandoned'
+            : item.status,
       draft: Boolean(item.isDraft),
       reviewStatus: (item.reviewers || []).some(
         reviewer => reviewer.vote === 0 && this.azureIdentityMatches(user, reviewer)
