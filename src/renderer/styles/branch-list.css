@@ -66,6 +66,17 @@
   gap: 2px;
 }
 
+.branch-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.branch-group-body.is-collapsed,
+.branch-item.is-folder-collapsed {
+  display: none;
+}
+
 .branch-list.is-project-loading {
   min-height: 72px;
 }
@@ -142,6 +153,8 @@
 }
 
 .branch-item {
+  position: relative;
+  z-index: 1;
   min-height: 34px;
   padding: 0 var(--space-2);
   background: var(--surface-primary);
@@ -151,6 +164,9 @@
   contain-intrinsic-size: 34px;
   user-select: none;
   transition: background var(--duration-fast) var(--ease-smooth), color var(--duration-fast) var(--ease-smooth), transform var(--duration-fast) var(--ease-smooth);
+}
+
+.branch-list.is-revealing .branch-item {
   animation: motion-item-reveal var(--duration-normal) var(--ease-decel) both;
   animation-delay: calc(var(--item-index, 0) * 18ms);
 }
@@ -186,12 +202,29 @@
 }
 
 .branch-item.active.active-bg-animating {
-  background: var(--surface-primary);
+  background: none;
+}
+
+.branch-list.is-sliding-active .branch-item,
+.branch-list.is-sliding-active .branch-item:hover,
+.branch-list.is-sliding-active .branch-folder-header,
+.branch-list.is-sliding-active .branch-group-header {
+  background: none;
+  transition: none;
+}
+
+.branch-list.is-sliding-active .branch-item:hover {
+  transform: none;
+}
+
+.branch-list.is-sliding-active .branch-item.active::after {
+  opacity: 0;
 }
 
 .branch-active-ghost {
   position: absolute;
-  z-index: 2;
+  z-index: 0;
+  border-radius: var(--radius-sm);
   background: var(--primary-soft);
   pointer-events: none;
 }

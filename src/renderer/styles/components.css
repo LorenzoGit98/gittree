@@ -147,6 +147,20 @@ input:focus-visible {
   background: var(--surface-secondary);
 }
 
+.toolbar-sync-count {
+  min-width: 18px;
+  height: 18px;
+  margin-left: 2px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  background: var(--surface-primary);
+  font-size: 9px;
+}
+
+.toolbar-sync-count.is-hidden {
+  display: none;
+}
+
 .search-trigger {
   min-width: 0;
   height: 38px;

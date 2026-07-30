@@ -313,6 +313,10 @@ class GitTreeApp {
             behind: currentBranchMetadata.behind
           }
         : null);
+      this.updatePushPullCounts(
+        currentBranchMetadata?.ahead || 0,
+        currentBranchMetadata?.behind || 0
+      );
       document.getElementById('status-branch').textContent = branchName ? `On ${branchName}` : '';
       document.getElementById('status-repo').textContent = repo.name;
       this.components.statusBar.setRepo(repo.name);
@@ -403,7 +407,25 @@ class GitTreeApp {
       const info = parts.length ? parts.join(' ') : (status.isClean ? 'Clean' : 'Modified');
       document.getElementById('status-info').textContent = info;
       this.components.statusBar.setInfo(info);
+      this.updatePushPullCounts(status.ahead || 0, status.behind || 0);
     } catch {}
+  }
+
+  updatePushPullCounts(ahead = 0, behind = 0) {
+    const pullCount = document.getElementById('btn-pull-count');
+    const pushCount = document.getElementById('btn-push-count');
+    if (pullCount) {
+      const show = behind > 0;
+      pullCount.textContent = show ? String(behind) : '';
+      pullCount.hidden = !show;
+      pullCount.classList.toggle('is-hidden', !show);
+    }
+    if (pushCount) {
+      const show = ahead > 0;
+      pushCount.textContent = show ? String(ahead) : '';
+      pushCount.hidden = !show;
+      pushCount.classList.toggle('is-hidden', !show);
+    }
   }
 
   animateContentRefresh(element) {
@@ -455,6 +477,10 @@ class GitTreeApp {
           behind: currentBranchMetadata.behind
         }
       : null);
+    this.updatePushPullCounts(
+      currentBranchMetadata?.ahead || 0,
+      currentBranchMetadata?.behind || 0
+    );
     this.components.statusBar.setBranch(branchName);
   }
 

@@ -81,6 +81,7 @@ class BranchListView {
       this.selectedBranchElement = null;
       this.selectedBranchKeys.clear();
       this.selectionAnchorKey = null;
+      this.shouldReveal = true;
       this.render();
     } catch { this.container.innerHTML = ''; }
     finally { this.setLoading(false); }
@@ -122,28 +123,58 @@ class BranchListView {
       this.activeGhost.animation.cancel();
       this.activeGhost.ghost.remove();
       this.activeGhost.newRow.classList.remove('active-bg-animating');
+      this.container.classList.remove('is-sliding-active');
       this.activeGhost = null;
     }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      newRow.classList.remove('active-bg-animating');
+      return;
+    }
     const container = this.container;
+    container.classList.add('is-sliding-active');
     const containerRect = container.getBoundingClientRect();
     const oldRect = oldRow.getBoundingClientRect();
     const newRect = newRow.getBoundingClientRect();
+    const startTop = oldRect.top - containerRect.top + container.scrollTop;
+    const endTop = newRect.top - containerRect.top + container.scrollTop;
+    const startH = oldRect.height;
+    const endH = newRect.height;
+    const midTop = Math.min(startTop, endTop);
+    const midH = Math.max(startTop + startH, endTop + endH) - midTop;
     const ghost = document.createElement('div');
     ghost.className = 'branch-active-ghost';
-    ghost.style.left = `${oldRect.left - containerRect.left}px`;
-    ghost.style.top = `${oldRect.top - containerRect.top}px`;
+    ghost.style.left = `${oldRect.left - containerRect.left + container.scrollLeft}px`;
     ghost.style.width = `${oldRect.width}px`;
-    ghost.style.height = `${newRect.height}px`;
+    ghost.style.top = `${startTop}px`;
+    ghost.style.height = `${startH}px`;
     container.appendChild(ghost);
-    const dy = newRect.top - oldRect.top;
+    const distance = Math.abs(endTop - startTop);
+    const duration = Math.round(Math.min(560, Math.max(400, 340 + distance * 0.45)));
     const animation = ghost.animate(
-      [{ transform: 'translateY(0)' }, { transform: `translateY(${dy}px)` }],
-      { duration: 280, easing: 'cubic-bezier(0.0, 0.0, 0.2, 1)' }
+      [
+        {
+          top: `${startTop}px`,
+          height: `${startH}px`,
+          easing: 'cubic-bezier(0.2, 0, 0, 1)'
+        },
+        {
+          top: `${midTop}px`,
+          height: `${midH}px`,
+          offset: 0.4,
+          easing: 'cubic-bezier(0.16, 1, 0.3, 1)'
+        },
+        {
+          top: `${endTop}px`,
+          height: `${endH}px`
+        }
+      ],
+      { duration, fill: 'forwards' }
     );
     this.activeGhost = { ghost, animation, newRow };
     animation.onfinish = () => {
-      ghost.remove();
       newRow.classList.remove('active-bg-animating');
+      ghost.remove();
+      container.classList.remove('is-sliding-active');
       this.activeGhost = null;
     };
   }
@@ -176,6 +207,10 @@ class BranchListView {
       return;
     }
 
+    const reveal = this.shouldReveal;
+    this.shouldReveal = false;
+    this.container.classList.toggle('is-revealing', reveal);
+
     const frag = document.createDocumentFragment();
 
     if (locals.length) {
@@ -194,19 +229,17 @@ class BranchListView {
 
     const header = document.createElement('div');
     header.className = 'branch-group-header';
+    header.dataset.groupId = groupId;
     header.innerHTML = `
       <i class="ph ph-caret-down branch-group-arrow${collapsed ? ' collapsed' : ''}"></i>
       <span>${label}</span>
     `;
-    header.onclick = () => {
-      if (this.collapsedGroups.has(groupId)) this.collapsedGroups.delete(groupId);
-      else this.collapsedGroups.add(groupId);
-      this.persistSet('gittree.sidebar.branchGroups', this.collapsedGroups);
-      this.render();
-    };
+    header.onclick = () => this.toggleGroup(groupId, header);
     frag.appendChild(header);
 
-    if (collapsed) return;
+    const body = document.createElement('div');
+    body.className = `branch-group-body${collapsed ? ' is-collapsed' : ''}`;
+    body.dataset.groupBody = groupId;
 
     const folders = new Map();
     const root = [];
@@ -222,7 +255,7 @@ class BranchListView {
       }
     });
 
-    root.forEach(b => frag.appendChild(this.branchRow(b, current, isRemote)));
+    root.forEach(b => body.appendChild(this.branchRow(b, current, isRemote)));
 
     for (const [folder, items] of folders) {
       const folderKey = `${groupId}:${folder}`;
@@ -230,27 +263,47 @@ class BranchListView {
 
       const folderHeader = document.createElement('div');
       folderHeader.className = 'branch-folder-header';
+      folderHeader.dataset.folderKey = folderKey;
       folderHeader.innerHTML = `
         <i class="ph ph-caret-down branch-folder-arrow${fCollapsed ? ' collapsed' : ''}"></i>
         <i class="ph ph-folder-simple"></i>
         <span class="branch-folder-name">${this.esc(folder)}/</span>
         <span class="branch-folder-count">${items.length}</span>
       `;
-      folderHeader.onclick = () => {
-        if (this.collapsedFolders.has(folderKey)) this.collapsedFolders.delete(folderKey);
-        else this.collapsedFolders.add(folderKey);
-        this.persistSet('gittree.sidebar.branchFolders', this.collapsedFolders);
-        this.render();
-      };
-      frag.appendChild(folderHeader);
+      folderHeader.onclick = () => this.toggleFolder(folderKey, folderHeader);
+      body.appendChild(folderHeader);
 
-      if (!fCollapsed) {
-        items.forEach(b => {
-          const leafName = b.name.slice(folder.length + 1);
-          frag.appendChild(this.branchRow(b, current, isRemote, leafName));
-        });
-      }
+      items.forEach(b => {
+        const leafName = b.name.slice(folder.length + 1);
+        const row = this.branchRow(b, current, isRemote, leafName);
+        row.dataset.folderKey = folderKey;
+        if (fCollapsed) row.classList.add('is-folder-collapsed');
+        body.appendChild(row);
+      });
     }
+
+    frag.appendChild(body);
+  }
+
+  toggleGroup(groupId, header) {
+    if (this.collapsedGroups.has(groupId)) this.collapsedGroups.delete(groupId);
+    else this.collapsedGroups.add(groupId);
+    this.persistSet('gittree.sidebar.branchGroups', this.collapsedGroups);
+    const collapsed = this.collapsedGroups.has(groupId);
+    header.querySelector('.branch-group-arrow')?.classList.toggle('collapsed', collapsed);
+    this.container.querySelector(`[data-group-body="${CSS.escape(groupId)}"]`)
+      ?.classList.toggle('is-collapsed', collapsed);
+  }
+
+  toggleFolder(folderKey, header) {
+    if (this.collapsedFolders.has(folderKey)) this.collapsedFolders.delete(folderKey);
+    else this.collapsedFolders.add(folderKey);
+    this.persistSet('gittree.sidebar.branchFolders', this.collapsedFolders);
+    const collapsed = this.collapsedFolders.has(folderKey);
+    header.querySelector('.branch-folder-arrow')?.classList.toggle('collapsed', collapsed);
+    this.container.querySelectorAll(
+      `.branch-item[data-folder-key="${CSS.escape(folderKey)}"]`
+    ).forEach(row => row.classList.toggle('is-folder-collapsed', collapsed));
   }
 
   branchRow(branch, current, isRemote = false, displayName = branch.name) {
