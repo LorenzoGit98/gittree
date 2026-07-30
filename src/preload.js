@@ -216,6 +216,9 @@ contextBridge.exposeInMainWorld('gitTree', {
   getPullRequests: (repoPath, provider, options) =>
     ipcRenderer.invoke('hosting:pull-requests', repoPath, provider, options),
 
+  createPullRequest: (repoPath, provider, input) =>
+    ipcRenderer.invoke('hosting:pull-request-create', repoPath, provider, input),
+
   getPullRequestDetail: (repoPath, provider, id) =>
     ipcRenderer.invoke('hosting:pull-request-detail', repoPath, provider, id),
 

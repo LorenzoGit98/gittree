@@ -41,6 +41,50 @@
   border-color: var(--border-focus);
 }
 
+.confirm-dialog.pr-create-dialog {
+  width: min(560px, 100%);
+  max-height: min(860px, calc(100vh - 48px));
+  overflow: auto;
+}
+
+.pr-create-form textarea.pr-create-body,
+.branch-dialog-form textarea {
+  width: 100%;
+  min-height: 110px;
+  padding: var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  resize: vertical;
+  color: var(--text-primary);
+  background: var(--surface-input);
+  font: inherit;
+  line-height: 1.45;
+}
+
+.pr-create-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.pr-create-flags {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.pr-create-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.pr-create-check input {
+  width: auto;
+  min-height: auto;
+}
+
 .pr-notice {
   min-height: 42px;
   display: flex;

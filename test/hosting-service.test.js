@@ -187,7 +187,7 @@ test('azure PAT sign-in validates against the organization connectionData endpoi
 
   const result = await service.setPat('azure', token, 'contoso');
 
-  assert.equal(requests[0].url, 'https://dev.azure.com/contoso/_apis/connectionData?api-version=7.1');
+  assert.equal(requests[0].url, 'https://dev.azure.com/contoso/_apis/connectionData?api-version=7.1-preview');
   assert.equal(
     requests[0].options.headers.Authorization,
     `Basic ${Buffer.from(`:${token}`).toString('base64')}`
@@ -222,7 +222,7 @@ test('azure pull request URLs keep organization and project segments', async () 
 
   assert.equal(
     requests[0].url,
-    'https://dev.azure.com/contoso/platform/_apis/git/repositories/widgets/pullrequests?searchCriteria.status=active&$top=50&$skip=0&api-version=7.1'
+    'https://dev.azure.com/contoso/platform/_apis/git/repositories/widgets/pullrequests?searchCriteria.status=active&$top=50&$skip=0&api-version=7.1-preview'
   );
   assert.equal(requests[0].url.includes('undefined'), false);
 });
@@ -358,7 +358,7 @@ test('azure pull request detail loads iteration files and tolerates empty draft 
   assert.equal(detail.permissions.checkout, false);
   assert.equal(detail.files.length, 2);
   assert.equal(detail.files[0].path, 'src/app.js');
-  assert.equal(requests.some(url => url.includes('api-version=7.1')), true);
+  assert.equal(requests.some(url => url.includes('api-version=7.1-preview')), true);
   assert.equal(await service.getReviewDraft({
     provider: 'azure',
     host: 'dev.azure.com',
@@ -367,4 +367,122 @@ test('azure pull request detail loads iteration files and tolerates empty draft 
     organization: 'contoso',
     project: 'platform'
   }, 42, detail.headSha) === null, true);
+});
+
+test('creates a complete GitHub pull request with reviewers assignees and labels', async () => {
+  const requests = [];
+  const service = new HostingService({
+    vault: memoryVault({ accessToken: 'token', user: { login: 'me' } }),
+    oauthConfig: { github: 'client-id' },
+    fetch: async (url, options) => {
+      requests.push({ url, method: options?.method || 'GET', body: options?.body });
+      if (url.endsWith('/pulls') && options?.method === 'POST') {
+        return jsonResponse({
+          id: 99,
+          number: 42,
+          title: 'Ship feature',
+          html_url: 'https://github.com/owner/repo/pull/42',
+          user: { login: 'me' },
+          head: { ref: 'feature', sha: 'a'.repeat(40) },
+          base: { ref: 'main' },
+          state: 'open',
+          draft: true,
+          requested_reviewers: []
+        });
+      }
+      return jsonResponse({});
+    }
+  });
+
+  const result = await service.createPullRequest(
+    { provider: 'github', host: 'github.com', ownerPath: 'owner', repository: 'repo' },
+    {
+      title: 'Ship feature',
+      body: 'Details',
+      source: 'feature',
+      target: 'main',
+      draft: true,
+      reviewers: 'alice, bob',
+      assignees: 'carol',
+      labels: 'ready,ui',
+      maintainerCanModify: true
+    }
+  );
+
+  assert.equal(result.success, true);
+  assert.equal(result.pullRequest.number, 42);
+  assert.equal(result.url, 'https://github.com/owner/repo/pull/42');
+  const createBody = JSON.parse(requests[0].body);
+  assert.equal(createBody.draft, true);
+  assert.equal(createBody.maintainer_can_modify, true);
+  assert.equal(requests.some(item => item.url.includes('/requested_reviewers')), true);
+  assert.equal(requests.some(item => item.url.includes('/assignees')), true);
+  assert.equal(requests.some(item => item.url.includes('/labels')), true);
+});
+
+test('creates an Azure pull request with draft reviewers work items and labels', async () => {
+  const requests = [];
+  const service = new HostingService({
+    vault: memoryVault({
+      accessToken: 'token',
+      user: { id: 'user-1', login: 'patricia@contoso.com' }
+    }),
+    fetch: async (url, options) => {
+      requests.push({ url, method: options?.method || 'GET', body: options?.body });
+      if (url.includes('vssps.dev.azure.com') && url.includes('/identities')) {
+        return jsonResponse({
+          value: [{
+            id: 'reviewer-guid',
+            providerDisplayName: 'alice@contoso.com',
+            properties: { Account: { $value: 'alice@contoso.com' } }
+          }]
+        });
+      }
+      if (url.includes('/pullrequests') && options?.method === 'POST' && !url.includes('/labels')) {
+        return jsonResponse({
+          pullRequestId: 77,
+          title: 'Azure feature',
+          createdBy: { id: 'user-1', uniqueName: 'patricia@contoso.com' },
+          sourceRefName: 'refs/heads/feature',
+          targetRefName: 'refs/heads/main',
+          status: 'active',
+          isDraft: true,
+          reviewers: []
+        });
+      }
+      return jsonResponse({});
+    }
+  });
+
+  const result = await service.createPullRequest(
+    {
+      provider: 'azure',
+      host: 'dev.azure.com',
+      ownerPath: 'contoso/platform',
+      repository: 'widgets',
+      organization: 'contoso',
+      project: 'platform'
+    },
+    {
+      title: 'Azure feature',
+      body: 'Ship it',
+      source: 'feature',
+      target: 'main',
+      draft: true,
+      reviewers: 'alice@contoso.com',
+      labels: 'ready',
+      workItems: '1001, 1002'
+    }
+  );
+
+  assert.equal(result.success, true);
+  assert.equal(result.pullRequest.number, 77);
+  assert.match(result.url, /pullrequest\/77$/);
+  const createBody = JSON.parse(requests.find(item => (
+    item.method === 'POST' && item.url.includes('/pullrequests') && !item.url.includes('/labels')
+  )).body);
+  assert.equal(createBody.isDraft, true);
+  assert.equal(createBody.reviewers[0].id, 'reviewer-guid');
+  assert.deepEqual(createBody.workItemRefs, [{ id: '1001' }, { id: '1002' }]);
+  assert.equal(requests.some(item => item.url.includes('/labels')), true);
 });

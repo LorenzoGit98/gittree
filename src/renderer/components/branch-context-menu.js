@@ -288,6 +288,19 @@ class BranchContextMenu {
     if (!supported.length) return;
     const upstream = branch.upstream ? this.splitRemote(branch.upstream) : null;
     const defaultRemote = supported.find(remote => remote.name === upstream?.remote) || supported[0];
+    const provider = defaultRemote.provider?.provider;
+    const canApi = ['github', 'gitlab', 'azure'].includes(provider)
+      && (await window.gitTree.getProviderStatus(provider))?.connected;
+    if (canApi && this.app.components.pullRequests) {
+      const view = this.app.components.pullRequests;
+      const source = branch.kind === 'remote'
+        ? this.splitRemote(branch.name).branch
+        : branch.name;
+      this.app.setWorkspaceMode('pullRequests');
+      await view.setProvider(provider);
+      await view.openCreateDialog({ source, force: true });
+      return;
+    }
     const values = await this.pullRequestDialog(defaultRemote.name, this.metadata.defaultBranch);
     if (!values) return;
     let source = branch.kind === 'remote' ? this.splitRemote(branch.name).branch : branch.name;

@@ -244,7 +244,7 @@ class HostingService {
     const value = String(endpoint || '');
     return value.includes('api-version=')
       ? value
-      : `${value}${value.includes('?') ? '&' : '?'}api-version=7.1`;
+      : `${value}${value.includes('?') ? '&' : '?'}api-version=7.1-preview`;
   }
 
   azureIdentityMatches(user, identity) {
@@ -262,8 +262,8 @@ class HostingService {
     let url;
     if (provider === 'azure') {
       url = organization
-        ? `https://dev.azure.com/${encodeURIComponent(organization)}/_apis/connectionData?api-version=7.1`
-        : 'https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version=7.1';
+        ? `https://dev.azure.com/${encodeURIComponent(organization)}/_apis/connectionData?api-version=7.1-preview`
+        : 'https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version=7.1-preview';
     } else {
       url = provider === 'github'
         ? 'https://api.github.com/user'
@@ -1170,6 +1170,281 @@ class HostingService {
     }
     await this.vault.removeReviewDraft(this.draftKey(repo, id));
     return { success: true };
+  }
+
+  validateBranchName(value, label) {
+    const name = String(value || '').trim().replace(/^refs\/heads\//, '');
+    if (
+      !name ||
+      name.length > 255 ||
+      name.includes('..') ||
+      name.startsWith('/') ||
+      name.endsWith('/') ||
+      !/^[A-Za-z0-9._/-]+$/.test(name)
+    ) {
+      throw new Error(`Invalid ${label} branch`);
+    }
+    return name;
+  }
+
+  parseNameList(value, label, limit = 20) {
+    const list = Array.isArray(value)
+      ? value
+      : String(value || '').split(/[,;\n]/);
+    const names = [...new Set(
+      list.map(item => String(item || '').trim()).filter(Boolean)
+    )];
+    if (names.length > limit) throw new Error(`Too many ${label}`);
+    for (const name of names) {
+      if (name.length > 100 || /\0/.test(name)) throw new Error(`Invalid ${label}`);
+    }
+    return names;
+  }
+
+  parseWorkItemIds(value) {
+    const list = Array.isArray(value)
+      ? value
+      : String(value || '').split(/[,;\s]+/);
+    const ids = [...new Set(
+      list.map(item => Number(String(item || '').replace(/^#/, '').trim()))
+        .filter(id => Number.isSafeInteger(id) && id > 0)
+    )];
+    if (ids.length > 20) throw new Error('Too many work items');
+    return ids;
+  }
+
+  validateCreatePullRequestInput(input = {}) {
+    const title = String(input.title || '').trim();
+    if (!title || title.length > 256 || /\0/.test(title)) {
+      throw new Error('Pull request title is required');
+    }
+    const body = String(input.body || '');
+    if (body.length > 65536 || /\0/.test(body)) {
+      throw new Error('Pull request description is too long');
+    }
+    const source = this.validateBranchName(input.source, 'source');
+    const target = this.validateBranchName(input.target, 'target');
+    if (source === target) throw new Error('Source and target branches must differ');
+    return {
+      title,
+      body,
+      source,
+      target,
+      draft: Boolean(input.draft),
+      maintainerCanModify: input.maintainerCanModify !== false,
+      reviewers: this.parseNameList(input.reviewers, 'reviewers'),
+      assignees: this.parseNameList(input.assignees, 'assignees'),
+      labels: this.parseNameList(input.labels, 'labels'),
+      workItems: this.parseWorkItemIds(input.workItems)
+    };
+  }
+
+  async azureIdentitySearch(organization, query) {
+    const account = await this.getAccessAccount('azure');
+    if (!account?.accessToken) throw new Error('Connect azure first');
+    const url =
+      `https://vssps.dev.azure.com/${encodeURIComponent(organization)}/_apis/identities`
+      + `?searchFilter=General&filterValue=${encodeURIComponent(query)}`
+      + '&queryMembership=None&api-version=7.1-preview.1';
+    const response = await this.fetch(url, {
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Basic ${Buffer.from(`:${account.accessToken}`).toString('base64')}`,
+        'User-Agent': 'GitTree'
+      }
+    });
+    const data = await this.readResponse(response);
+    return data.value || [];
+  }
+
+  async resolveAzureReviewers(repo, names) {
+    const reviewers = [];
+    for (const name of names) {
+      const matches = await this.azureIdentitySearch(repo.organization, name);
+      const exact = matches.find(item => this.azureIdentityMatches(
+        { login: name, name, id: name },
+        {
+          id: item.id,
+          uniqueName: item.properties?.Account?.$value || item.properties?.Mail?.$value,
+          displayName: item.providerDisplayName || item.customDisplayName,
+          login: item.properties?.Account?.$value
+        }
+      )) || matches.find(item => {
+        const hay = [
+          item.providerDisplayName,
+          item.customDisplayName,
+          item.properties?.Account?.$value,
+          item.properties?.Mail?.$value
+        ].filter(Boolean).map(value => String(value).toLowerCase());
+        return hay.includes(name.toLowerCase());
+      }) || matches[0];
+      if (!exact?.id) throw new Error(`Azure reviewer not found: ${name}`);
+      reviewers.push({ id: exact.id });
+    }
+    return reviewers;
+  }
+
+  async resolveGitLabUserIds(repo, names) {
+    const ids = [];
+    for (const name of names) {
+      const byUsername = await this.api(
+        repo,
+        `/users?username=${encodeURIComponent(name)}`
+      ).catch(() => ({ data: [] }));
+      let user = Array.isArray(byUsername.data) ? byUsername.data[0] : null;
+      if (!user) {
+        const search = await this.api(
+          repo,
+          `/users?search=${encodeURIComponent(name)}&per_page=5`
+        );
+        user = (search.data || []).find(item => (
+          item.username?.toLowerCase() === name.toLowerCase()
+          || item.name?.toLowerCase() === name.toLowerCase()
+        )) || search.data?.[0];
+      }
+      if (!user?.id) throw new Error(`GitLab user not found: ${name}`);
+      ids.push(user.id);
+    }
+    return ids;
+  }
+
+  async createPullRequest(repository, input = {}) {
+    const repo = this.validateRepository(repository);
+    const options = this.validateCreatePullRequestInput(input);
+    const account = await this.vault.getAccount(repo.provider);
+    if (!account?.accessToken) throw new Error(`Connect ${repo.provider} first`);
+
+    if (repo.provider === 'github') {
+      const prefix =
+        `/repos/${encodeURIComponent(repo.ownerPath)}/${encodeURIComponent(repo.repository)}`;
+      const created = await this.api(repo, `${prefix}/pulls`, {
+        method: 'POST',
+        body: {
+          title: options.title,
+          head: options.source,
+          base: options.target,
+          body: options.body,
+          draft: options.draft,
+          maintainer_can_modify: options.maintainerCanModify
+        }
+      });
+      const number = created.data.number;
+      const warnings = [];
+      if (options.reviewers.length) {
+        try {
+          await this.api(repo, `${prefix}/pulls/${number}/requested_reviewers`, {
+            method: 'POST',
+            body: { reviewers: options.reviewers }
+          });
+        } catch (error) {
+          warnings.push(error.message);
+        }
+      }
+      if (options.assignees.length) {
+        try {
+          await this.api(repo, `${prefix}/issues/${number}/assignees`, {
+            method: 'POST',
+            body: { assignees: options.assignees }
+          });
+        } catch (error) {
+          warnings.push(error.message);
+        }
+      }
+      if (options.labels.length) {
+        try {
+          await this.api(repo, `${prefix}/issues/${number}/labels`, {
+            method: 'POST',
+            body: { labels: options.labels }
+          });
+        } catch (error) {
+          warnings.push(error.message);
+        }
+      }
+      return {
+        success: true,
+        pullRequest: this.normalizeGitHubSummary(created.data, account.user),
+        url: created.data.html_url || '',
+        warnings
+      };
+    }
+
+    if (repo.provider === 'azure') {
+      const body = {
+        sourceRefName: `refs/heads/${options.source}`,
+        targetRefName: `refs/heads/${options.target}`,
+        title: options.title,
+        description: options.body,
+        isDraft: options.draft
+      };
+      if (options.reviewers.length) {
+        body.reviewers = await this.resolveAzureReviewers(repo, options.reviewers);
+      }
+      if (options.workItems.length) {
+        body.workItemRefs = options.workItems.map(id => ({ id: String(id) }));
+      }
+      const created = await this.api(repo, '/pullrequests', { method: 'POST', body });
+      const warnings = [];
+      if (options.labels.length) {
+        for (const label of options.labels) {
+          try {
+            await this.api(repo, `/pullrequests/${created.data.pullRequestId}/labels`, {
+              method: 'POST',
+              body: { name: label }
+            });
+          } catch (error) {
+            warnings.push(error.message);
+          }
+        }
+      }
+      const summary = this.normalizeAzureSummary(created.data, account.user);
+      return {
+        success: true,
+        pullRequest: summary,
+        url: `https://dev.azure.com/${encodeURIComponent(repo.organization)}/${encodeURIComponent(repo.project)}/_git/${encodeURIComponent(repo.repository)}/pullrequest/${summary.number}`,
+        warnings
+      };
+    }
+
+    const project = encodeURIComponent(`${repo.ownerPath}/${repo.repository}`);
+    const warnings = [];
+    let reviewerIds = [];
+    let assigneeIds = [];
+    if (options.reviewers.length) {
+      try {
+        reviewerIds = await this.resolveGitLabUserIds(repo, options.reviewers);
+      } catch (error) {
+        warnings.push(error.message);
+      }
+    }
+    if (options.assignees.length) {
+      try {
+        assigneeIds = await this.resolveGitLabUserIds(repo, options.assignees);
+      } catch (error) {
+        warnings.push(error.message);
+      }
+    }
+    const created = await this.api(repo, `/projects/${project}/merge_requests`, {
+      method: 'POST',
+      body: {
+        source_branch: options.source,
+        target_branch: options.target,
+        title: options.draft && !/^draft:/i.test(options.title)
+          ? `Draft: ${options.title}`
+          : options.title,
+        description: options.body,
+        draft: options.draft,
+        labels: options.labels.join(',') || undefined,
+        reviewer_ids: reviewerIds.length ? reviewerIds : undefined,
+        assignee_ids: assigneeIds.length ? assigneeIds : undefined,
+        remove_source_branch: Boolean(input.removeSourceBranch)
+      }
+    });
+    return {
+      success: true,
+      pullRequest: this.normalizeGitLabSummary(created.data, account.user),
+      url: created.data.web_url || '',
+      warnings
+    };
   }
 }
 

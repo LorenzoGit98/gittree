@@ -22,7 +22,8 @@ class PullRequestView {
       list: document.getElementById('pr-list'),
       notice: document.getElementById('pr-notice'),
       search: document.getElementById('pr-search'),
-      auth: document.getElementById('btn-pr-auth')
+      auth: document.getElementById('btn-pr-auth'),
+      create: document.getElementById('btn-pr-create')
     };
     this.bind();
   }
@@ -49,6 +50,7 @@ class PullRequestView {
       }, 250);
     };
     this.elements.auth.onclick = () => this.toggleAuthentication();
+    this.elements.create.onclick = () => this.openCreateDialog();
     let frame = 0;
     this.elements.list.onscroll = () => {
       if (frame) return;
@@ -126,6 +128,7 @@ class PullRequestView {
     this.status = await window.gitTree.getProviderStatus(this.provider);
     if (this.status?.error) {
       this.showNotice(this.status.error, 'warning');
+      this.elements.create.disabled = true;
       return;
     }
     const label = this.elements.auth.querySelector('span');
@@ -139,6 +142,10 @@ class PullRequestView {
       icon.className = 'ph ph-plugs-connected';
       this.elements.auth.title = '';
     }
+    this.elements.create.disabled = !(
+      this.status.connected
+      && this.availableProviders?.has(this.provider)
+    );
     if (this.status.warning) this.showNotice(this.status.warning, 'warning');
     else if (!this.availableProviders?.has(this.provider)) {
       this.showNotice(t('pullRequests.noRemote', { provider: this.provider }), 'warning');
@@ -843,6 +850,190 @@ class PullRequestView {
       dialog.querySelector('[data-cancel]').onclick = () => finish(null);
       dialog.querySelector('[data-confirm]').onclick = () => finish(input.value.trim() || null);
       input.addEventListener('keydown', e => { if (e.key === 'Enter') finish(input.value.trim() || null); });
+    });
+  }
+
+  branchOptions(metadata) {
+    const names = new Set();
+    for (const branch of metadata?.branches || []) {
+      if (branch.kind === 'local' && branch.name) {
+        names.add(branch.name);
+        continue;
+      }
+      if (branch.kind === 'remote' && branch.name) {
+        const index = branch.name.indexOf('/');
+        const short = index >= 0 ? branch.name.slice(index + 1) : branch.name;
+        if (short) names.add(short);
+      }
+    }
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }
+
+  async openCreateDialog(defaults = {}) {
+    if (this.elements.create.disabled && !defaults.force) {
+      if (!this.status?.connected) {
+        this.app.showToast(t('pullRequests.connect'), 'warning');
+        return;
+      }
+    }
+    const metadata = await window.gitTree.getBranchMetadata(this.repoPath);
+    if (metadata?.error) {
+      this.app.showToast(metadata.error, 'error');
+      return;
+    }
+    const branches = this.branchOptions(metadata);
+    const preferredSource = defaults.source && branches.includes(defaults.source)
+      ? defaults.source
+      : null;
+    const source = preferredSource
+      || (metadata.current && branches.includes(metadata.current) ? metadata.current : null)
+      || branches[0]
+      || '';
+    const preferredTarget = defaults.target && branches.includes(defaults.target)
+      ? defaults.target
+      : null;
+    const target = preferredTarget
+      || (metadata.defaultBranch && branches.includes(metadata.defaultBranch)
+        ? metadata.defaultBranch
+        : null)
+      || (branches.find(name => name !== source) || branches[0] || '');
+    const remote = (metadata.remotes || []).find(item => (
+      item.provider?.provider === this.provider
+    ));
+    const values = await this.createPullRequestDialog({
+      source,
+      target,
+      branches,
+      title: defaults.title || ''
+    });
+    if (!values) return;
+    this.elements.create.disabled = true;
+    try {
+      if (values.pushSource && remote?.name) {
+        const pushed = await window.gitTree.push(
+          this.repoPath,
+          remote.name,
+          values.source,
+          true
+        );
+        if (pushed?.error) {
+          this.app.showToast(pushed.error, 'error');
+          return;
+        }
+      }
+      const result = await window.gitTree.createPullRequest(
+        this.repoPath,
+        this.provider,
+        values
+      );
+      if (result?.error) {
+        this.app.showToast(result.error, 'error');
+        return;
+      }
+      this.app.showToast(t('pullRequests.createSuccess', {
+        number: result.pullRequest?.number || ''
+      }), 'success');
+      for (const warning of result.warnings || []) {
+        this.app.showToast(warning, 'warning');
+      }
+      this.filter = 'authored';
+      document.querySelectorAll('[data-pr-filter]').forEach(item => {
+        item.classList.toggle('active', item.dataset.prFilter === 'authored');
+      });
+      await this.reload();
+      const created = this.items.find(item => (
+        item.number === result.pullRequest?.number
+        || item.id === result.pullRequest?.id
+      ));
+      if (created) await this.select(created);
+    } finally {
+      await this.refreshStatus();
+    }
+  }
+
+  createPullRequestDialog({ source, target, branches, title = '' }) {
+    const overlay = document.getElementById('modal-overlay');
+    const dialog = document.getElementById('modal-dialog');
+    const options = branches.map(name => (
+      `<option value="${this.esc(name)}">${this.esc(name)}</option>`
+    )).join('');
+    const showAssignees = this.provider !== 'azure';
+    const showMaintainer = this.provider === 'github';
+    const showWorkItems = this.provider === 'azure';
+    const showRemoveSource = this.provider === 'gitlab';
+    return new Promise(resolve => {
+      dialog.classList.add('pr-create-dialog');
+      dialog.innerHTML = `
+        <form class="branch-dialog-form pr-create-form">
+          <h3>${this.esc(t('pullRequests.createTitle'))}</h3>
+          <label>${this.esc(t('pullRequests.createTitleField'))}
+            <input name="title" maxlength="256" required autofocus value="${this.esc(title)}">
+          </label>
+          <label>${this.esc(t('pullRequests.createBodyField'))}
+            <textarea name="body" class="pr-create-body" maxlength="65536" rows="5" placeholder="${this.esc(t('pullRequests.createBodyPlaceholder'))}"></textarea>
+          </label>
+          <div class="pr-create-grid">
+            <label>${this.esc(t('pullRequests.createSource'))}
+              <select name="source">${options}</select>
+            </label>
+            <label>${this.esc(t('pullRequests.createTarget'))}
+              <select name="target">${options}</select>
+            </label>
+          </div>
+          <label>${this.esc(t('pullRequests.createReviewers'))}
+            <input name="reviewers" maxlength="1000" placeholder="${this.esc(t('pullRequests.createReviewersHint'))}">
+          </label>
+          ${showAssignees ? `<label>${this.esc(t('pullRequests.createAssignees'))}
+            <input name="assignees" maxlength="1000" placeholder="${this.esc(t('pullRequests.createAssigneesHint'))}">
+          </label>` : ''}
+          <label>${this.esc(t('pullRequests.createLabels'))}
+            <input name="labels" maxlength="1000" placeholder="${this.esc(t('pullRequests.createLabelsHint'))}">
+          </label>
+          ${showWorkItems ? `<label>${this.esc(t('pullRequests.createWorkItems'))}
+            <input name="workItems" maxlength="200" placeholder="${this.esc(t('pullRequests.createWorkItemsHint'))}">
+          </label>` : ''}
+          <div class="pr-create-flags">
+            <label class="pr-create-check"><input name="draft" type="checkbox"> ${this.esc(t('pullRequests.createDraft'))}</label>
+            <label class="pr-create-check"><input name="pushSource" type="checkbox" checked> ${this.esc(t('pullRequests.createPush'))}</label>
+            ${showMaintainer ? `<label class="pr-create-check"><input name="maintainerCanModify" type="checkbox" checked> ${this.esc(t('pullRequests.createMaintainer'))}</label>` : ''}
+            ${showRemoveSource ? `<label class="pr-create-check"><input name="removeSourceBranch" type="checkbox"> ${this.esc(t('pullRequests.createRemoveSource'))}</label>` : ''}
+          </div>
+          <div class="confirm-actions">
+            <button class="btn" type="button" data-cancel>${this.esc(t('common.cancel'))}</button>
+            <button class="btn btn-primary" type="submit">${this.esc(t('pullRequests.createSubmit'))}</button>
+          </div>
+        </form>`;
+      overlay.classList.remove('is-hidden');
+      const form = dialog.querySelector('form');
+      form.elements.source.value = source;
+      form.elements.target.value = target;
+      const finish = value => {
+        dialog.classList.remove('pr-create-dialog');
+        overlay.classList.add('is-hidden');
+        dialog.innerHTML = '';
+        resolve(value);
+      };
+      form.querySelector('[data-cancel]').onclick = () => finish(null);
+      form.onsubmit = event => {
+        event.preventDefault();
+        const nextTitle = form.elements.title.value.trim();
+        if (!nextTitle) return;
+        finish({
+          title: nextTitle,
+          body: form.elements.body.value,
+          source: form.elements.source.value,
+          target: form.elements.target.value,
+          reviewers: form.elements.reviewers.value,
+          assignees: form.elements.assignees?.value || '',
+          labels: form.elements.labels.value,
+          workItems: form.elements.workItems?.value || '',
+          draft: form.elements.draft.checked,
+          pushSource: form.elements.pushSource.checked,
+          maintainerCanModify: form.elements.maintainerCanModify?.checked !== false,
+          removeSourceBranch: Boolean(form.elements.removeSourceBranch?.checked)
+        });
+      };
+      form.elements.title.focus();
     });
   }
 

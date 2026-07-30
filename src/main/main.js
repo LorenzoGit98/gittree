@@ -827,6 +827,18 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle(
+    'hosting:pull-request-create',
+    async (_event, repoPath, provider, input) => {
+      try {
+        const repository = await getHostingRepository(repoPath, provider);
+        return await hostingService.createPullRequest(repository, input);
+      } catch (err) {
+        return { error: err.message };
+      }
+    }
+  );
+
+  ipcMain.handle(
     'hosting:pull-requests',
     async (_event, repoPath, provider, options) => {
       try {
