@@ -11,6 +11,8 @@ GitTree utilizza `electron-updater` e i manifest generati da electron-builder ne
 5. L’installazione richiede un secondo comando esplicito di riavvio.
 6. Se l’utente chiude normalmente l’app dopo il download, l’aggiornamento resta pronto per l’installazione.
 
+Su Windows (`oneClick: false`) l’installazione fresh mantiene il wizard assistito (directory inclusa). Gli aggiornamenti lanciati da `quitAndInstall(false, true)` passano `--updated`: `build/installer.nsh` salta install-mode e finish page, lascia solo la progress bar e riavvia l’app.
+
 Il renderer non riceve URL arbitrari e non può eseguire comandi di aggiornamento raw. Le uniche IPC esposte sono:
 
 - `update:get-state`

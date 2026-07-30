@@ -45,6 +45,7 @@ nsis:
   shortcutName: GitTree
   uninstallDisplayName: GitTree
   deleteAppDataOnUninstall: false
+  include: installer.nsh
 
 mac:
   icon: icon.png

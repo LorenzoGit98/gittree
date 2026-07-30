@@ -24,6 +24,11 @@ test('electron-builder emits installable and update-compatible artifacts', () =>
   assert.match(config, /-\s*AppImage/);
   assert.match(config, /generateUpdatesFilesForAllChannels:\s*true/);
   assert.match(config, /from:\s*build\/oauth-config\.json/);
+  assert.match(config, /include:\s*installer\.nsh/);
+  const nsh = fs.readFileSync(path.join(root, 'build', 'installer.nsh'), 'utf8');
+  assert.match(nsh, /!macro customInstallMode/);
+  assert.match(nsh, /!macro customFinishPage/);
+  assert.match(nsh, /\$\{isUpdated\}/);
 });
 
 test('the master application icon is release ready', () => {
