@@ -467,7 +467,7 @@
 }
 
 .batch-selected-names::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--surface-primary);
 }
 
 .batch-selected-names::-webkit-scrollbar-thumb {

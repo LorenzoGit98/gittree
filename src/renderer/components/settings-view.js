@@ -487,35 +487,69 @@ class SettingsView {
 
     const checkUpdateBtn = this.dialog.querySelector('#btn-check-update');
     const checkUpdateStatus = this.dialog.querySelector('#check-update-status');
+    let unsubscribeState = null;
+    
     if (checkUpdateBtn) {
       checkUpdateBtn.onclick = async () => {
+        // Rimuovi vecchio listener se esiste
+        if (unsubscribeState) { unsubscribeState(); unsubscribeState = null; }
+        
         checkUpdateBtn.disabled = true;
         checkUpdateStatus.textContent = t('settings.checking');
+        
         try {
           const result = await window.gitTree.checkForUpdates();
+          
           if (result?.error) {
             checkUpdateStatus.textContent = result.error;
-          } else {
-            checkUpdateStatus.textContent = t('settings.upToDate');
-            this.app.showToast(t('settings.upToDate'), 'success');
+            checkUpdateBtn.disabled = false;
+            return;
           }
+          
+          // Usa onUpdateState per ricevere aggiornamenti asincroni
+          unsubscribeState = window.gitTree.onUpdateState(state => {
+            if (!checkUpdateStatus) return;
+            
+            switch (state.status) {
+              case 'checking':
+                checkUpdateStatus.textContent = t('settings.checking');
+                break;
+              case 'available':
+                checkUpdateStatus.textContent = `${t('settings.updateAvailable')} (${state.availableVersion})`;
+                checkUpdateBtn.textContent = t('settings.downloadUpdate');
+                break;
+              case 'downloaded':
+                checkUpdateStatus.textContent = t('settings.updateReady');
+                checkUpdateBtn.textContent = t('settings.installUpdate');
+                break;
+              case 'downloading':
+                checkUpdateStatus.textContent = `${t('settings.downloading')} ${state.progress}%`;
+                break;
+              case 'idle':
+              case 'error':
+              default:
+                checkUpdateStatus.textContent = t('settings.upToDate');
+                checkUpdateBtn.textContent = t('settings.checkUpdate');
+                this.app.showToast(t('settings.upToDate'), 'success');
+                break;
+            }
+            
+            checkUpdateBtn.disabled = false;
+            
+            // Rimuovi listener dopo che abbiamo ricevuto lo stato finale
+            if (['idle', 'available', 'downloaded', 'error'].includes(state.status)) {
+              if (unsubscribeState) { unsubscribeState(); unsubscribeState = null; }
+            }
+          });
+          
         } catch (err) {
-          checkUpdateStatus.textContent = err.message || t('common.error');
-        } finally {
-          checkUpdateBtn.disabled = false;
+          if (checkUpdateStatus) {
+            checkUpdateStatus.textContent = err.message || t('common.error');
+            checkUpdateBtn.disabled = false;
+          }
+          if (unsubscribeState) { unsubscribeState(); unsubscribeState = null; }
         }
       };
-      this.unsubscribeUpdateState?.();
-      this.unsubscribeUpdateState = window.gitTree.onUpdateState(state => {
-        if (!checkUpdateStatus) return;
-        if (state.status === 'available') {
-          checkUpdateStatus.textContent = t('settings.updateAvailable');
-        } else if (state.status === 'downloading') {
-          checkUpdateStatus.textContent = t('settings.downloading');
-        } else if (state.status === 'downloaded') {
-          checkUpdateStatus.textContent = t('settings.updateReady');
-        }
-      });
     }
   }
 

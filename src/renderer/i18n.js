@@ -172,9 +172,11 @@ const I18n = {
               profileApplied: 'Git profile assigned to this repository',
               checkUpdate: 'Check for updates',
               checking: 'Checking…',
-              upToDate: 'You\'re up to date',
+              upToDate: "You're up to date",
               updateAvailable: 'Update available',
               downloading: 'Downloading update…',
+              downloadUpdate: 'Download Update',
+              installUpdate: 'Install Update',
               updateReady: 'Update ready to install'
             },
             history: {
@@ -698,9 +700,11 @@ const I18n = {
               profileApplied: 'Profilo Git assegnato a questo repository',
               checkUpdate: 'Verifica aggiornamenti',
               checking: 'Verifica in corso…',
-              upToDate: 'Sei aggiornato',
+              upToDate: "Sei aggiornato",
               updateAvailable: 'Aggiornamento disponibile',
               downloading: 'Download aggiornamento…',
+              downloadUpdate: 'Scarica Aggiornamento',
+              installUpdate: 'Installa Aggiornamento',
               updateReady: 'Aggiornamento pronto per l\'installazione'
             },
             history: {

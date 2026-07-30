@@ -552,7 +552,7 @@
 }
 
 .settings-theme-preview-light {
-  background: linear-gradient(135deg, rgb(243,246,251) 0%, rgb(252,254,255) 100%);
+  background: var(--surface-primary);
 }
 
 .settings-theme-preview-light::before {
@@ -561,12 +561,12 @@
 }
 
 .settings-theme-preview-light::after {
-  border: 1px solid rgb(213,220,230);
-  background: linear-gradient(180deg, #ffffff 0%, #f9fafb 100%);
+  border: 1px solid var(--border-default);
+  background: var(--surface-secondary);
 }
 
 .settings-theme-preview-dark {
-  background: linear-gradient(135deg, rgb(24,24,26) 0%, rgb(30,30,32) 100%);
+  background: var(--surface-primary);
 }
 
 .settings-theme-preview-dark::before {
@@ -575,8 +575,8 @@
 }
 
 .settings-theme-preview-dark::after {
-  border: 1px solid rgb(48,48,48);
-  background: linear-gradient(180deg, rgb(27,27,30) 0%, rgb(20,20,22) 100%);
+  border: 1px solid var(--border-default);
+  background: var(--surface-secondary);
 }
 
 .settings-theme-name {
