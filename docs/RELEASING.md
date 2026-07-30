@@ -55,20 +55,23 @@ Gli artefatti vengono scritti in `dist/` e non vengono pubblicati.
 ## Release automatica con semantic-release
 
 La release ufficiale viene generata automaticamente a ogni push su `master` tramite
-[semantic-release](https://semantic-release.gitbook.io/). Il sistema analizza i
-commit Conventional Commits dall'ultimo tag e determina automaticamente:
+[semantic-release](https://semantic-release.gitbook.io/).
 
-- **patch** (`fix:` o `perf:`)
-- **minor** (`feat:`)
-- **major** (`BREAKING CHANGE:` o `feat!:`)
+### Schema di versione (era 0.3.x)
 
-Se non ci sono commit `feat/fix/breaking change` non viene creata alcuna release.
+Finché il prodotto resta in anteprima, la linea è **`0.3.N`**:
+
+- ogni release incrementa solo il **patch** (`0.3.1` → `0.3.2` → … → `0.3.123`);
+- `feat:`, `fix:`, `perf:`, `refactor:` e anche i breaking change producono una patch;
+- `docs:`, `chore:`, `test:`, `ci:`, `build:` non aprono una release.
+
+Non creare tag a mano e non usare `npm version` per i rilasci ufficiali: lo fa il workflow.
 
 Il workflow `.github/workflows/versioning.yml` esegue semantic-release che:
-1. analizza i commit;
-2. determina la versione successiva;
+1. analizza i commit dall’ultimo tag `v0.3.*`;
+2. determina la patch successiva;
 3. aggiorna `package.json` e `package-lock.json`;
-4. crea un commit `chore(release): vX.Y.Z` con `[skip ci]`;
+4. crea un commit `chore(release): X.Y.Z` con `[skip ci]`;
 5. pusha il tag `vX.Y.Z`.
 
 Il push del tag attiva `.github/workflows/release.yml` che:

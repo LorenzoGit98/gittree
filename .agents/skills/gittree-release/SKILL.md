@@ -49,13 +49,7 @@ For GitLab, use only the public Application ID from a non-confidential applicati
 
 ## 3. Prepare the version
 
-Require an explicit SemVer target. Update both `package.json` and `package-lock.json` without creating an automatic tag:
-
-```text
-npm version <version> --no-git-tag-version
-```
-
-Review the diff and ensure generated build credentials, OAuth configuration files, installer output, tokens, and temporary bootstrap helpers are not tracked.
+Do not bump versions by hand for official releases. Push Conventional Commits to `master` and let `.github/workflows/versioning.yml` create the next `0.3.N` patch tag. Only intervene manually when recovering a broken tag or documenting an intentional line change away from `0.3.x`.
 
 ## 4. Run release gates
 

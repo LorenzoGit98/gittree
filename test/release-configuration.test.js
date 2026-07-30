@@ -31,6 +31,21 @@ test('electron-builder emits installable and update-compatible artifacts', () =>
   assert.match(nsh, /\$\{isUpdated\}/);
 });
 
+test('semantic-release stays on 0.3.x patch bumps', () => {
+  const releaserc = JSON.parse(fs.readFileSync(path.join(root, '.releaserc'), 'utf8'));
+  const analyzer = releaserc.plugins.find(plugin => (
+    Array.isArray(plugin) && plugin[0] === '@semantic-release/commit-analyzer'
+  ));
+  assert.ok(analyzer, 'commit-analyzer plugin missing');
+  const rules = analyzer[1].releaseRules || [];
+  for (const type of ['feat', 'fix', 'perf', 'refactor']) {
+    const rule = rules.find(item => item.type === type);
+    assert.equal(rule?.release, 'patch', `${type} must bump patch only`);
+  }
+  assert.equal(rules.find(item => item.breaking === true)?.release, 'patch');
+  assert.match(releaserc.tagFormat, /^v\$\{version\}$/);
+});
+
 test('the master application icon is release ready', () => {
   const icon = fs.readFileSync(path.join(root, 'icon.png'));
   assert.equal(icon.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
