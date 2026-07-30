@@ -240,11 +240,29 @@ class HostingService {
     return this.readResponse(response);
   }
 
+  withAzureApiVersion(endpoint) {
+    const value = String(endpoint || '');
+    return value.includes('api-version=')
+      ? value
+      : `${value}${value.includes('?') ? '&' : '?'}api-version=7.1`;
+  }
+
+  azureIdentityMatches(user, identity) {
+    if (!user || !identity) return false;
+    const candidates = [user.login, user.name, user.id]
+      .filter(Boolean)
+      .map(value => String(value).toLowerCase());
+    const theirs = [identity.uniqueName, identity.displayName, identity.id, identity.login]
+      .filter(Boolean)
+      .map(value => String(value).toLowerCase());
+    return theirs.some(value => candidates.includes(value));
+  }
+
   async fetchCurrentUser(provider, token, organization) {
     let url;
     if (provider === 'azure') {
       url = organization
-        ? `https://dev.azure.com/${encodeURIComponent(organization)}/_apis/connectionData`
+        ? `https://dev.azure.com/${encodeURIComponent(organization)}/_apis/connectionData?api-version=7.1`
         : 'https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version=7.1';
     } else {
       url = provider === 'github'
@@ -308,7 +326,7 @@ class HostingService {
     if (!account?.accessToken) throw new Error(`Connect ${repo.provider} first`);
     let url;
     if (repo.provider === 'azure') {
-      url = `https://dev.azure.com/${encodeURIComponent(repo.organization)}/${encodeURIComponent(repo.project)}/_apis/git/repositories/${encodeURIComponent(repo.repository)}${endpoint}`;
+      url = `https://dev.azure.com/${encodeURIComponent(repo.organization)}/${encodeURIComponent(repo.project)}/_apis/git/repositories/${encodeURIComponent(repo.repository)}${this.withAzureApiVersion(endpoint)}`;
     } else {
       url = repo.provider === 'github'
         ? `https://api.github.com${endpoint}`
@@ -385,14 +403,14 @@ class HostingService {
       );
       let items = result.data.map(item => this.normalizeGitHubSummary(item, account.user));
       if (filter === 'authored') {
-        items = items.filter(item => item.author.login === account.user?.login);
+        items = items.filter(item => item.author?.login === account.user?.login);
       } else if (filter === 'review-requested') {
         items = items.filter(item => item.reviewStatus === 'requested');
       }
       if (search) {
         items = items.filter(item => (
-          item.title.toLowerCase().includes(search)
-          || item.source.toLowerCase().includes(search)
+          String(item.title || '').toLowerCase().includes(search)
+          || String(item.source || '').toLowerCase().includes(search)
           || String(item.number) === search
         ));
       }
@@ -415,12 +433,14 @@ class HostingService {
       }
       let items = result.data.value.map(item => this.normalizeAzureSummary(item, account.user));
       if (filter === 'authored') {
-        items = items.filter(item => item.author.login === account.user?.login);
+        items = items.filter(item => this.azureIdentityMatches(account.user, item.author));
+      } else if (filter === 'review-requested') {
+        items = items.filter(item => item.reviewStatus === 'requested');
       }
       if (search) {
         items = items.filter(item => (
-          item.title.toLowerCase().includes(search)
-          || item.source.toLowerCase().includes(search)
+          String(item.title || '').toLowerCase().includes(search)
+          || String(item.source || '').toLowerCase().includes(search)
           || String(item.number) === search
         ));
       }
@@ -498,22 +518,26 @@ class HostingService {
   }
 
   normalizeAzureSummary(item, user) {
+    const author = item.createdBy || {};
     return {
       provider: 'azure',
       id: item.pullRequestId,
       number: item.pullRequestId,
-      title: item.title,
+      title: item.title || '',
       author: {
-        login: item.createdBy?.uniqueName || item.createdBy?.displayName || '',
-        avatarUrl: item.createdBy?._links?.avatar?.href || ''
+        login: author.uniqueName || author.displayName || '',
+        id: author.id || '',
+        avatarUrl: author._links?.avatar?.href || ''
       },
       source: (item.sourceRefName || '').replace('refs/heads/', ''),
       target: (item.targetRefName || '').replace('refs/heads/', ''),
-      headSha: item.lastMergeSourceCommit?.commitId || '',
+      headSha: item.lastMergeSourceCommit?.commitId
+        || item.lastMergeCommit?.commitId
+        || '',
       state: item.status === 'active' || item.status === 'open' ? 'open' : item.status === 'completed' ? 'closed' : item.status,
       draft: Boolean(item.isDraft),
       reviewStatus: (item.reviewers || []).some(
-        reviewer => reviewer.vote === 0 && reviewer.uniqueName === user?.login
+        reviewer => reviewer.vote === 0 && this.azureIdentityMatches(user, reviewer)
       ) ? 'requested' : 'none',
       ciStatus: item.mergeStatus === 'succeeded' ? 'success' : item.mergeStatus === 'conflicts' ? 'failure' : 'unknown',
       reviewers: item.reviewers || []
@@ -527,9 +551,13 @@ class HostingService {
       const prefix =
         `/repos/${encodeURIComponent(repo.ownerPath)}/${encodeURIComponent(repo.repository)}`;
       const pull = await this.api(repo, `${prefix}/pulls/${pullRequestId}`);
+      const headSha = pull.data.head?.sha;
+      if (!headSha) throw new Error('Pull request head SHA is unavailable');
       const [reviews, checks, files, threadResult] = await Promise.all([
         this.api(repo, `${prefix}/pulls/${pullRequestId}/reviews?per_page=100`),
-        this.api(repo, `${prefix}/commits/${pull.data.head.sha}/check-runs?per_page=100`),
+        this.api(repo, `${prefix}/commits/${headSha}/check-runs?per_page=100`).catch(() => ({
+          data: { check_runs: [] }
+        })),
         this.api(repo, `${prefix}/pulls/${pullRequestId}/files?per_page=100`),
         this.githubGraphql(
           `query($owner: String!, $name: String!, $number: Int!) {
@@ -562,7 +590,7 @@ class HostingService {
             name: repo.repository,
             number: pullRequestId
           }
-        )
+        ).catch(() => ({ data: null }))
       ]);
       const account = await this.vault.getAccount('github');
       const summary = this.normalizeGitHubSummary(pull.data, account?.user);
@@ -589,7 +617,7 @@ class HostingService {
           conclusion: check.conclusion,
           url: check.html_url
         })),
-        files: files.data.map(file => this.normalizeGitHubFile(file)),
+        files: (files.data || []).map(file => this.normalizeGitHubFile(file)),
         threads: (
           threadResult.data?.repository?.pullRequest?.reviewThreads?.nodes || []
         ).map(thread => {
@@ -613,7 +641,7 @@ class HostingService {
             }))
           };
         }),
-        headSha: pull.data.head.sha,
+        headSha,
         mergeability: pull.data.mergeable_state || (
           pull.data.mergeable === true ? 'mergeable' : 'unknown'
         )
@@ -623,15 +651,22 @@ class HostingService {
     if (repo.provider === 'azure') {
       const result = await this.api(repo, `/pullrequests/${pullRequestId}`);
       const pr = result.data;
-      const threadsResult = await this.api(repo, `/pullrequests/${pullRequestId}/threads`);
+      const [threadsResult, fileResult] = await Promise.all([
+        this.api(repo, `/pullrequests/${pullRequestId}/threads`).catch(() => ({ data: { value: [] } })),
+        this.listAzurePullRequestFiles(repo, pullRequestId)
+      ]);
       const account = await this.vault.getAccount('azure');
       const summary = this.normalizeAzureSummary(pr, account?.user);
+      const headSha = summary.headSha
+        || fileResult.headSha
+        || pr.lastMergeSourceCommit?.commitId
+        || '';
       return {
-        summary,
+        summary: { ...summary, headSha },
         permissions: {
           review: true,
           resolveThreads: true,
-          checkout: true
+          checkout: false
         },
         reviewers: (pr.reviewers || []).map(reviewer => ({
           login: reviewer.uniqueName || reviewer.displayName || '',
@@ -639,7 +674,7 @@ class HostingService {
           vote: reviewer.vote
         })),
         checks: [],
-        files: [],
+        files: fileResult.files,
         threads: (threadsResult.data.value || []).map(thread => ({
           id: String(thread.id),
           resolved: thread.status === 'closed' || thread.status === 'fixed',
@@ -656,7 +691,7 @@ class HostingService {
             createdAt: comment.publishedDate
           }))
         })),
-        headSha: pr.lastMergeSourceCommit?.commitId || '',
+        headSha,
         mergeability: pr.mergeStatus || 'unknown'
       };
     }
@@ -745,8 +780,51 @@ class HostingService {
     };
   }
 
-  normalizeAzureFile(commit) {
-    return null;
+  normalizeAzureFile(entry) {
+    const filePath = String(entry?.item?.path || '').replace(/^\//, '');
+    if (!filePath) return null;
+    const changeType = String(entry.changeType || '').toLowerCase();
+    let status = 'modified';
+    if (changeType.includes('add')) status = 'added';
+    else if (changeType.includes('delete')) status = 'removed';
+    else if (changeType.includes('rename') || changeType.includes('sourceRename')) status = 'renamed';
+    const oldPath = entry.originalPath
+      ? String(entry.originalPath).replace(/^\//, '')
+      : null;
+    return {
+      path: filePath,
+      oldPath: oldPath && oldPath !== filePath ? oldPath : null,
+      status,
+      additions: null,
+      deletions: null,
+      binary: Boolean(entry.item?.isFolder),
+      // ponytail: Azure iteration changes have no unified patch; add diffs/commits later if needed
+      patch: ''
+    };
+  }
+
+  async listAzurePullRequestFiles(repo, pullRequestId) {
+    try {
+      const iterations = await this.api(repo, `/pullrequests/${pullRequestId}/iterations`);
+      const list = iterations.data.value || [];
+      if (!list.length) return { files: [], headSha: '' };
+      const latest = list[list.length - 1];
+      const headSha = latest.sourceRefCommit?.commitId
+        || latest.commonRefCommit?.commitId
+        || '';
+      const changes = await this.api(
+        repo,
+        `/pullrequests/${pullRequestId}/iterations/${latest.id}/changes?$top=100`
+      );
+      return {
+        files: (changes.data.changeEntries || [])
+          .map(entry => this.normalizeAzureFile(entry))
+          .filter(Boolean),
+        headSha
+      };
+    } catch {
+      return { files: [], headSha: '' };
+    }
   }
 
   async pullRequestDiff(repository, id, page = 1) {
@@ -766,7 +844,8 @@ class HostingService {
     }
 
     if (repo.provider === 'azure') {
-      return { files: [], page: 1, hasMore: false };
+      const { files } = await this.listAzurePullRequestFiles(repo, pullRequestId);
+      return { files, page: 1, hasMore: false };
     }
 
     const project = encodeURIComponent(`${repo.ownerPath}/${repo.repository}`);
@@ -915,7 +994,7 @@ class HostingService {
 
   async getReviewDraft(repository, id, headSha) {
     if (typeof headSha !== 'string' || !/^[a-f0-9]{7,64}$/i.test(headSha)) {
-      throw new Error('Invalid review head SHA');
+      return null;
     }
     const draft = await this.vault.getReviewDraft(this.draftKey(repository, id));
     return draft ? { ...draft, stale: draft.headSha !== headSha } : null;
@@ -1065,7 +1144,7 @@ class HostingService {
       const reviewersResult = await this.api(repo, `/pullrequests/${id}/reviewers`);
       const account = await this.vault.getAccount('azure');
       const reviewer = (reviewersResult.data.value || []).find(
-        r => r.uniqueName === account.user?.login
+        r => this.azureIdentityMatches(account.user, r)
       );
       if (reviewer) {
         await this.api(repo, `/pullrequests/${id}/reviewers/${reviewer.id}`, {
@@ -1074,6 +1153,20 @@ class HostingService {
         });
       }
       await persist('approve');
+    }
+    if (draft.event === 'REQUEST_CHANGES' && !completed.has('request-changes')) {
+      const reviewersResult = await this.api(repo, `/pullrequests/${id}/reviewers`);
+      const account = await this.vault.getAccount('azure');
+      const reviewer = (reviewersResult.data.value || []).find(
+        r => this.azureIdentityMatches(account.user, r)
+      );
+      if (reviewer) {
+        await this.api(repo, `/pullrequests/${id}/reviewers/${reviewer.id}`, {
+          method: 'PUT',
+          body: { vote: -10 }
+        });
+      }
+      await persist('request-changes');
     }
     await this.vault.removeReviewDraft(this.draftKey(repo, id));
     return { success: true };

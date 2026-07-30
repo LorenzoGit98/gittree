@@ -493,8 +493,9 @@ class GitTreeApp {
   }
 
   async doFetch() {
-    if (!this.state.repo) return;
+    if (!this.state.repo || this.remoteActionBusy) return;
     const repoPath = this.state.repo.path;
+    this.setRemoteActionBusy('btn-fetch', true);
     this.components.repoTabs.setSyncBusy(repoPath, true);
     this.showToast(t('feedback.fetching'));
     try {
@@ -504,12 +505,14 @@ class GitTreeApp {
       await this.refresh();
     } finally {
       this.components.repoTabs.setSyncBusy(repoPath, false);
+      this.setRemoteActionBusy('btn-fetch', false);
     }
   }
 
   async doPull() {
-    if (!this.state.repo) return;
+    if (!this.state.repo || this.remoteActionBusy) return;
     const repoPath = this.state.repo.path;
+    this.setRemoteActionBusy('btn-pull', true);
     this.components.repoTabs.setSyncBusy(repoPath, true);
     this.showToast(t('feedback.pulling'));
     try {
@@ -519,6 +522,7 @@ class GitTreeApp {
       await this.refresh();
     } finally {
       this.components.repoTabs.setSyncBusy(repoPath, false);
+      this.setRemoteActionBusy('btn-pull', false);
     }
   }
 
@@ -564,8 +568,9 @@ class GitTreeApp {
   }
 
   async doPush() {
-    if (!this.state.repo) return;
+    if (!this.state.repo || this.remoteActionBusy) return;
     const repoPath = this.state.repo.path;
+    this.setRemoteActionBusy('btn-push', true);
     this.components.repoTabs.setSyncBusy(repoPath, true);
     this.showToast(t('feedback.pushing'));
     try {
@@ -575,6 +580,28 @@ class GitTreeApp {
       await this.refresh();
     } finally {
       this.components.repoTabs.setSyncBusy(repoPath, false);
+      this.setRemoteActionBusy('btn-push', false);
+    }
+  }
+
+  setRemoteActionBusy(activeId, busy) {
+    this.remoteActionBusy = busy;
+    for (const id of ['btn-fetch', 'btn-pull', 'btn-push']) {
+      const button = document.getElementById(id);
+      if (!button) continue;
+      const icon = button.querySelector(':scope > i');
+      const isActive = busy && id === activeId;
+      button.disabled = busy;
+      button.classList.toggle('is-busy', isActive);
+      button.setAttribute('aria-busy', String(isActive));
+      if (!icon) continue;
+      if (isActive) {
+        if (!icon.dataset.originalIcon) icon.dataset.originalIcon = icon.className;
+        icon.className = 'ph ph-circle-notch';
+      } else if (icon.dataset.originalIcon) {
+        icon.className = icon.dataset.originalIcon;
+        delete icon.dataset.originalIcon;
+      }
     }
   }
 

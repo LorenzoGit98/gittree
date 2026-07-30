@@ -186,6 +186,7 @@ class PullRequestView {
 
   async reload() {
     this.generation += 1;
+    this.loading = false;
     this.items = [];
     this.hashes.clear();
     this.page = 1;
@@ -203,8 +204,9 @@ class PullRequestView {
   }
 
   async loadNextPage(reset = false) {
-    if (this.loading || (!reset && !this.hasMore)) return;
+    if ((!reset && this.loading) || (!reset && !this.hasMore)) return;
     this.loading = true;
+    this.renderViewport(true);
     const generation = this.generation;
     const page = reset ? 1 : this.page;
     try {
@@ -225,9 +227,12 @@ class PullRequestView {
       this.hasMore = Boolean(result.hasMore);
       this.renderViewport(true);
     } catch (error) {
-      this.showNotice(error.message, 'warning');
+      if (generation === this.generation) this.showNotice(error.message, 'warning');
     } finally {
-      if (generation === this.generation) this.loading = false;
+      if (generation === this.generation) {
+        this.loading = false;
+        this.renderViewport(true);
+      }
     }
   }
 
@@ -290,7 +295,7 @@ class PullRequestView {
     copy.className = 'pr-row-copy';
     const title = document.createElement('span');
     title.className = 'pr-row-title';
-    title.textContent = `#${item.number} ${item.title}`;
+    title.textContent = `#${item.number} ${item.title || ''}`;
     const meta = document.createElement('span');
     meta.className = 'pr-row-meta';
     meta.textContent = t('pullRequests.rowMeta', {
@@ -320,30 +325,42 @@ class PullRequestView {
     this.selected = item;
     this.renderViewport(true);
     const title = document.getElementById('detail-title');
-    title.textContent = `#${item.number} ${item.title}`;
-    title.title = item.title;
+    title.textContent = `#${item.number} ${item.title || ''}`;
+    title.title = item.title || '';
     const body = document.getElementById('detail-body');
     body.innerHTML = `<div class="diff-placeholder">${this.esc(t('common.loading'))}</div>`;
-    const detail = await window.gitTree.getPullRequestDetail(
-      this.repoPath,
-      this.provider,
-      item.number
-    );
-    if (detail?.error) {
-      body.textContent = detail.error;
-      return;
+    try {
+      const detail = await window.gitTree.getPullRequestDetail(
+        this.repoPath,
+        this.provider,
+        item.number
+      );
+      if (this.selected?.id !== item.id) return;
+      if (detail?.error) {
+        body.textContent = detail.error;
+        return;
+      }
+      this.detail = {
+        ...detail,
+        summary: detail.summary || item,
+        checks: detail.checks || [],
+        files: detail.files || [],
+        threads: detail.threads || [],
+        permissions: detail.permissions || {}
+      };
+      this.draft = detail.reviewDraft || {
+        headSha: detail.headSha || '',
+        body: '',
+        event: 'COMMENT',
+        inlineComments: [],
+        replies: [],
+        stale: false
+      };
+      this.renderDetail();
+    } catch (error) {
+      if (this.selected?.id !== item.id) return;
+      body.textContent = error.message || String(error);
     }
-    if (this.selected?.id !== item.id) return;
-    this.detail = detail;
-    this.draft = detail.reviewDraft || {
-      headSha: detail.headSha,
-      body: '',
-      event: 'COMMENT',
-      inlineComments: [],
-      replies: [],
-      stale: false
-    };
-    this.renderDetail();
   }
 
   renderDetail() {
@@ -354,29 +371,34 @@ class PullRequestView {
     const summary = document.createElement('section');
     summary.className = 'pr-detail-summary';
     const heading = document.createElement('h3');
-    heading.textContent = this.detail.summary.title;
+    heading.textContent = this.detail.summary?.title || '';
     const facts = document.createElement('div');
     facts.className = 'pr-detail-facts';
     facts.append(
       this.badge(t('pullRequests.branchRoute', {
-        source: this.detail.summary.source,
-        target: this.detail.summary.target
+        source: this.detail.summary?.source || '',
+        target: this.detail.summary?.target || ''
       }), 'badge badge-branch'),
-      this.badge(this.detail.mergeability, 'badge'),
+      this.badge(this.detail.mergeability || 'unknown', 'badge'),
       this.badge(
-        t('pullRequests.checksCount', { count: this.detail.checks.length }),
+        t('pullRequests.checksCount', { count: this.detail.checks?.length || 0 }),
         'badge'
       )
     );
-    const checkout = document.createElement('button');
-    checkout.type = 'button';
-    checkout.className = 'btn btn-small';
-    checkout.innerHTML = `<i class="ph ph-git-branch"></i>${this.esc(t('pullRequests.checkoutSource'))}`;
-    checkout.onclick = () => this.checkoutSource();
-    summary.append(heading, facts, checkout);
+    summary.append(heading, facts);
+    if (this.detail.permissions?.checkout !== false) {
+      const checkout = document.createElement('button');
+      checkout.type = 'button';
+      checkout.className = 'btn btn-small';
+      checkout.innerHTML = `<i class="ph ph-git-branch"></i>${this.esc(t('pullRequests.checkoutSource'))}`;
+      checkout.onclick = () => this.checkoutSource().catch(error => {
+        this.app.showToast(error.message || String(error), 'error');
+      });
+      summary.appendChild(checkout);
+    }
     wrapper.appendChild(summary);
 
-    if (this.draft.stale) wrapper.appendChild(this.createStaleNotice());
+    if (this.draft?.stale) wrapper.appendChild(this.createStaleNotice());
     wrapper.appendChild(this.createFileSection());
     wrapper.appendChild(this.createThreadSection());
     wrapper.appendChild(this.createReviewComposer());
@@ -407,12 +429,12 @@ class PullRequestView {
     section.className = 'pr-detail-section';
     const heading = document.createElement('h3');
     heading.textContent = t('pullRequests.filesCount', {
-      count: this.detail.files.length
+      count: this.detail.files?.length || 0
     });
     section.appendChild(heading);
     const files = document.createElement('div');
     files.className = 'pr-detail-facts';
-    this.detail.files.slice(0, 100).forEach((file, index) => {
+    (this.detail.files || []).slice(0, 100).forEach((file, index) => {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'chip';
@@ -428,7 +450,7 @@ class PullRequestView {
     });
     const patch = document.createElement('div');
     section.append(files, patch);
-    if (this.detail.files[0]) this.renderPatch(this.detail.files[0], patch);
+    if (this.detail.files?.[0]) this.renderPatch(this.detail.files[0], patch);
     return section;
   }
 
@@ -526,10 +548,10 @@ class PullRequestView {
     section.className = 'pr-detail-section';
     const heading = document.createElement('h3');
     heading.textContent = t('pullRequests.discussionsCount', {
-      count: this.detail.threads.length
+      count: this.detail.threads?.length || 0
     });
     section.appendChild(heading);
-    this.detail.threads.slice(0, 50).forEach(thread => {
+    (this.detail.threads || []).slice(0, 50).forEach(thread => {
       const item = document.createElement('article');
       item.className = 'pr-thread';
       const content = document.createElement('p');
@@ -549,7 +571,7 @@ class PullRequestView {
       reply.textContent = t('pullRequests.reply');
       reply.onclick = () => this.replyThread(thread);
       actions.appendChild(reply);
-      if (this.detail.permissions.resolveThreads) {
+      if (this.detail.permissions?.resolveThreads) {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'btn btn-small';
@@ -633,6 +655,7 @@ class PullRequestView {
 
   async saveDraft() {
     if (!this.selected || !this.draft) return;
+    if (!/^[a-f0-9]{7,64}$/i.test(this.draft.headSha || '')) return;
     const result = await window.gitTree.saveReviewDraft(
       this.repoPath,
       this.provider,

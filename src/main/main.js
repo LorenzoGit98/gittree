@@ -844,13 +844,19 @@ function registerIpcHandlers() {
       try {
         const repository = await getHostingRepository(repoPath, provider);
         const detail = await hostingService.pullRequestDetail(repository, id);
-        return {
-          ...detail,
-          reviewDraft: await hostingService.getReviewDraft(
+        let reviewDraft = null;
+        try {
+          reviewDraft = await hostingService.getReviewDraft(
             repository,
             id,
-            detail.headSha
-          )
+            detail.headSha || ''
+          );
+        } catch {
+          reviewDraft = null;
+        }
+        return {
+          ...detail,
+          reviewDraft
         };
       } catch (err) {
         return { error: err.message };
@@ -942,7 +948,9 @@ function registerIpcHandlers() {
         }
         const url = provider === 'github'
           ? `${repository.webBase}/pull/${safeId}`
-          : `${repository.webBase}/-/merge_requests/${safeId}`;
+          : provider === 'azure'
+            ? `${repository.webBase}/pullrequest/${safeId}`
+            : `${repository.webBase}/-/merge_requests/${safeId}`;
         const parsed = new URL(url);
         if (parsed.protocol !== 'https:') throw new Error('Unsafe review URL');
         await shell.openExternal(url);

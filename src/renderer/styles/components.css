@@ -147,6 +147,19 @@ input:focus-visible {
   background: var(--surface-secondary);
 }
 
+.btn.is-busy,
+.btn:disabled.is-busy {
+  color: var(--text-secondary);
+  background: var(--surface-secondary);
+  opacity: 1;
+}
+
+.btn.is-busy i,
+.btn .ph-circle-notch {
+  color: var(--primary);
+  animation: project-loading-spin 0.8s linear infinite;
+}
+
 .toolbar-sync-count {
   min-width: 18px;
   height: 18px;

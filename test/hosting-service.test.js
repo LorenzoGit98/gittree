@@ -187,7 +187,7 @@ test('azure PAT sign-in validates against the organization connectionData endpoi
 
   const result = await service.setPat('azure', token, 'contoso');
 
-  assert.equal(requests[0].url, 'https://dev.azure.com/contoso/_apis/connectionData');
+  assert.equal(requests[0].url, 'https://dev.azure.com/contoso/_apis/connectionData?api-version=7.1');
   assert.equal(
     requests[0].options.headers.Authorization,
     `Basic ${Buffer.from(`:${token}`).toString('base64')}`
@@ -222,7 +222,149 @@ test('azure pull request URLs keep organization and project segments', async () 
 
   assert.equal(
     requests[0].url,
-    'https://dev.azure.com/contoso/platform/_apis/git/repositories/widgets/pullrequests?searchCriteria.status=active&$top=50&$skip=0'
+    'https://dev.azure.com/contoso/platform/_apis/git/repositories/widgets/pullrequests?searchCriteria.status=active&$top=50&$skip=0&api-version=7.1'
   );
   assert.equal(requests[0].url.includes('undefined'), false);
+});
+
+test('getReviewDraft returns null for missing head SHA instead of throwing', async () => {
+  const service = new HostingService({
+    vault: memoryVault({ accessToken: 'token', user: { login: 'me' } }),
+    fetch: async () => jsonResponse({})
+  });
+  const repository = {
+    provider: 'azure',
+    host: 'dev.azure.com',
+    ownerPath: 'contoso/platform',
+    repository: 'widgets',
+    organization: 'contoso',
+    project: 'platform'
+  };
+  assert.equal(await service.getReviewDraft(repository, 7, ''), null);
+  assert.equal(await service.getReviewDraft(repository, 7, null), null);
+});
+
+test('azure list filters review-requested and authored by identity', async () => {
+  const service = new HostingService({
+    vault: memoryVault({
+      accessToken: 'token',
+      user: { id: 'user-1', login: 'patricia@contoso.com', name: 'Patricia' }
+    }),
+    fetch: async () => jsonResponse({
+      value: [
+        {
+          pullRequestId: 11,
+          title: 'Mine',
+          createdBy: { id: 'user-1', uniqueName: 'patricia@contoso.com', displayName: 'Patricia' },
+          sourceRefName: 'refs/heads/feature-a',
+          targetRefName: 'refs/heads/main',
+          status: 'active',
+          lastMergeSourceCommit: { commitId: 'a'.repeat(40) },
+          reviewers: []
+        },
+        {
+          pullRequestId: 12,
+          title: 'Needs me',
+          createdBy: { id: 'other', uniqueName: 'other@contoso.com', displayName: 'Other' },
+          sourceRefName: 'refs/heads/feature-b',
+          targetRefName: 'refs/heads/main',
+          status: 'active',
+          lastMergeSourceCommit: { commitId: 'b'.repeat(40) },
+          reviewers: [{ id: 'user-1', uniqueName: 'patricia@contoso.com', vote: 0 }]
+        },
+        {
+          pullRequestId: 13,
+          title: 'Unrelated',
+          createdBy: { id: 'other', uniqueName: 'other@contoso.com', displayName: 'Other' },
+          sourceRefName: 'refs/heads/feature-c',
+          targetRefName: 'refs/heads/main',
+          status: 'active',
+          reviewers: [{ id: 'someone', uniqueName: 'someone@contoso.com', vote: 0 }]
+        }
+      ]
+    })
+  });
+  const repository = {
+    provider: 'azure',
+    host: 'dev.azure.com',
+    ownerPath: 'contoso/platform',
+    repository: 'widgets',
+    organization: 'contoso',
+    project: 'platform'
+  };
+
+  const authored = await service.listPullRequests(repository, { filter: 'authored', page: 1 });
+  assert.deepEqual(authored.items.map(item => item.number), [11]);
+
+  const requested = await service.listPullRequests(repository, {
+    filter: 'review-requested',
+    page: 1
+  });
+  assert.deepEqual(requested.items.map(item => item.number), [12]);
+});
+
+test('azure pull request detail loads iteration files and tolerates empty draft SHA', async () => {
+  const requests = [];
+  const service = new HostingService({
+    vault: memoryVault({
+      accessToken: 'token',
+      user: { id: 'user-1', login: 'patricia@contoso.com' }
+    }),
+    fetch: async url => {
+      requests.push(url);
+      if (url.includes('/iterations/') && url.includes('/changes')) {
+        return jsonResponse({
+          changeEntries: [
+            { changeType: 'edit', item: { path: '/src/app.js' } },
+            { changeType: 'add', item: { path: '/README.md' } }
+          ]
+        });
+      }
+      if (url.includes('/iterations')) {
+        return jsonResponse({
+          value: [{ id: 1, sourceRefCommit: { commitId: 'c'.repeat(40) } }]
+        });
+      }
+      if (url.includes('/threads')) {
+        return jsonResponse({ value: [] });
+      }
+      return jsonResponse({
+        pullRequestId: 42,
+        title: 'Ship it',
+        createdBy: { id: 'user-1', uniqueName: 'patricia@contoso.com' },
+        sourceRefName: 'refs/heads/feature',
+        targetRefName: 'refs/heads/main',
+        status: 'active',
+        mergeStatus: 'succeeded',
+        reviewers: []
+      });
+    }
+  });
+
+  const detail = await service.pullRequestDetail(
+    {
+      provider: 'azure',
+      host: 'dev.azure.com',
+      ownerPath: 'contoso/platform',
+      repository: 'widgets',
+      organization: 'contoso',
+      project: 'platform'
+    },
+    42
+  );
+
+  assert.equal(detail.summary.number, 42);
+  assert.equal(detail.headSha, 'c'.repeat(40));
+  assert.equal(detail.permissions.checkout, false);
+  assert.equal(detail.files.length, 2);
+  assert.equal(detail.files[0].path, 'src/app.js');
+  assert.equal(requests.some(url => url.includes('api-version=7.1')), true);
+  assert.equal(await service.getReviewDraft({
+    provider: 'azure',
+    host: 'dev.azure.com',
+    ownerPath: 'contoso/platform',
+    repository: 'widgets',
+    organization: 'contoso',
+    project: 'platform'
+  }, 42, detail.headSha) === null, true);
 });
