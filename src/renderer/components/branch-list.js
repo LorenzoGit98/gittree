@@ -52,6 +52,18 @@ class BranchListView {
         event, branch, this.metadata, this.status, this.operationState, selectedBranches
       );
     });
+    
+    // Inizializza le scorciatoie da tastiera (ESC per dismettere selezione)
+    this.initKeyboardShortcuts();
+  }
+
+  // Aggiungi listener per ESC su tutta la finestra
+  initKeyboardShortcuts() {
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && this.selectedBranchKeys.size > 0) {
+        this.dismissSelection();
+      }
+    });
   }
 
   async load(repoPath) {
@@ -420,27 +432,78 @@ class BranchListView {
   }
 
   updateBatchBar() {
-    let bar = this.container.parentElement.querySelector('.branch-batch-bar');
+    const footer = document.getElementById('batch-operations-footer');
+    const countSpan = footer?.querySelector('.batch-selection-count');
+    const namesContainer = footer?.querySelector('.batch-selected-names');
+    const pullBtn = footer?.querySelector('[data-batch-pull]');
+    const deleteBtn = footer?.querySelector('[data-batch-delete]');
+    const compareBtn = footer?.querySelector('[data-batch-compare]');
+    const dismissBtn = footer?.querySelector('[data-batch-dismiss]');
+    
     if (this.selectedBranchKeys.size > 1) {
-      if (!bar) {
-        bar = document.createElement('div');
-        bar.className = 'branch-batch-bar';
-        this.container.parentElement.appendChild(bar);
-      }
       const count = this.selectedBranchKeys.size;
-      bar.innerHTML = `
-        <span class="branch-batch-count">${this.esc(t('sidebar.batchSelected', { count }))}</span>
-        <button class="btn btn-small branch-batch-delete" data-batch-delete>
-          <i class="ph ph-trash"></i>${this.esc(t('sidebar.batchDelete'))}
-        </button>
-        <button class="btn btn-small branch-batch-compare" data-batch-compare>
-          <i class="ph ph-arrows-left-right"></i>${this.esc(t('sidebar.batchCompare'))}
-        </button>
-      `;
-      bar.querySelector('[data-batch-delete]').onclick = () => this.batchDelete();
-      bar.querySelector('[data-batch-compare]').onclick = () => this.batchCompare();
-    } else if (bar) {
-      bar.remove();
+      if (countSpan) {
+        const selectedText = t('sidebar.batchSelected', { count });
+        countSpan.textContent = selectedText;
+      }
+      
+      // Mostra i nomi dei branch selezionati (con limit a 5 visibili, altrimenti "...")
+      if (namesContainer) {
+        const branches = this.getSelectedBranches();
+        namesContainer.innerHTML = '';
+        const fragment = document.createDocumentFragment();
+        
+        const displayCount = Math.min(branches.length, 5);
+        for (let i = 0; i < displayCount; i++) {
+          const branch = branches[i];
+          const badge = document.createElement('span');
+          badge.className = 'batch-selected-names__item';
+          badge.dataset.branchName = branch.name;
+          badge.title = branch.kind === 'remote' ? `remotes/${branch.name}` : branch.name;
+          badge.textContent = branch.name.split('/').pop();
+          fragment.appendChild(badge);
+        }
+        
+        if (branches.length > 5) {
+          const more = document.createElement('span');
+          more.className = 'batch-selected-names__item';
+          more.textContent = `+${branches.length - 5} more`;
+          more.style.opacity = '0.6';
+          fragment.appendChild(more);
+        }
+        
+        namesContainer.appendChild(fragment);
+      }
+      
+      // Attiva i pulsanti
+      if (pullBtn) {
+        pullBtn.onclick = () => this.batchPull();
+        pullBtn.disabled = false;
+      }
+      if (deleteBtn) {
+        deleteBtn.onclick = () => this.batchDelete();
+        deleteBtn.disabled = false;
+      }
+      if (compareBtn) {
+        compareBtn.onclick = () => this.batchCompare();
+        compareBtn.disabled = false;
+      }
+      if (dismissBtn) {
+        dismissBtn.onclick = () => this.dismissSelection();
+        dismissBtn.disabled = false;
+      }
+      
+      // Mostra il footer con animazione
+      footer.classList.add('is-visible');
+    } else {
+      // Nascondi il footer
+      footer?.classList.remove('is-visible');
+      
+      // Disabilita i pulsanti quando non ci sono selezioni
+      if (pullBtn) { pullBtn.onclick = null; pullBtn.disabled = true; }
+      if (deleteBtn) { deleteBtn.onclick = null; deleteBtn.disabled = true; }
+      if (compareBtn) { compareBtn.onclick = null; compareBtn.disabled = true; }
+      if (dismissBtn) { dismissBtn.onclick = null; dismissBtn.disabled = true; }
     }
   }
 
@@ -511,6 +574,78 @@ class BranchListView {
     } else if (branches.length > 2) {
       this.app.components.compare.compareMatrix(branches.slice(0, 8));
     }
+  }
+
+  async batchPull() {
+    const repo = this.app.state.repo;
+    if (!repo) return;
+    
+    const branches = this.getSelectedBranches().filter(b => b.kind === 'local');
+    if (!branches.length) return;
+    
+    // Aggiorna lo stato UI
+    const footer = document.getElementById('batch-operations-footer');
+    const infoSection = footer?.querySelector('.batch-selection-info');
+    if (infoSection) infoSection.classList.add('is-busy');
+    
+    this.setRemoteActionBusy('btn-pull', true);
+    this.showToast(t('feedback.pullingMultiple', { count: branches.length }), 'info');
+    
+    try {
+      let successCount = 0;
+      let failCount = 0;
+      
+      for (const branch of branches) {
+        const parts = branch.upstream?.split('/');
+        if (parts && parts.length === 2) {
+          const [remote, remoteBranch] = parts;
+          const result = await window.gitTree.pull(repo.path, remote, remoteBranch);
+          
+          if (result.error) {
+            failCount++;
+            this.showToast(`Failed to pull ${branch.name}: ${result.error}`, 'error');
+            const badge = this.container.querySelector(
+              `.batch-selected-names__item[data-branch-name="${CSS.escape(branch.name)}"]`
+            );
+            if (badge) {
+              badge.classList.add('is-error');
+              badge.innerHTML += ' <i class="ph ph-x-circle" aria-hidden="true"></i>';
+            }
+          } else {
+            successCount++;
+            const badge = this.container.querySelector(
+              `.batch-selected-names__item[data-branch-name="${CSS.escape(branch.name)}"]`
+            );
+            if (badge) {
+              badge.classList.add('is-success');
+              badge.innerHTML += ' <i class="ph ph-check" aria-hidden="true"></i>';
+            }
+          }
+        }
+      }
+      
+      if (failCount === 0) {
+        this.showToast(t('feedback.pullAllComplete', { count: successCount }), 'success');
+      } else if (successCount > 0) {
+        this.showToast(
+          t('feedback.pullPartialComplete', { success: successCount, failure: failCount }),
+          'warning'
+        );
+      }
+      
+      await this.app.refresh();
+    } finally {
+      this.setRemoteActionBusy('btn-pull', false);
+      if (infoSection) infoSection.classList.remove('is-busy');
+      setTimeout(() => this.dismissSelection(), 500); // Ritardo per vedere i risultati
+    }
+  }
+
+  dismissSelection() {
+    this.selectedBranchKeys.clear();
+    this.selectionAnchorKey = null;
+    this.updateVisibleSelection();
+    this.updateBatchBar();
   }
 
   confirmDialog(title, message, actionLabel, danger = false) {

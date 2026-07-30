@@ -216,6 +216,46 @@
               <div id="tag-list" class="branch-list"></div>
             </div>
           </div>
+
+          <!-- Unified Batch Operations Footer -->
+          <div class="batch-operations-footer" id="batch-operations-footer">
+            <div class="batch-operations-content">
+              <div class="batch-selection-info">
+                <i class="ph ph-git-branch"></i>
+                <span class="batch-selection-count"></span>
+                <div class="batch-selected-names" role="list" aria-label="Selected branches"></div>
+              </div>
+              <div class="batch-actions">
+                <button class="btn btn-small btn-primary batch-pull-all" 
+                        type="button" 
+                        title="Pull all selected branches"
+                        aria-label="Pull all selected branches">
+                  <i class="ph ph-download-simple"></i>
+                  <span data-i18n="sidebar.pullAll">Pull All</span>
+                </button>
+                <button class="btn btn-small batch-delete" 
+                        type="button" 
+                        title="Delete selected branches"
+                        aria-label="Delete selected branches">
+                  <i class="ph ph-trash"></i>
+                  <span data-i18n="sidebar.batchDelete">Delete</span>
+                </button>
+                <button class="btn btn-small batch-compare" 
+                        type="button" 
+                        title="Compare selected branches"
+                        aria-label="Compare selected branches">
+                  <i class="ph ph-arrows-left-right"></i>
+                  <span data-i18n="sidebar.batchCompare">Compare</span>
+                </button>
+                <button class="btn btn-small batch-dismiss" 
+                        type="button" 
+                        title="Dismiss selection"
+                        aria-label="Dismiss selection">
+                  <i class="ph ph-x"></i>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </aside>
 

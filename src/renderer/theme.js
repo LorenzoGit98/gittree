@@ -12,11 +12,11 @@ const Theme = {
       { id: 'lilac', preview: ['rgb(244,241,250)', 'rgb(253,252,255)', 'rgb(233,228,241)'] }
     ],
     dark: [
-      { id: 'onyx', preview: ['rgb(0,0,0)', 'rgb(0,0,0)', 'rgb(18,18,18)'] },
-      { id: 'charcoal', preview: ['rgb(22,22,24)', 'rgb(28,28,31)', 'rgb(43,43,47)'] },
-      { id: 'graphite', preview: ['rgb(16,20,26)', 'rgb(23,28,35)', 'rgb(38,46,56)'] },
-      { id: 'umber', preview: ['rgb(21,17,16)', 'rgb(28,23,20)', 'rgb(44,37,32)'] },
-      { id: 'pine', preview: ['rgb(13,18,14)', 'rgb(19,24,20)', 'rgb(33,42,35)'] }
+      { id: 'onyx', preview: ['rgb(24,24,26)', 'rgb(27,27,30)', 'rgb(30,30,33)'] },
+      { id: 'charcoal', preview: ['rgb(30,30,33)', 'rgb(35,35,39)', 'rgb(42,42,46)'] },
+      { id: 'graphite', preview: ['rgb(22,29,38)', 'rgb(29,38,48)', 'rgb(37,49,62)'] },
+      { id: 'umber', preview: ['rgb(27,24,22)', 'rgb(35,31,28)', 'rgb(44,37,32)'] },
+      { id: 'pine', preview: ['rgb(19,24,21)', 'rgb(25,34,29)', 'rgb(31,42,36)'] }
     ]
   },
 

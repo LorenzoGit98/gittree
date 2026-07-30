@@ -80,9 +80,11 @@
   font-size: var(--text-sm);
 }
 
-.pr-create-check input {
-  width: auto;
-  min-height: auto;
+.pr-create-check input[type="checkbox"] {
+  width: 16px;
+  height: 14px;
+  min-height: 14px;
+  flex-shrink: 0;
 }
 
 .pr-notice {

@@ -552,29 +552,31 @@
 }
 
 .settings-theme-preview-light {
-  background: rgb(243,246,251);
+  background: linear-gradient(135deg, rgb(243,246,251) 0%, rgb(252,254,255) 100%);
 }
 
 .settings-theme-preview-light::before {
   background: rgb(233,238,245);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.05);
 }
 
 .settings-theme-preview-light::after {
   border: 1px solid rgb(213,220,230);
-  background: rgb(255,255,255);
+  background: linear-gradient(180deg, #ffffff 0%, #f9fafb 100%);
 }
 
 .settings-theme-preview-dark {
-  background: rgb(0,0,0);
+  background: linear-gradient(135deg, rgb(24,24,26) 0%, rgb(30,30,32) 100%);
 }
 
 .settings-theme-preview-dark::before {
-  background: rgb(18,18,18);
+  background: rgb(30,30,33);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03);
 }
 
 .settings-theme-preview-dark::after {
   border: 1px solid rgb(48,48,48);
-  background: rgb(5,5,5);
+  background: linear-gradient(180deg, rgb(27,27,30) 0%, rgb(20,20,22) 100%);
 }
 
 .settings-theme-name {

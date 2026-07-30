@@ -381,3 +381,172 @@
 .branch-batch-delete {
   color: var(--color-danger);
 }
+
+/* Unified Batch Operations Footer */
+.batch-operations-footer {
+  position: fixed;
+  bottom: -80px; /* Start hidden */
+  left: 0;
+  right: 0;
+  transform: translateY(0);
+  transition: bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 50;
+  pointer-events: none;
+}
+
+.batch-operations-footer.is-visible {
+  bottom: 0;
+  pointer-events: auto;
+}
+
+.batch-operations-footer.is-visible .batch-operations-content {
+  animation: fade-slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.05s forwards;
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+@keyframes fade-slide-up {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.batch-operations-content {
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-subtle);
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.batch-selection-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-primary);
+}
+
+.batch-selection-info > i {
+  font-size: 16px;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.batch-operations-footer.is-visible .batch-selection-info > i {
+  animation: bounce-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes bounce-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.5) translateY(-10px);
+  }
+  100% {
+    opacity: 0.7;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.batch-selection-count {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.batch-selected-names {
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin-left: var(--space-2);
+  scrollbar-width: thin;
+}
+
+.batch-selected-names::-webkit-scrollbar {
+  height: 4px;
+}
+
+.batch-selected-names::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.batch-selected-names::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 2px;
+}
+
+.batch-selected-names__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px 8px;
+  margin: 2px;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+
+.batch-selected-names__item i {
+  font-size: 10px;
+}
+
+.batch-selected-names__item.is-success i {
+  color: var(--success-color);
+}
+
+.batch-selected-names__item.is-error i {
+  color: var(--color-danger);
+}
+
+.batch-selected-names__item::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: var(--brand-color);
+  border-radius: 50%;
+}
+
+.batch-selected-names__item.is-success::before {
+  background: var(--success-color);
+}
+
+.batch-selected-names__item.is-error::before {
+  background: var(--color-danger);
+}
+
+.batch-selected-names__item.is-scrolling {
+  animation: scroll-highlight 2s ease-in-out;
+}
+
+@keyframes scroll-highlight {
+  0%, 100% {
+    background: var(--bg-secondary);
+  }
+  50% {
+    background: var(--bg-tertiary);
+  }
+}
+
+.batch-actions {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  justify-content: flex-end;
+}
+
+.batch-actions .btn {
+  font-size: 12px;
+  gap: var(--space-1);
+}
+
+.batch-selection-info.is-busy i {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

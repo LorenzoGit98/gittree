@@ -698,35 +698,42 @@ input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
   width: 16px;
-  height: 16px;
+  height: 14px;
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: 3px;
   background: var(--surface-input);
   cursor: pointer;
   position: relative;
   flex-shrink: 0;
+  transition: all 0.15s ease;
 }
 
 input[type="checkbox"]:checked {
   background: var(--primary);
   border-color: var(--primary);
+  transform: scale(1.05);
 }
 
 input[type="checkbox"]:checked::after {
   content: "";
   position: absolute;
-  top: 2px;
-  left: 5px;
-  width: 4px;
-  height: 8px;
+  top: 1px;
+  left: 4px;
+  width: 3px;
+  height: 6px;
   border: solid var(--text-inverse);
-  border-width: 0 2px 2px 0;
+  border-width: 0 1.5px 1.5px 0;
   transform: rotate(45deg);
 }
 
 input[type="checkbox"]:focus-visible {
   outline: 2px solid var(--border-focus);
   outline-offset: 2px;
+}
+
+input[type="checkbox"]:hover:not(:checked) {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
 }
 
 :root[data-theme="dark"] input[type="checkbox"] {
@@ -737,4 +744,9 @@ input[type="checkbox"]:focus-visible {
 :root[data-theme="dark"] input[type="checkbox"]:checked {
   background: var(--primary);
   border-color: var(--primary);
+}
+
+:root[data-theme="dark"] input[type="checkbox"]:hover:not(:checked) {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
 }
