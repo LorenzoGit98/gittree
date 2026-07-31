@@ -218,7 +218,7 @@
   justify-content: center;
   border: 0;
   border-radius: var(--radius-sm);
-  background: transparent;
+  background: var(--surface-primary);
   color: var(--text-secondary);
   cursor: pointer;
 }
