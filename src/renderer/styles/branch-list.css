@@ -183,6 +183,58 @@
   box-shadow: none;
 }
 
+.stash-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.stash-item .branch-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stash-actions {
+  display: none;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.stash-item:hover .stash-actions,
+.stash-item:focus-within .stash-actions {
+  display: inline-flex;
+}
+
+.stash-action {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.stash-action:hover,
+.stash-action:focus-visible {
+  background: var(--surface-active);
+  color: var(--text-primary);
+}
+
+.stash-action.is-danger:hover,
+.stash-action.is-danger:focus-visible {
+  background: var(--error-soft);
+  color: var(--error-text);
+}
+
 .branch-item.selected:not(.active) .branch-icon {
   color: var(--text-link);
 }

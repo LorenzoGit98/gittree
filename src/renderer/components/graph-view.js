@@ -1,3 +1,5 @@
+/* exported GraphView */
+/* eslint-disable-next-line no-unused-vars -- script-tag global consumed by app.js */
 class GraphView {
   constructor(container, body, app) {
     this.container = container;
@@ -543,7 +545,7 @@ class GraphView {
     let stored = {};
     try {
       stored = JSON.parse(localStorage.getItem(this.historyStateStorageKey)) || {};
-    } catch {}
+    } catch { /* invalid stored history state is ignored */ }
     const state = stored[this.repoPath] || {};
     this.filters = {
       query: typeof state.query === 'string' ? state.query : '',

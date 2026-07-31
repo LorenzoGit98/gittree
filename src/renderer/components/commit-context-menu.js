@@ -72,6 +72,20 @@ class CommitContextMenu {
         reason: this.hashes.length !== 1 ? t('commitMenu.createTagSingle') : ''
       },
       {
+        action: 'delete-tag',
+        icon: 'ph-tag-simple',
+        label: t('commitMenu.deleteTag'),
+        disabled: this.hashes.length !== 1,
+        reason: this.hashes.length !== 1 ? t('commitMenu.deleteTagSingle') : ''
+      },
+      {
+        action: 'restore-file',
+        icon: 'ph-arrow-counter-clockwise',
+        label: t('commitMenu.checkoutFile'),
+        disabled: this.hashes.length !== 1,
+        reason: this.hashes.length !== 1 ? t('commitMenu.checkoutFileSingle') : ''
+      },
+      {
         action: 'rebase',
         icon: 'ph-git-branch',
         label: t('commitMenu.rebase'),
@@ -117,6 +131,18 @@ class CommitContextMenu {
       if (!repo || this.hashes.length !== 1) return;
       this.close();
       await this.createTagDialog(repo, this.hashes[0]);
+      return;
+    }
+    if (action === 'delete-tag') {
+      if (!repo || this.hashes.length !== 1) return;
+      this.close();
+      await this.deleteTagDialog(repo, this.hashes[0]);
+      return;
+    }
+    if (action === 'restore-file') {
+      if (!repo || this.hashes.length !== 1) return;
+      this.close();
+      await this.restoreFileDialog(repo, this.hashes[0]);
       return;
     }
     const preview = this.previews[action];
@@ -230,6 +256,220 @@ class CommitContextMenu {
       document.addEventListener('keydown', onKeydown);
       overlay.addEventListener('click', onOverlayClick);
       form.elements.name.focus();
+    });
+  }
+
+  async deleteTagDialog(repo, hash) {
+    const tagsResult = await window.gitTree.getTagsAtCommit(repo.path, hash);
+    const tags = Array.isArray(tagsResult) ? tagsResult : [];
+    if (tagsResult?.error || !tags.length) {
+      this.app.showToast(tagsResult?.error || t('commitMenu.noTagsAtCommit'), 'warning');
+      return;
+    }
+    const overlay = document.getElementById('modal-overlay');
+    const dialog = document.getElementById('modal-dialog');
+    return new Promise(resolve => {
+      dialog.className = 'confirm-dialog tag-delete-dialog';
+      dialog.setAttribute('role', 'dialog');
+      dialog.setAttribute('aria-modal', 'true');
+      dialog.innerHTML = `
+        <span class="eyebrow">${this.esc(hash.slice(0, 8))}</span>
+        <h3>${this.esc(t('commitMenu.deleteTagTitle'))}</h3>
+        <div class="tag-delete-list">
+          ${tags.map(tag => `
+            <label class="tag-delete-item">
+              <input type="checkbox" value="${this.esc(tag)}">
+              <i class="ph ph-tag" aria-hidden="true"></i>
+              <span>${this.esc(tag)}</span>
+            </label>
+          `).join('')}
+        </div>
+        <p class="tag-create-error" data-tag-error aria-live="polite"></p>
+        <div class="confirm-actions">
+          <button class="btn" type="button" data-cancel>${this.esc(t('common.cancel'))}</button>
+          <button class="btn btn-danger" type="button" data-delete disabled>
+            <i class="ph ph-trash" aria-hidden="true"></i>
+            ${this.esc(t('commitMenu.deleteTagAction'))}
+          </button>
+        </div>`;
+      overlay.classList.remove('is-hidden');
+      const error = dialog.querySelector('[data-tag-error]');
+      const del = dialog.querySelector('[data-delete]');
+      const cancel = dialog.querySelector('[data-cancel]');
+      const checkboxes = [...dialog.querySelectorAll('input[type="checkbox"]')];
+      const sync = () => {
+        del.disabled = !checkboxes.some(checkbox => checkbox.checked);
+      };
+      checkboxes.forEach(checkbox => {
+        checkbox.onchange = sync;
+      });
+      let submitting = false;
+      const finish = value => {
+        document.removeEventListener('keydown', onKeydown);
+        overlay.removeEventListener('click', onOverlayClick);
+        overlay.classList.add('is-hidden');
+        dialog.className = 'confirm-dialog';
+        dialog.removeAttribute('role');
+        dialog.removeAttribute('aria-modal');
+        dialog.innerHTML = '';
+        resolve(value);
+      };
+      const onKeydown = event => {
+        if (event.key === 'Escape' && !submitting) finish(null);
+      };
+      const onOverlayClick = event => {
+        if (event.target === overlay && !submitting) finish(null);
+      };
+      cancel.onclick = () => {
+        if (!submitting) finish(null);
+      };
+      del.onclick = async () => {
+        const selected = checkboxes.filter(checkbox => checkbox.checked).map(checkbox => checkbox.value);
+        if (!selected.length || submitting) return;
+        submitting = true;
+        del.disabled = true;
+        cancel.disabled = true;
+        del.querySelector('i').className = 'ph ph-circle-notch';
+        error.textContent = '';
+        try {
+          for (const tag of selected) {
+            const result = await window.gitTree.deleteTag(repo.path, tag);
+            if (!result?.success || result?.error) {
+              throw new Error(result?.error || t('commitMenu.tagDeleteFailed'));
+            }
+          }
+          finish(true);
+          this.app.showToast(
+            t('commitMenu.tagsDeleted', { count: selected.length }),
+            'success'
+          );
+          await this.app.refresh({ selectHash: hash, silent: true });
+        } catch (tagError) {
+          submitting = false;
+          del.disabled = false;
+          cancel.disabled = false;
+          del.querySelector('i').className = 'ph ph-trash';
+          error.textContent = tagError.message || t('commitMenu.tagDeleteFailed');
+        }
+      };
+      document.addEventListener('keydown', onKeydown);
+      overlay.addEventListener('click', onOverlayClick);
+      checkboxes[0]?.focus();
+    });
+  }
+
+  async restoreFileDialog(repo, hash) {
+    const treeResult = await window.gitTree.getFileTree(repo.path, hash);
+    const files = Array.isArray(treeResult) ? treeResult : [];
+    if (treeResult?.error || !files.length) {
+      this.app.showToast(treeResult?.error || t('commitMenu.noFilesAtCommit'), 'warning');
+      return;
+    }
+    const overlay = document.getElementById('modal-overlay');
+    const dialog = document.getElementById('modal-dialog');
+    return new Promise(resolve => {
+      dialog.className = 'confirm-dialog checkout-file-dialog';
+      dialog.setAttribute('role', 'dialog');
+      dialog.setAttribute('aria-modal', 'true');
+      dialog.innerHTML = `
+        <span class="eyebrow">${this.esc(hash.slice(0, 8))}</span>
+        <h3>${this.esc(t('commitMenu.checkoutFileTitle'))}</h3>
+        <p class="checkout-file-help">${this.esc(t('commitMenu.checkoutFileHelp'))}</p>
+        <label class="checkout-file-search search-clearable">
+          <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+          <input type="search" placeholder="${this.esc(t('commitMenu.checkoutFileFilter'))}" aria-label="${this.esc(t('commitMenu.checkoutFileFilter'))}">
+        </label>
+        <div class="tag-delete-list checkout-file-list" data-file-list></div>
+        <p class="tag-create-error" data-file-error aria-live="polite"></p>
+        <div class="confirm-actions">
+          <button class="btn" type="button" data-cancel>${this.esc(t('common.cancel'))}</button>
+          <button class="btn btn-primary" type="button" data-restore disabled>
+            <i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i>
+            ${this.esc(t('commitMenu.checkoutFileAction'))}
+          </button>
+        </div>`;
+      overlay.classList.remove('is-hidden');
+      const list = dialog.querySelector('[data-file-list]');
+      const error = dialog.querySelector('[data-file-error]');
+      const restoreButton = dialog.querySelector('[data-restore]');
+      const cancel = dialog.querySelector('[data-cancel]');
+      const search = dialog.querySelector('input[type="search"]');
+      let selectedPath = null;
+      let submitting = false;
+
+      const renderList = () => {
+        const needle = (search.value || '').trim().toLowerCase();
+        const visible = files
+          .filter(file => !needle || file.toLowerCase().includes(needle))
+          .slice(0, 500);
+        list.innerHTML = visible.map(file => `
+          <label class="tag-delete-item checkout-file-item${file === selectedPath ? ' is-selected' : ''}" data-file="${this.esc(file)}">
+            <i class="ph ph-file-code" aria-hidden="true"></i>
+            <span>${this.esc(file)}</span>
+          </label>
+        `).join('') || `<div class="settings-empty">${this.esc(t('commitMenu.noFilesMatch'))}</div>`;
+        list.querySelectorAll('[data-file]').forEach(item => {
+          item.onclick = () => {
+            selectedPath = item.dataset.file;
+            list.querySelectorAll('[data-file]').forEach(other => {
+              other.classList.toggle('is-selected', other === item);
+            });
+            restoreButton.disabled = false;
+          };
+        });
+      };
+      search.oninput = renderList;
+      renderList();
+
+      const finish = value => {
+        document.removeEventListener('keydown', onKeydown);
+        overlay.removeEventListener('click', onOverlayClick);
+        overlay.classList.add('is-hidden');
+        dialog.className = 'confirm-dialog';
+        dialog.removeAttribute('role');
+        dialog.removeAttribute('aria-modal');
+        dialog.innerHTML = '';
+        resolve(value);
+      };
+      const onKeydown = event => {
+        if (event.key === 'Escape' && !submitting) finish(null);
+      };
+      const onOverlayClick = event => {
+        if (event.target === overlay && !submitting) finish(null);
+      };
+      cancel.onclick = () => {
+        if (!submitting) finish(null);
+      };
+      restoreButton.onclick = async () => {
+        if (!selectedPath || submitting) return;
+        submitting = true;
+        restoreButton.disabled = true;
+        cancel.disabled = true;
+        restoreButton.querySelector('i').className = 'ph ph-circle-notch';
+        error.textContent = '';
+        try {
+          const result = await window.gitTree.restoreFileFromCommit(
+            repo.path,
+            hash,
+            selectedPath
+          );
+          if (!result?.success || result?.error) {
+            throw new Error(result?.error || t('commitMenu.checkoutFileFailed'));
+          }
+          finish(true);
+          this.app.showToast(t('commitMenu.fileRestored'), 'success');
+          await this.app.refresh({ selectHash: hash, silent: true });
+        } catch (restoreError) {
+          submitting = false;
+          restoreButton.disabled = false;
+          cancel.disabled = false;
+          restoreButton.querySelector('i').className = 'ph ph-arrow-counter-clockwise';
+          error.textContent = restoreError.message || t('commitMenu.checkoutFileFailed');
+        }
+      };
+      document.addEventListener('keydown', onKeydown);
+      overlay.addEventListener('click', onOverlayClick);
+      search.focus();
     });
   }
 

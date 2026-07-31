@@ -1,3 +1,5 @@
+/* exported BranchNaming */
+/* eslint-disable-next-line no-unused-vars -- script-tag global consumed by app.js */
 const BranchNaming = {
   aliases: {
     feature: ['feature', 'features', 'feat'],

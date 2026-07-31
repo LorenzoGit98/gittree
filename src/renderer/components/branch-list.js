@@ -1,3 +1,5 @@
+/* exported BranchListView */
+/* eslint-disable-next-line no-unused-vars -- script-tag global consumed by app.js */
 class BranchListView {
   constructor(container, app) {
     this.container = container;

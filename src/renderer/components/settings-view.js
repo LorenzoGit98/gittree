@@ -1,3 +1,5 @@
+/* exported SettingsView */
+/* eslint-disable-next-line no-unused-vars -- script-tag global consumed by app.js */
 class SettingsView {
   constructor(app) {
     this.app = app;
@@ -21,13 +23,14 @@ class SettingsView {
     this.timer = window.setInterval(() => this.tick(), 30000);
   }
 
-  async open() {
+  async open(section = null) {
     const repo = this.app.state.repo;
     let metadata = this.app.components.branchList?.metadata;
     if (repo && !metadata) {
       const response = await window.gitTree.getBranchMetadata(repo.path);
       metadata = response?.error ? null : response;
     }
+    const remotes = repo ? await this.readRemotes(repo.path) : [];
     const schedules = this.readObject(this.autoFetchStorageKey);
     let profiles = this.readArray(this.profilesStorageKey);
     const assignments = this.readObject(this.assignmentsStorageKey);
@@ -129,6 +132,29 @@ class SettingsView {
           </div>
         </section>
 
+        <section class="settings-section" data-settings-section="remotes">
+          <div class="settings-section-heading">
+            <i class="ph ph-cloud" aria-hidden="true"></i>
+            <div>
+              <h3>${this.esc(t('settings.remotesTitle'))}</h3>
+              <p>${this.esc(t('settings.remotesHelp'))}</p>
+            </div>
+          </div>
+          <div class="settings-remotes-list" id="settings-remotes-list">
+            ${remotes.map(remote => this.renderRemoteRow(remote)).join('') || `<div class="settings-empty">${this.esc(t('settings.noRemotes'))}</div>`}
+          </div>
+          <form id="settings-remote-form" class="settings-remote-form">
+            <input name="name" maxlength="200" required
+              placeholder="${this.esc(t('settings.remoteName'))}">
+            <input name="url" maxlength="4096" required
+              placeholder="${this.esc(t('settings.remoteUrl'))}">
+            <button class="btn btn-primary" type="submit">
+              <i class="ph ph-plus" aria-hidden="true"></i>
+              ${this.esc(t('settings.addRemote'))}
+            </button>
+          </form>
+        </section>
+
         <section class="settings-section" data-settings-section="accounts">
           <div class="settings-section-heading">
             <i class="ph ph-users-three" aria-hidden="true"></i>
@@ -188,9 +214,10 @@ class SettingsView {
       </div>
     `;
     this.overlay.classList.remove('is-hidden');
-    this.bindSettingsEvents(repo, metadata);
+    this.bindSettingsEvents(repo);
     this.syncAppearanceState();
     this.populateVersion();
+    if (section) this.focusSection(section);
     this.dialog.querySelector('[data-settings-close]')?.focus();
   }
 
@@ -296,6 +323,185 @@ class SettingsView {
     </div>`;
   }
 
+  async readRemotes(repoPath) {
+    try {
+      const result = await window.gitTree.getRemotes(repoPath);
+      return Array.isArray(result) ? result : [];
+    } catch {
+      return [];
+    }
+  }
+
+  renderRemoteRow(remote) {
+    const url = remote.refs?.push || remote.refs?.fetch || '';
+    return `<div class="settings-remote-row" data-remote-name="${this.esc(remote.name)}">
+      <i class="ph ph-cloud" aria-hidden="true"></i>
+      <div class="settings-remote-copy">
+        <strong>${this.esc(remote.name)}</strong>
+        <span class="settings-remote-url" title="${this.esc(url)}">${this.esc(url)}</span>
+      </div>
+      <div class="settings-remote-actions">
+        <button class="btn btn-small" type="button" data-action="rename" title="${this.esc(t('settings.renameRemote'))}" aria-label="${this.esc(t('settings.renameRemote'))}">
+          <i class="ph ph-pencil-simple" aria-hidden="true"></i>
+        </button>
+        <button class="btn btn-small" type="button" data-action="url" title="${this.esc(t('settings.changeRemoteUrl'))}" aria-label="${this.esc(t('settings.changeRemoteUrl'))}">
+          <i class="ph ph-link" aria-hidden="true"></i>
+        </button>
+        <button class="btn btn-small is-danger" type="button" data-action="remove" title="${this.esc(t('settings.removeRemote'))}" aria-label="${this.esc(t('settings.removeRemote'))}">
+          <i class="ph ph-trash" aria-hidden="true"></i>
+        </button>
+      </div>
+    </div>`;
+  }
+
+  async refreshRemotesList(repo) {
+    const container = this.dialog.querySelector('#settings-remotes-list');
+    if (!container || !repo) return;
+    const remotes = await this.readRemotes(repo.path);
+    container.innerHTML = remotes.map(remote => this.renderRemoteRow(remote)).join('')
+      || `<div class="settings-empty">${this.esc(t('settings.noRemotes'))}</div>`;
+    this.bindRemotes(repo);
+  }
+
+  bindRemotes(repo) {
+    if (!repo) return;
+    const list = this.dialog.querySelector('#settings-remotes-list');
+    const form = this.dialog.querySelector('#settings-remote-form');
+    if (form) {
+      form.onsubmit = async event => {
+        event.preventDefault();
+        const name = form.elements.name.value.trim();
+        const url = form.elements.url.value.trim();
+        if (!name || !url) return;
+        const result = await window.gitTree.addRemote(repo.path, name, url);
+        if (result?.error) {
+          this.app.showToast(result.error, 'error');
+          return;
+        }
+        form.elements.name.value = '';
+        form.elements.url.value = '';
+        await this.refreshRemotesList(repo);
+        this.app.components.branchList?.load(repo.path);
+        this.app.showToast(t('settings.remoteAdded', { remote: name }), 'success');
+      };
+    }
+    list?.querySelectorAll('[data-remote-name]').forEach(row => {
+      const name = row.dataset.remoteName;
+      row.querySelectorAll('[data-action]').forEach(button => {
+        button.onclick = async () => {
+          const action = button.dataset.action;
+          if (action === 'remove') {
+            const confirmed = await this.app.confirmDialog(
+              t('settings.removeRemoteTitle'),
+              t('settings.removeRemoteConfirm', { remote: name }),
+              t('settings.removeRemote'),
+              true
+            );
+            if (!confirmed) return;
+            const result = await window.gitTree.removeRemote(repo.path, name);
+            if (result?.error) {
+              this.app.showToast(result.error, 'error');
+              return;
+            }
+            await this.refreshRemotesList(repo);
+            this.app.components.branchList?.load(repo.path);
+            this.app.showToast(t('settings.remoteRemoved', { remote: name }), 'success');
+          } else if (action === 'rename') {
+            const nextName = await this.remotePrompt(
+              t('settings.renameRemote'),
+              t('settings.remoteName'),
+              name
+            );
+            if (!nextName || nextName === name) return;
+            const result = await window.gitTree.renameRemote(repo.path, name, nextName);
+            if (result?.error) {
+              this.app.showToast(result.error, 'error');
+              return;
+            }
+            await this.refreshRemotesList(repo);
+            this.app.components.branchList?.load(repo.path);
+            this.app.showToast(t('settings.remoteRenamed', { remote: nextName }), 'success');
+          } else if (action === 'url') {
+            const url = await this.remotePrompt(
+              t('settings.changeRemoteUrl'),
+              t('settings.remoteUrl'),
+              row.querySelector('.settings-remote-url')?.textContent || ''
+            );
+            if (!url) return;
+            const result = await window.gitTree.setRemoteUrl(repo.path, name, url);
+            if (result?.error) {
+              this.app.showToast(result.error, 'error');
+              return;
+            }
+            await this.refreshRemotesList(repo);
+            this.app.showToast(t('settings.remoteUrlChanged', { remote: name }), 'success');
+          }
+        };
+      });
+    });
+  }
+
+  remotePrompt(title, label, value) {
+    return new Promise(resolve => {
+      const overlay = document.createElement('div');
+      overlay.className = 'repository-picker-overlay';
+      overlay.innerHTML = `
+        <section class="repository-picker" role="dialog" aria-modal="true">
+          <header class="repository-picker-header">
+            <div>
+              <span class="eyebrow">${this.esc(title)}</span>
+              <h2>${this.esc(title)}</h2>
+            </div>
+          </header>
+          <form class="clone-dialog-body remote-prompt-form">
+            <label>
+              <span>${this.esc(label)}</span>
+              <input class="clone-url-input" type="text" value="${this.esc(value)}" spellcheck="false" autocomplete="off" required>
+            </label>
+            <p class="tag-create-error" data-prompt-error aria-live="polite"></p>
+            <footer class="repository-picker-footer">
+              <div>
+                <button class="btn btn-secondary" type="button" data-action="cancel">${this.esc(t('common.cancel'))}</button>
+                <button class="btn btn-primary" type="submit">${this.esc(t('common.continue'))}</button>
+              </div>
+            </footer>
+          </form>
+        </section>`;
+      const finish = result => {
+        overlay.remove();
+        document.removeEventListener('keydown', keydown);
+        resolve(result);
+      };
+      const keydown = event => {
+        if (event.key === 'Escape') finish(null);
+      };
+      document.body.appendChild(overlay);
+      overlay.addEventListener('mousedown', event => {
+        if (event.target === overlay) finish(null);
+      });
+      overlay.querySelector('[data-action="cancel"]').onclick = () => finish(null);
+      overlay.querySelector('form').onsubmit = event => {
+        event.preventDefault();
+        const input = overlay.querySelector('input');
+        const resultValue = input.value.trim();
+        if (!resultValue) return;
+        finish(resultValue);
+      };
+      document.addEventListener('keydown', keydown);
+      overlay.querySelector('input').focus();
+      overlay.querySelector('input').select();
+    });
+  }
+
+  focusSection(section) {
+    const target = this.dialog.querySelector(`[data-settings-section="${section}"]`);
+    if (!target) return;
+    this.dialog.querySelector('.settings-scroll')?.scrollTo({
+      top: target.offsetTop - 12,
+      behavior: 'smooth'
+    });
+  }
+
   renderProfile(profile, assignedProfile, hasRepository) {
     const assigned = profile.id === assignedProfile;
     return `<div class="settings-profile${assigned ? ' is-assigned' : ''}">
@@ -394,7 +600,7 @@ class SettingsView {
     </div>`;
   }
 
-  bindSettingsEvents(repo, metadata) {
+  bindSettingsEvents(repo) {
     this.dialog.querySelector('[data-settings-close]').onclick = () => this.close();
     this.dialog.querySelector('[data-settings-shortcuts]').onclick = () => this.openShortcuts();
     this.overlay.onclick = event => {
@@ -473,6 +679,8 @@ class SettingsView {
       localStorage.setItem(this.profilesStorageKey, JSON.stringify(profiles));
       this.open();
     };
+
+    this.bindRemotes(repo);
     this.dialog.querySelectorAll('[data-profile-apply]').forEach(button => {
       button.onclick = async () => {
         const profile = this.readArray(this.profilesStorageKey)

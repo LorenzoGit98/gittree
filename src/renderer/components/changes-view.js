@@ -20,6 +20,7 @@ class ChangesView {
       modeCount: document.getElementById('workspace-changes-count'),
       stageAll: document.getElementById('btn-stage-all'),
       unstageAll: document.getElementById('btn-unstage-all'),
+      discardAll: document.getElementById('btn-discard-all'),
       composer: document.getElementById('commit-composer'),
       summary: document.getElementById('commit-summary'),
       body: document.getElementById('commit-body'),
@@ -41,6 +42,7 @@ class ChangesView {
   bind() {
     this.elements.stageAll.onclick = () => this.mutatePaths(false, this.unstagedFiles());
     this.elements.unstageAll.onclick = () => this.mutatePaths(true, this.stagedFiles());
+    this.elements.discardAll.onclick = () => this.discardPaths(this.unstagedFiles());
     this.elements.composer.onsubmit = event => {
       event.preventDefault();
       this.commit();
@@ -137,6 +139,7 @@ class ChangesView {
     this.elements.stagedCount.textContent = String(staged.length);
     this.elements.stageAll.disabled = unstaged.length === 0;
     this.elements.unstageAll.disabled = staged.length === 0;
+    this.elements.discardAll.disabled = unstaged.length === 0;
     this.elements.commitButton.disabled =
       staged.length === 0 && !this.elements.amend.checked;
     const fileCount = this.snapshot?.files?.length || 0;
@@ -218,8 +221,71 @@ class ChangesView {
       event.stopPropagation();
       this.mutatePaths(staged, [file]);
     };
+    if (!staged) {
+      const discard = document.createElement('button');
+      discard.className = 'changes-file-action changes-file-discard';
+      discard.type = 'button';
+      discard.title = t('changes.discardFile');
+      discard.setAttribute('aria-label', discard.title);
+      const discardIcon = document.createElement('i');
+      discardIcon.className = 'ph ph-trash';
+      discard.appendChild(discardIcon);
+      discard.onclick = event => {
+        event.stopPropagation();
+        this.discardPaths([file]);
+      };
+      row.append(status, main, discard, action);
+      return row;
+    }
     row.append(status, main, action);
     return row;
+  }
+
+  async discardPaths(files) {
+    if (!this.snapshot || files.length === 0) return;
+    const paths = files.map(file => file.path);
+    const confirmed = await this.confirmDiscard(paths.length);
+    if (!confirmed) return;
+    const result = await window.gitTree.discardPaths(
+      this.repoPath,
+      this.snapshot.snapshotId,
+      paths
+    );
+    if (result?.error) {
+      this.app.showToast(result.error, 'error');
+      await this.refresh(true);
+      return;
+    }
+    this.snapshot = result.snapshot;
+    this.render();
+    if (this.selected) {
+      const file = this.snapshot.files.find(item => item.path === this.selected.path);
+      if (file) await this.selectFile({ path: file.path }, Boolean(file.staged));
+      else this.app.components.diffViewer.clear();
+    }
+    this.app.showToast(t('changes.discarded'), 'success');
+  }
+
+  confirmDiscard(count) {
+    const overlay = document.getElementById('modal-overlay');
+    const dialog = document.getElementById('modal-dialog');
+    return new Promise(resolve => {
+      dialog.innerHTML = `
+        <h3>${this.esc(t('changes.discardTitle'))}</h3>
+        <p>${this.esc(t('changes.discardConfirm', { count }))}</p>
+        <div class="confirm-actions">
+          <button class="btn" data-cancel>${this.esc(t('common.cancel'))}</button>
+          <button class="btn btn-danger" data-confirm>${this.esc(t('changes.discardAction'))}</button>
+        </div>`;
+      overlay.classList.remove('is-hidden');
+      const finish = value => {
+        overlay.classList.add('is-hidden');
+        dialog.innerHTML = '';
+        resolve(value);
+      };
+      dialog.querySelector('[data-cancel]').onclick = () => finish(false);
+      dialog.querySelector('[data-confirm]').onclick = () => finish(true);
+    });
   }
 
   fileStatus(file, staged) {
@@ -394,7 +460,7 @@ class ChangesView {
     let draft = {};
     try {
       draft = JSON.parse(localStorage.getItem(this.composerKey())) || {};
-    } catch {}
+    } catch { /* invalid draft falls back to empty */ }
     this.elements.summary.value = draft.summary || '';
     this.elements.body.value = draft.body || '';
     this.elements.amend.checked = Boolean(draft.amend);
@@ -517,6 +583,12 @@ class ChangesView {
     this.persistComposer();
     this.app.showToast(t('changes.commitCreated'), 'success');
     await this.app.refresh({ selectHash: result.hash, silent: true });
+  }
+
+  esc(value) {
+    const element = document.createElement('div');
+    element.textContent = value ?? '';
+    return element.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 }
 

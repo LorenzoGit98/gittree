@@ -1,3 +1,5 @@
+/* exported WelcomeScreen */
+/* eslint-disable-next-line no-unused-vars -- script-tag global consumed by app.js */
 class WelcomeScreen {
   constructor() {
     this.screen = document.getElementById('welcome-screen');

@@ -99,8 +99,9 @@
   width: 100%;
   height: 38px;
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) 34px;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
   align-items: center;
+  column-gap: var(--space-1);
   padding: 0 var(--space-2);
   border: 0;
   border-bottom: 1px solid var(--border-subtle);
@@ -176,6 +177,32 @@
   border-color: var(--border-strong);
   background: var(--surface-primary);
   color: var(--text-primary);
+}
+
+.changes-file-discard {
+  color: var(--text-tertiary);
+}
+
+.changes-file-discard:hover,
+.changes-file-discard:focus-visible {
+  border-color: var(--error);
+  background: var(--error-soft);
+  color: var(--error-text);
+}
+
+.changes-section-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.changes-discard-btn {
+  color: var(--text-secondary);
+}
+
+.changes-discard-btn:hover:not(:disabled) {
+  border-color: var(--error);
+  color: var(--error-text);
 }
 
 .changes-empty {

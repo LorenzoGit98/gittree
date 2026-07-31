@@ -1,3 +1,5 @@
+/* exported BranchContextMenu */
+/* eslint-disable-next-line no-unused-vars -- script-tag global consumed by app.js */
 class BranchContextMenu {
   constructor(app) {
     this.app = app;
@@ -61,7 +63,6 @@ class BranchContextMenu {
     const pullUpstream = isLocal
       ? (isCurrent ? b.upstream : '')
       : (currentMetadata?.upstream === b.name ? b.name : '');
-    const sourceRef = b.name;
     const mutationReason = pending
       ? t('branchMenu.pendingOperation', { operation: this.operationState.type })
       : '';
@@ -146,7 +147,13 @@ class BranchContextMenu {
       { separator: true },
       this.item('ph-git-pull-request', t('branchMenu.createPullRequest'), 'pull-request',
         !this.hasSupportedProvider() || pending,
-        mutationReason || t('branchMenu.unsupportedProvider'))
+        mutationReason || t('branchMenu.unsupportedProvider')),
+      { separator: true },
+      this.item('ph-tag', t('branchMenu.pushTags'), 'push-tags',
+        remotes.length === 0 || pending,
+        remotes.length === 0 ? t('branchMenu.noRemotes') : mutationReason),
+      this.item('ph-sliders-horizontal', t('branchMenu.manageRemotes'), 'manage-remotes',
+        pending, mutationReason)
     ].filter(Boolean);
 
     this.element.innerHTML = actions.map(action => this.renderItem(action)).join('');
@@ -255,6 +262,21 @@ class BranchContextMenu {
         this.app.showToast(t('branchMenu.operationComplete'), 'success');
         return;
       }
+      if (action === 'push-tags') {
+        const defaultRemote = this.metadata.remotes?.[0]?.name;
+        if (!defaultRemote) return;
+        const remote = await this.promptRemote(defaultRemote);
+        if (!remote) return;
+        result = await window.gitTree.pushTags(repo.path, remote);
+        if (result?.error) { this.app.showToast(result.error, 'error'); return; }
+        this.app.showToast(t('branchMenu.tagsPushed', { remote }), 'success');
+        return;
+      }
+      if (action === 'manage-remotes') {
+        this.close();
+        await this.app.components.settings.open('remotes');
+        return;
+      }
       this.app.showToast(t('branchMenu.operationComplete'), 'success');
       this.app.emit('refresh');
     } catch (error) {
@@ -334,6 +356,17 @@ class BranchContextMenu {
   promptText(title, value = '') {
     return this.formDialog(title, `<label>${this.esc(t('branchMenu.branchNameLabel'))}<input name="value" value="${this.esc(value)}" required autofocus></label>`,
       form => form.elements.value.value.trim());
+  }
+
+  promptRemote(defaultRemote) {
+    const remotes = this.metadata.remotes || [];
+    return this.formDialog(t('branchMenu.pushTags'), `
+      <label>${this.esc(t('branchMenu.remoteLabel'))}
+        <select name="remote">${remotes
+          .map(item => `<option value="${this.esc(item.name)}"${item.name === defaultRemote ? ' selected' : ''}>${this.esc(item.name)}</option>`)
+          .join('')}</select>
+      </label>
+    `, form => form.elements.remote.value);
   }
 
   formDialog(title, fields, extract) {

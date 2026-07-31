@@ -331,7 +331,7 @@ class HostingService {
     if (text.length > MAX_RESPONSE_BYTES) {
       throw new Error('Provider response is too large');
     }
-    let value = {};
+    let value;
     try {
       value = text ? JSON.parse(text) : {};
     } catch {

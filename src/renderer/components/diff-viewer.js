@@ -1,3 +1,5 @@
+/* exported DiffViewer */
+/* eslint-disable-next-line no-unused-vars -- script-tag global consumed by app.js */
 class DiffViewer {
   constructor(bodyEl, app) {
     this.body = bodyEl;

@@ -1,3 +1,5 @@
+/* exported GitFlow */
+/* eslint-disable-next-line no-unused-vars -- script-tag global consumed by app.js */
 class GitFlow {
   constructor(app) {
     this.app = app;

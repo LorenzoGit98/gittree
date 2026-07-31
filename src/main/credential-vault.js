@@ -17,7 +17,7 @@ class CredentialVault {
     let backend = '';
     try {
       backend = this.safeStorage?.getSelectedStorageBackend?.() || '';
-    } catch {}
+    } catch { /* backend detection is best effort */ }
     const memoryOnly =
       !encryptionAvailable ||
       (this.platform === 'linux' && backend === 'basic_text');
@@ -57,7 +57,7 @@ class CredentialVault {
           };
         } catch (error) {
           if (error.code !== 'ENOENT') {
-            throw new Error('The encrypted hosting vault could not be read');
+            throw new Error('The encrypted hosting vault could not be read', { cause: error });
           }
         }
       }
@@ -73,7 +73,7 @@ class CredentialVault {
     this.loaded = true;
     try {
       await fs.promises.rm(this.storagePath, { force: true });
-    } catch {}
+    } catch { /* vault file may already be gone */ }
     this.writeQueue = Promise.resolve();
     return { success: true };
   }

@@ -39,7 +39,7 @@ class GitService {
       const log = await this.git.log(options);
       return log;
     } catch (err) {
-      throw new Error(`Failed to get log: ${err.message}`);
+      throw new Error(`Failed to get log: ${err.message}`, { cause: err });
     }
   }
 
@@ -86,7 +86,7 @@ class GitService {
       if (/does not have any commits|your current branch .* does not have any commits/i.test(err.message)) {
         return { commits: [], refs: [], nextOffset: safeOffset, hasMore: false };
       }
-      throw new Error(`Failed to get graph page: ${err.message}`);
+      throw new Error(`Failed to get graph page: ${err.message}`, { cause: err });
     }
   }
 
@@ -119,7 +119,7 @@ class GitService {
         commit: headCommit,
         upstream: ''
       });
-    } catch {}
+    } catch { /* HEAD may be unborn */ }
     return refs;
   }
 
@@ -131,7 +131,7 @@ class GitService {
         if (relativeFile) options.push('--', relativeFile);
         return await this.git.diff(options);
       } catch (err) {
-        throw new Error(`Failed to get diff: ${err.message}`);
+        throw new Error(`Failed to get diff: ${err.message}`, { cause: err });
       }
     }
     return this.getCommitDiff(commitHash, file);
@@ -148,7 +148,7 @@ class GitService {
       if (relativeFile) options.push('--', relativeFile);
       return await this.git.diff(options);
     } catch (err) {
-      throw new Error(`Failed to get diff: ${err.message}`);
+      throw new Error(`Failed to get diff: ${err.message}`, { cause: err });
     }
   }
 
@@ -176,7 +176,7 @@ class GitService {
         commits: log.all || []
       };
     } catch (err) {
-      throw new Error(`Failed to compare branches: ${err.message}`);
+      throw new Error(`Failed to compare branches: ${err.message}`, { cause: err });
     }
   }
 
@@ -191,7 +191,7 @@ class GitService {
       const diff = await this.git.diff(['--no-ext-diff', `${hashA}..${hashB}`]);
       return { base: hashA, compare: hashB, files, diff };
     } catch (err) {
-      throw new Error(`Failed to compare commits: ${err.message}`);
+      throw new Error(`Failed to compare commits: ${err.message}`, { cause: err });
     }
   }
 
@@ -224,7 +224,7 @@ class GitService {
       ]);
       return this.parseWorkingDiff(relativePath, false, patch);
     } catch (err) {
-      throw new Error(`Failed to get commit file diff: ${err.message}`);
+      throw new Error(`Failed to get commit file diff: ${err.message}`, { cause: err });
     }
   }
 
@@ -245,7 +245,7 @@ class GitService {
         files: show.trim().split('\n').filter(Boolean)
       };
     } catch (err) {
-      throw new Error(`Failed to get commit detail: ${err.message}`);
+      throw new Error(`Failed to get commit detail: ${err.message}`, { cause: err });
     }
   }
 
@@ -258,7 +258,7 @@ class GitService {
         branches: result.branches
       };
     } catch (err) {
-      throw new Error(`Failed to get branches: ${err.message}`);
+      throw new Error(`Failed to get branches: ${err.message}`, { cause: err });
     }
   }
 
@@ -329,7 +329,7 @@ class GitService {
           'refs/remotes/origin/HEAD'
         ])).trim();
         defaultBranch = symbolic.replace(/^origin\//, '');
-      } catch {}
+      } catch { /* remote HEAD may be missing */ }
       if (!defaultBranch) {
         if (localNames.has('main')) defaultBranch = 'main';
         else if (localNames.has('master')) defaultBranch = 'master';
@@ -338,7 +338,7 @@ class GitService {
 
       return { current, defaultBranch, branches, remotes };
     } catch (err) {
-      throw new Error(`Failed to get branch metadata: ${err.message}`);
+      throw new Error(`Failed to get branch metadata: ${err.message}`, { cause: err });
     }
   }
 
@@ -349,7 +349,7 @@ class GitService {
       await this.git.checkout(branch);
       return { success: true, branch };
     } catch (err) {
-      throw new Error(`Failed to checkout branch: ${err.message}`);
+      throw new Error(`Failed to checkout branch: ${err.message}`, { cause: err });
     }
   }
 
@@ -365,7 +365,7 @@ class GitService {
       await this.git.raw(['branch', '-m', branch, newName]);
       return { success: true, branch: newName };
     } catch (err) {
-      throw new Error(`Failed to rename branch: ${err.message}`);
+      throw new Error(`Failed to rename branch: ${err.message}`, { cause: err });
     }
   }
 
@@ -401,7 +401,7 @@ class GitService {
       }
       return { success: true, branch: localName, upstream: remoteRef };
     } catch (err) {
-      throw new Error(`Failed to checkout remote branch: ${err.message}`);
+      throw new Error(`Failed to checkout remote branch: ${err.message}`, { cause: err });
     }
   }
 
@@ -413,7 +413,7 @@ class GitService {
       await this.git.raw(['branch', '--set-upstream-to', remoteRef, localBranch]);
       return { success: true, branch: localBranch, upstream: remoteRef };
     } catch (err) {
-      throw new Error(`Failed to track remote branch: ${err.message}`);
+      throw new Error(`Failed to track remote branch: ${err.message}`, { cause: err });
     }
   }
 
@@ -425,7 +425,7 @@ class GitService {
       const result = await this.git.fetch(remote, branch);
       return { success: true, remote, branch, result };
     } catch (err) {
-      throw new Error(`Failed to fetch branch: ${err.message}`);
+      throw new Error(`Failed to fetch branch: ${err.message}`, { cause: err });
     }
   }
 
@@ -437,7 +437,7 @@ class GitService {
       const result = await this.git.push(['--delete', remote, branch]);
       return { success: true, remote, branch, result };
     } catch (err) {
-      throw new Error(`Failed to delete remote branch: ${err.message}`);
+      throw new Error(`Failed to delete remote branch: ${err.message}`, { cause: err });
     }
   }
 
@@ -452,7 +452,7 @@ class GitService {
       const result = await this.git.rebase([branch]);
       return { success: true, branch, result };
     } catch (err) {
-      throw new Error(`Failed to rebase onto ${branch}: ${err.message}`);
+      throw new Error(`Failed to rebase onto ${branch}: ${err.message}`, { cause: err });
     }
   }
 
@@ -645,7 +645,7 @@ class GitService {
         result
       };
     } catch (error) {
-      throw new Error(`Failed to rebase onto commit: ${error.message}`);
+      throw new Error(`Failed to rebase onto commit: ${error.message}`, { cause: error });
     }
   }
 
@@ -660,7 +660,7 @@ class GitService {
         head: (await this.git.revparse(['HEAD'])).trim()
       };
     } catch (error) {
-      throw new Error(`Failed to cherry-pick: ${error.message}`);
+      throw new Error(`Failed to cherry-pick: ${error.message}`, { cause: error });
     }
   }
 
@@ -812,7 +812,7 @@ class GitService {
       else await this.git.checkoutLocalBranch(name);
       return { success: true, name };
     } catch (err) {
-      throw new Error(`Failed to create branch: ${err.message}`);
+      throw new Error(`Failed to create branch: ${err.message}`, { cause: err });
     }
   }
 
@@ -839,7 +839,7 @@ class GitService {
       const result = await this.git.merge([flag, branch]);
       return { success: true, branch, strategy, result };
     } catch (err) {
-      throw new Error(`Failed to merge: ${err.message}`);
+      throw new Error(`Failed to merge: ${err.message}`, { cause: err });
     }
   }
 
@@ -868,7 +868,7 @@ class GitService {
       conflictedFiles: [],
       changedFiles: []
     });
-    let stdout = '';
+    let stdout;
     try {
       ({ stdout } = await execFileAsync(
         'git',
@@ -1029,7 +1029,7 @@ class GitService {
       );
       return { success: true, state: await this.getOperationState() };
     } catch (err) {
-      throw new Error(`Failed to continue ${state.type}: ${err.message}`);
+      throw new Error(`Failed to continue ${state.type}: ${err.message}`, { cause: err });
     }
   }
 
@@ -1040,7 +1040,7 @@ class GitService {
       await this.git.raw([state.type, '--abort']);
       return { success: true, state: await this.getOperationState() };
     } catch (err) {
-      throw new Error(`Failed to abort ${state.type}: ${err.message}`);
+      throw new Error(`Failed to abort ${state.type}: ${err.message}`, { cause: err });
     }
   }
 
@@ -1053,7 +1053,7 @@ class GitService {
       await this.git.raw([state.type, '--skip']);
       return { success: true, state: await this.getOperationState() };
     } catch (error) {
-      throw new Error(`Failed to skip ${state.type}: ${error.message}`);
+      throw new Error(`Failed to skip ${state.type}: ${error.message}`, { cause: error });
     }
   }
 
@@ -1084,7 +1084,7 @@ class GitService {
         } catch (error) {
           if (error.code === 'ENOENT') break;
           if (error.message === 'Repository paths cannot traverse symbolic links') throw error;
-          throw new Error('Invalid repository path');
+          throw new Error('Invalid repository path', { cause: error });
         }
       }
     }
@@ -1114,7 +1114,7 @@ class GitService {
       await this.git.branch([flag, branch]);
       return { success: true, branch };
     } catch (err) {
-      throw new Error(`Failed to delete branch: ${err.message}`);
+      throw new Error(`Failed to delete branch: ${err.message}`, { cause: err });
     }
   }
 
@@ -1150,7 +1150,7 @@ class GitService {
       const result = await this.git.push(args);
       return { success: true, remote, branch, result };
     } catch (err) {
-      throw new Error(`Failed to push: ${err.message}`);
+      throw new Error(`Failed to push: ${err.message}`, { cause: err });
     }
   }
 
@@ -1162,7 +1162,7 @@ class GitService {
       const result = await this.git.pull(remote, branch, options);
       return { success: true, remote, branch, result };
     } catch (err) {
-      throw new Error(`Failed to pull: ${err.message}`);
+      throw new Error(`Failed to pull: ${err.message}`, { cause: err });
     }
   }
 
@@ -1172,7 +1172,7 @@ class GitService {
       const result = await this.git.fetch(remote);
       return { success: true, remote, result };
     } catch (err) {
-      throw new Error(`Failed to fetch: ${err.message}`);
+      throw new Error(`Failed to fetch: ${err.message}`, { cause: err });
     }
   }
 
@@ -1200,7 +1200,7 @@ class GitService {
         isClean: status.isClean()
       };
     } catch (err) {
-      throw new Error(`Failed to get status: ${err.message}`);
+      throw new Error(`Failed to get status: ${err.message}`, { cause: err });
     }
   }
 
@@ -1235,7 +1235,7 @@ class GitService {
         }
       })
     );
-    let indexState = '';
+    let indexState;
     try {
       indexState = await this.git.raw(['diff', '--cached', '--raw', '-z']);
     } catch {
@@ -1302,13 +1302,44 @@ class GitService {
     return { success: true, snapshot: await this.getWorkingTree() };
   }
 
+  async discardPaths(snapshotId, paths) {
+    await this.assertWorkingTreeSnapshot(snapshotId);
+    const safePaths = this.validatePathList(paths);
+    const status = await this.git.status();
+    const conflicted = new Set(status.conflicted || []);
+    const untracked = new Set(status.not_added || []);
+    const tracked = [];
+    const untrackedToRemove = [];
+    for (const relativePath of safePaths) {
+      if (conflicted.has(relativePath)) {
+        throw new Error(`Resolve the conflict in ${relativePath} before discarding it`);
+      }
+      if (untracked.has(relativePath)) untrackedToRemove.push(relativePath);
+      else tracked.push(relativePath);
+    }
+    if (tracked.length) {
+      await this.git.raw(['restore', '--worktree', '--', ...tracked]);
+    }
+    for (const relativePath of untrackedToRemove) {
+      await fs.promises.rm(path.resolve(this.repoPath, relativePath), {
+        recursive: true,
+        force: true
+      });
+    }
+    return { success: true, snapshot: await this.getWorkingTree() };
+  }
+
   async getWorkingDiff(filePath, staged = false) {
     const parsed = await this.getParsedWorkingDiff(filePath, staged);
     return {
       path: parsed.path,
       staged: parsed.staged,
       binary: parsed.binary,
-      hunks: parsed.hunks.map(({ raw, ...hunk }) => hunk)
+      hunks: parsed.hunks.map(hunk => {
+        const copy = { ...hunk };
+        delete copy.raw;
+        return copy;
+      })
     };
   }
 
@@ -1599,7 +1630,7 @@ class GitService {
         snapshot: await this.getWorkingTree()
       };
     } catch (error) {
-      throw new Error(`Commit failed: ${error.message}`);
+      throw new Error(`Commit failed: ${error.message}`, { cause: error });
     }
   }
 
@@ -1608,31 +1639,57 @@ class GitService {
       const result = await this.git.stashList();
       return result;
     } catch (err) {
-      throw new Error(`Failed to get stash list: ${err.message}`);
+      throw new Error(`Failed to get stash list: ${err.message}`, { cause: err });
     }
   }
 
   async stash(message = null) {
     try {
-      const args = message ? ['push', '-m', message] : [];
+      const args = ['push', '-u'];
+      if (message) args.push('-m', message);
       await this.git.stash(args);
       return { success: true };
     } catch (err) {
-      throw new Error(`Failed to stash: ${err.message}`);
+      throw new Error(`Failed to stash: ${err.message}`, { cause: err });
     }
   }
 
   async stashPop(index = 0) {
+    const safeIndex = this.safeStashIndex(index);
+    try {
+      await this.git.stash(['pop', `stash@{${safeIndex}}`]);
+      return { success: true };
+    } catch (err) {
+      throw new Error(`Failed to pop stash: ${err.message}`, { cause: err });
+    }
+  }
+
+  async stashApply(index = 0) {
+    const safeIndex = this.safeStashIndex(index);
+    try {
+      await this.git.stash(['apply', `stash@{${safeIndex}}`]);
+      return { success: true };
+    } catch (err) {
+      throw new Error(`Failed to apply stash: ${err.message}`, { cause: err });
+    }
+  }
+
+  async stashDrop(index = 0) {
+    const safeIndex = this.safeStashIndex(index);
+    try {
+      await this.git.stash(['drop', `stash@{${safeIndex}}`]);
+      return { success: true };
+    } catch (err) {
+      throw new Error(`Failed to drop stash: ${err.message}`, { cause: err });
+    }
+  }
+
+  safeStashIndex(index) {
     const numeric = Number(index);
     if (!Number.isFinite(numeric) || !Number.isInteger(numeric) || numeric < 0) {
       throw new Error('Invalid stash index');
     }
-    try {
-      await this.git.stash(['pop', `stash@{${numeric}}`]);
-      return { success: true };
-    } catch (err) {
-      throw new Error(`Failed to pop stash: ${err.message}`);
-    }
+    return numeric;
   }
 
   async getRemotes() {
@@ -1640,7 +1697,80 @@ class GitService {
       const remotes = await this.git.getRemotes(true);
       return remotes;
     } catch (err) {
-      throw new Error(`Failed to get remotes: ${err.message}`);
+      throw new Error(`Failed to get remotes: ${err.message}`, { cause: err });
+    }
+  }
+
+  async assertValidRemoteName(name) {
+    if (
+      typeof name !== 'string' ||
+      !name.trim() ||
+      name.startsWith('-') ||
+      name.length > 200 ||
+      /[\s\0\r\n]/.test(name)
+    ) {
+      throw new Error('Invalid remote name');
+    }
+    try {
+      await this.git.raw(['check-ref-format', `refs/remotes/${name}`]);
+    } catch {
+      throw new Error(`Invalid remote name: ${name}`);
+    }
+  }
+
+  validateRemoteUrl(url) {
+    if (
+      typeof url !== 'string' ||
+      !url.trim() ||
+      url.length > 4096 ||
+      url.trim().startsWith('-') ||
+      /[\0\r\n]/.test(url)
+    ) {
+      throw new Error('Invalid remote URL');
+    }
+    return url.trim();
+  }
+
+  async addRemote(name, url) {
+    await this.assertValidRemoteName(name);
+    const safeUrl = this.validateRemoteUrl(url);
+    try {
+      await this.git.raw(['remote', 'add', name, safeUrl]);
+      return { success: true, name, url: safeUrl };
+    } catch (error) {
+      throw new Error(`Failed to add remote: ${error.message}`, { cause: error });
+    }
+  }
+
+  async renameRemote(name, newName) {
+    await this.assertRemote(name);
+    await this.assertValidRemoteName(newName);
+    try {
+      await this.git.raw(['remote', 'rename', name, newName]);
+      return { success: true, name: newName };
+    } catch (error) {
+      throw new Error(`Failed to rename remote: ${error.message}`, { cause: error });
+    }
+  }
+
+  async setRemoteUrl(name, url) {
+    await this.assertRemote(name);
+    const safeUrl = this.validateRemoteUrl(url);
+    try {
+      await this.git.raw(['remote', 'set-url', name, safeUrl]);
+      return { success: true, name, url: safeUrl };
+    } catch (error) {
+      throw new Error(`Failed to update remote URL: ${error.message}`, { cause: error });
+    }
+  }
+
+  async removeRemote(name) {
+    await this.assertRemote(name);
+    try {
+      await this.git.raw(['remote', 'remove', name]);
+      return { success: true, name };
+    } catch (error) {
+      throw new Error(`Failed to remove remote: ${error.message}`, { cause: error });
     }
   }
 
@@ -1650,7 +1780,19 @@ class GitService {
       const result = await this.git.raw(['ls-tree', '-r', '--name-only', commitHash]);
       return result.trim().split('\n').filter(Boolean);
     } catch (err) {
-      throw new Error(`Failed to get file tree: ${err.message}`);
+      throw new Error(`Failed to get file tree: ${err.message}`, { cause: err });
+    }
+  }
+
+  async restoreFileFromCommit(commitHash, filePath) {
+    await this.assertNoPendingOperation();
+    await this.assertCommitish(commitHash);
+    const relativePath = this.validateRepositoryPath(filePath);
+    try {
+      await this.git.raw(['restore', '--source', commitHash, '--worktree', '--', relativePath]);
+      return { success: true, path: relativePath };
+    } catch (error) {
+      throw new Error(`Failed to restore file: ${error.message}`, { cause: error });
     }
   }
 
@@ -1659,13 +1801,11 @@ class GitService {
       const result = await this.git.tags();
       return result;
     } catch (err) {
-      throw new Error(`Failed to get tags: ${err.message}`);
+      throw new Error(`Failed to get tags: ${err.message}`, { cause: err });
     }
   }
 
-  async createTag(name, commitHash, message = '') {
-    await this.assertNoPendingOperation();
-    await this.assertCommitish(commitHash);
+  validateTagName(name) {
     if (
       typeof name !== 'string' ||
       !name.trim() ||
@@ -1680,7 +1820,69 @@ class GitService {
     ) {
       throw new Error('Invalid tag name');
     }
-    const safeName = name.trim();
+    return name.trim();
+  }
+
+  async assertTagExists(name) {
+    const safeName = this.validateTagName(name);
+    try {
+      await this.git.raw(['check-ref-format', `refs/tags/${safeName}`]);
+    } catch {
+      throw new Error(`Invalid tag name: ${safeName}`);
+    }
+    try {
+      await this.git.raw(['show-ref', '--verify', `refs/tags/${safeName}`]);
+    } catch {
+      throw new Error(`Tag not found: ${safeName}`);
+    }
+    return safeName;
+  }
+
+  async deleteTag(name) {
+    const safeName = await this.assertTagExists(name);
+    try {
+      await this.git.raw(['tag', '-d', safeName]);
+      return { success: true, name: safeName };
+    } catch (error) {
+      throw new Error(`Failed to delete tag: ${error.message}`, { cause: error });
+    }
+  }
+
+  async pushTags(remote) {
+    await this.assertRemote(remote);
+    try {
+      await this.git.push([remote, '--tags']);
+      return { success: true, remote };
+    } catch (error) {
+      throw new Error(`Failed to push tags: ${error.message}`, { cause: error });
+    }
+  }
+
+  async deleteRemoteTag(remote, name) {
+    await this.assertRemote(remote);
+    const safeName = await this.assertTagExists(name);
+    try {
+      await this.git.push([remote, `:refs/tags/${safeName}`]);
+      return { success: true, remote, name: safeName };
+    } catch (error) {
+      throw new Error(`Failed to delete remote tag: ${error.message}`, { cause: error });
+    }
+  }
+
+  async getTagsAtCommit(commitHash) {
+    this.assertSafeRef(commitHash);
+    try {
+      const result = await this.git.raw(['tag', '--points-at', commitHash]);
+      return result.split(/\r?\n/).filter(Boolean);
+    } catch (error) {
+      throw new Error(`Failed to get tags: ${error.message}`, { cause: error });
+    }
+  }
+
+  async createTag(name, commitHash, message = '') {
+    await this.assertNoPendingOperation();
+    await this.assertCommitish(commitHash);
+    const safeName = this.validateTagName(name);
     try {
       await this.git.raw(['check-ref-format', `refs/tags/${safeName}`]);
     } catch {
@@ -1708,7 +1910,7 @@ class GitService {
         annotated: Boolean(annotation)
       };
     } catch (error) {
-      throw new Error(`Failed to create tag: ${error.message}`);
+      throw new Error(`Failed to create tag: ${error.message}`, { cause: error });
     }
   }
 }

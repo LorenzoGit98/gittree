@@ -22,7 +22,7 @@ class RepoManager {
         this.repos = parsed.repos || [];
         this.activeRepoIndex = parsed.activeRepoIndex >= 0 ? parsed.activeRepoIndex : (this.repos.length > 0 ? 0 : -1);
       }
-    } catch (err) {
+    } catch {
       this.repos = [];
       this.activeRepoIndex = -1;
     }

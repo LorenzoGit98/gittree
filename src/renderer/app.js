@@ -374,15 +374,85 @@ class GitTreeApp {
     if (!container) return;
     const needle = String(filter || '').trim().toLowerCase();
     const items = (this.state.stashes || [])
-      .map((stash, index) => ({ label: stash.message || `Stash ${index}` }))
+      .map((stash, index) => ({ index, label: stash.message || `Stash ${index}` }))
       .filter(item => !needle || item.label.toLowerCase().includes(needle));
     if (!items.length) { container.innerHTML = ''; return; }
     container.innerHTML = items.map(item => `
-      <div class="branch-item">
-        <i class="ph ph-archive branch-icon"></i>
-        <span>${this.esc(item.label)}</span>
+      <div class="branch-item stash-item" data-stash-index="${item.index}">
+        <i class="ph ph-archive branch-icon" aria-hidden="true"></i>
+        <span class="branch-name">${this.esc(item.label)}</span>
+        <span class="stash-actions" role="group" aria-label="${this.esc(t('sidebar.stashActions'))}">
+          <button type="button" class="icon-btn stash-action" data-action="pop" title="${this.esc(t('sidebar.stashPop'))}" aria-label="${this.esc(t('sidebar.stashPop'))}">
+            <i class="ph ph-play" aria-hidden="true"></i>
+          </button>
+          <button type="button" class="icon-btn stash-action" data-action="apply" title="${this.esc(t('sidebar.stashApply'))}" aria-label="${this.esc(t('sidebar.stashApply'))}">
+            <i class="ph ph-copy" aria-hidden="true"></i>
+          </button>
+          <button type="button" class="icon-btn stash-action is-danger" data-action="drop" title="${this.esc(t('sidebar.stashDrop'))}" aria-label="${this.esc(t('sidebar.stashDrop'))}">
+            <i class="ph ph-trash" aria-hidden="true"></i>
+          </button>
+        </span>
       </div>
     `).join('');
+    container.querySelectorAll('.stash-item').forEach(item => {
+      item.querySelectorAll('[data-action]').forEach(button => {
+        button.onclick = event => {
+          event.stopPropagation();
+          const index = Number(item.dataset.stashIndex);
+          this.runStashAction(button.dataset.action, index);
+        };
+      });
+    });
+  }
+
+  async runStashAction(action, index) {
+    const repo = this.state.repo;
+    if (!repo || !Number.isInteger(index)) return;
+    if (action === 'drop') {
+      const confirmed = await this.confirmDialog(
+        t('sidebar.stashDropTitle'),
+        t('sidebar.stashDropConfirm'),
+        t('sidebar.stashDrop')
+      );
+      if (!confirmed) return;
+    }
+    const api = action === 'pop'
+      ? window.gitTree.stashPop
+      : action === 'apply'
+        ? window.gitTree.stashApply
+        : action === 'drop'
+          ? window.gitTree.stashDrop
+          : null;
+    if (!api) return;
+    const result = await api(repo.path, index);
+    if (result?.error) { this.showToast(result.error, 'error'); return; }
+    if (action === 'pop' || action === 'drop') {
+      await this.loadStashes(repo.path);
+      await this.refresh();
+    } else {
+      this.showToast(t('feedback.stashApplied'), 'success');
+      await this.refresh();
+    }
+  }
+
+  confirmDialog(title, message, actionLabel, danger = false) {
+    const overlay = document.getElementById('modal-overlay');
+    const dialog = document.getElementById('modal-dialog');
+    return new Promise(resolve => {
+      dialog.innerHTML = `<h3>${this.esc(title)}</h3><p>${this.esc(message)}</p>
+        <div class="confirm-actions">
+          <button class="btn" data-cancel>${this.esc(t('common.cancel'))}</button>
+          <button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" data-confirm>${this.esc(actionLabel)}</button>
+        </div>`;
+      overlay.classList.remove('is-hidden');
+      const finish = value => {
+        overlay.classList.add('is-hidden');
+        dialog.innerHTML = '';
+        resolve(value);
+      };
+      dialog.querySelector('[data-cancel]').onclick = () => finish(false);
+      dialog.querySelector('[data-confirm]').onclick = () => finish(true);
+    });
   }
 
   async loadTags(repoPath) {
@@ -428,7 +498,7 @@ class GitTreeApp {
       document.getElementById('status-info').textContent = info;
       this.components.statusBar.setInfo(info);
       this.updatePushPullCounts(status.ahead || 0, status.behind || 0);
-    } catch {}
+    } catch { /* status refresh is best effort */ }
   }
 
   updatePushPullCounts(ahead = 0, behind = 0) {
@@ -578,7 +648,7 @@ class GitTreeApp {
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         return { ...defaults, ...parsed };
       }
-    } catch {}
+    } catch { /* invalid stored visibility falls back to defaults */ }
     return defaults;
   }
 
@@ -873,7 +943,7 @@ class GitTreeApp {
     try {
       const parsed = JSON.parse(localStorage.getItem(storageKey));
       if (Array.isArray(parsed)) savedSections = new Set(parsed);
-    } catch {}
+    } catch { /* invalid stored sections are ignored */ }
 
     const headers = document.querySelectorAll('.sidebar-section-header.collapsible');
     headers.forEach(header => {

@@ -7,6 +7,7 @@
     "start": "electron .",
     "prepare:assets": "node scripts/prepare-build-assets.js",
     "validate": "npm run test && npm run audit:design",
+    "lint": "eslint .",
     "audit:design": "node .agents/skills/gittree-design-system/scripts/audit-design.js",
     "perf:renderer": "node scripts/renderer-perf-benchmark.js",
     "test:renderer-ui": "node scripts/renderer-ui-regression.js",
@@ -53,12 +54,15 @@
     "simple-git": "^3.36.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@semantic-release/commit-analyzer": "^13.0.1",
     "@semantic-release/git": "^10.0.1",
     "@semantic-release/npm": "^12.0.1",
     "@semantic-release/release-notes-generator": "^14.0.3",
     "electron": "^43.2.0",
     "electron-builder": "^26.15.3",
+    "eslint": "^10.8.0",
+    "globals": "^17.8.0",
     "semantic-release": "^24.2.3"
   }
 }

@@ -126,6 +126,9 @@ contextBridge.exposeInMainWorld('gitTree', {
   unstagePaths: (repoPath, snapshotId, paths) =>
     ipcRenderer.invoke('git:unstage-paths', repoPath, snapshotId, paths),
 
+  discardPaths: (repoPath, snapshotId, paths) =>
+    ipcRenderer.invoke('git:discard-paths', repoPath, snapshotId, paths),
+
   stageHunks: (repoPath, snapshotId, filePath, hunkIds) =>
     ipcRenderer.invoke('git:stage-hunks', repoPath, snapshotId, filePath, hunkIds),
 
@@ -159,17 +162,50 @@ contextBridge.exposeInMainWorld('gitTree', {
   stashPop: (repoPath, index) =>
     ipcRenderer.invoke('git:stash-pop', repoPath, index),
 
+  stashApply: (repoPath, index) =>
+    ipcRenderer.invoke('git:stash-apply', repoPath, index),
+
+  stashDrop: (repoPath, index) =>
+    ipcRenderer.invoke('git:stash-drop', repoPath, index),
+
   getRemotes: (repoPath) =>
     ipcRenderer.invoke('git:remotes', repoPath),
 
+  addRemote: (repoPath, name, url) =>
+    ipcRenderer.invoke('git:remote-add', repoPath, name, url),
+
+  renameRemote: (repoPath, name, newName) =>
+    ipcRenderer.invoke('git:remote-rename', repoPath, name, newName),
+
+  setRemoteUrl: (repoPath, name, url) =>
+    ipcRenderer.invoke('git:remote-set-url', repoPath, name, url),
+
+  removeRemote: (repoPath, name) =>
+    ipcRenderer.invoke('git:remote-remove', repoPath, name),
+
   getFileTree: (repoPath, commitHash) =>
     ipcRenderer.invoke('git:file-tree', repoPath, commitHash),
+
+  restoreFileFromCommit: (repoPath, commitHash, filePath) =>
+    ipcRenderer.invoke('git:restore-file-from-commit', repoPath, commitHash, filePath),
 
   getTags: (repoPath) =>
     ipcRenderer.invoke('git:tags', repoPath),
 
   createTag: (repoPath, name, commitHash, message = '') =>
     ipcRenderer.invoke('git:create-tag', repoPath, name, commitHash, message),
+
+  deleteTag: (repoPath, name) =>
+    ipcRenderer.invoke('git:delete-tag', repoPath, name),
+
+  pushTags: (repoPath, remote) =>
+    ipcRenderer.invoke('git:tags-push', repoPath, remote),
+
+  deleteRemoteTag: (repoPath, remote, name) =>
+    ipcRenderer.invoke('git:remote-tag-delete', repoPath, remote, name),
+
+  getTagsAtCommit: (repoPath, commitHash) =>
+    ipcRenderer.invoke('git:tags-at-commit', repoPath, commitHash),
 
   getOperationState: (repoPath) =>
     ipcRenderer.invoke('git:operation-state', repoPath),

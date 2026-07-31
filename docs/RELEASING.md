@@ -57,12 +57,12 @@ Gli artefatti vengono scritti in `dist/` e non vengono pubblicati.
 La release ufficiale viene generata automaticamente a ogni push su `master` tramite
 [semantic-release](https://semantic-release.gitbook.io/).
 
-### Schema di versione (era 0.3.x)
+### Schema di versione
 
-Finché il prodotto resta in anteprima, la linea è **`0.3.N`**:
+Finché il prodotto resta in anteprima, la linea è **`0.4.N`** dopo la maturità delle fasi 1–5:
 
-- ogni release incrementa solo il **patch** (`0.3.1` → `0.3.2` → … → `0.3.123`);
-- `feat:`, `fix:`, `perf:`, `refactor:` e anche i breaking change producono una patch;
+- le **nuove funzionalità** (`feat:`) e i breaking change producono una **minor** (`0.4.0` → `0.4.1`…);
+- `fix:`, `perf:`, `refactor:` e `style:` producono una **patch** (`0.4.1` → `0.4.2`);
 - `docs:`, `chore:`, `test:`, `ci:`, `build:` non aprono una release.
 
 Non creare tag a mano e non usare `npm version` per i rilasci ufficiali: lo fa il workflow.

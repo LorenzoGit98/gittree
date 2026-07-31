@@ -467,6 +467,96 @@
   text-decoration: none;
 }
 
+.settings-remotes-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 0 var(--space-4) var(--space-3);
+}
+
+.settings-remote-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+}
+
+.settings-remote-row > i {
+  color: var(--text-tertiary);
+  font-size: var(--text-lg);
+}
+
+.settings-remote-copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-remote-copy strong {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.settings-remote-url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+
+.settings-remote-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.settings-remote-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto;
+  gap: var(--space-2);
+  padding: 0 var(--space-4) var(--space-4);
+}
+
+.settings-remote-form input {
+  min-width: 0;
+  height: 34px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  outline: 0;
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+
+.settings-remote-form input:focus {
+  border-color: var(--primary);
+}
+
+@media (max-width: 560px) {
+  .settings-remote-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+.remote-prompt-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.remote-prompt-form .repository-picker-footer {
+  margin-top: var(--space-2);
+}
+
 .settings-about-repo a:hover {
   text-decoration: underline;
 }

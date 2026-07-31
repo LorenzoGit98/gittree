@@ -370,9 +370,14 @@
                     <h3 data-i18n="changes.unstaged">Unstaged</h3>
                     <span id="unstaged-count" class="badge">0</span>
                   </div>
-                  <button id="btn-stage-all" class="btn btn-small" type="button">
-                    <i class="ph ph-plus-circle"></i><span data-i18n="changes.stageAll">Stage all</span>
-                  </button>
+                  <div class="changes-section-actions">
+                    <button id="btn-discard-all" class="btn btn-small changes-discard-btn" type="button" disabled>
+                      <i class="ph ph-trash"></i><span data-i18n="changes.discardAll">Discard all</span>
+                    </button>
+                    <button id="btn-stage-all" class="btn btn-small" type="button">
+                      <i class="ph ph-plus-circle"></i><span data-i18n="changes.stageAll">Stage all</span>
+                    </button>
+                  </div>
                 </div>
                 <div id="unstaged-files" class="changes-file-list" role="list"></div>
               </section>

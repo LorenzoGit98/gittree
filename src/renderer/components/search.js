@@ -1,3 +1,5 @@
+/* exported GlobalSearch */
+/* eslint-disable-next-line no-unused-vars -- script-tag global consumed by app.js */
 class GlobalSearch {
   constructor(app) {
     this.app = app;
@@ -77,7 +79,7 @@ class GlobalSearch {
             });
           });
         }
-      } catch {}
+      } catch { /* search data is best effort */ }
     }
 
     if (this.app.components.repoTabs?.repos) {
@@ -147,7 +149,7 @@ class GlobalSearch {
       header.textContent = this.groupLabel(type);
       this.results.appendChild(header);
 
-      group.forEach((item, idx) => {
+      group.forEach(item => {
         const el = document.createElement('div');
         el.className = 'search-result-item';
         el.innerHTML = `

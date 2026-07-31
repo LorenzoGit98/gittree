@@ -1,3 +1,5 @@
+/* exported BranchCompare */
+/* eslint-disable-next-line no-unused-vars -- script-tag global consumed by app.js */
 class BranchCompare {
   constructor(app) {
     this.app = app;

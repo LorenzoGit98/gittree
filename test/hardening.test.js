@@ -303,3 +303,189 @@ test('merge rejects when the branch adds a file that exists untracked locally', 
     fixture.cleanup();
   }
 });
+
+test('discardPaths restores tracked files and removes untracked files', async () => {
+  const fixture = createRepository();
+  try {
+    fixture.write('tracked.txt', 'original');
+    fixture.git('add', '-A');
+    fixture.git('commit', '-m', 'init');
+
+    fixture.write('tracked.txt', 'modified');
+    fixture.write('untracked.txt', 'new');
+    const service = new GitService(fixture.repository);
+    const snapshot = await service.getWorkingTree();
+
+    const result = await service.discardPaths(
+      snapshot.snapshotId,
+      ['tracked.txt', 'untracked.txt']
+    );
+    assert.equal(result.success, true);
+    assert.equal(fs.readFileSync(path.join(fixture.repository, 'tracked.txt'), 'utf8'), 'original');
+    assert.equal(fs.existsSync(path.join(fixture.repository, 'untracked.txt')), false);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('tags can be deleted locally, pushed and removed from a remote', async () => {
+  const fixture = createRepository();
+  try {
+    fixture.write('a.txt', 'hello');
+    fixture.git('add', '-A');
+    fixture.git('commit', '-m', 'initial');
+    const hash = fixture.git('rev-parse', 'HEAD');
+    const { git } = require('./helpers/git-repository');
+    git(fixture.root, 'init', '--bare', 'remote.git');
+    fixture.git('remote', 'add', 'origin', path.join(fixture.root, 'remote.git'));
+
+    const service = new GitService(fixture.repository);
+    await service.createTag('v1.0.0', hash, 'release one');
+    assert.deepEqual(await service.getTagsAtCommit(hash), ['v1.0.0']);
+
+    await service.pushTags('origin');
+    const remoteTags = git(fixture.root, '--git-dir=remote.git', 'tag', '-l');
+    assert.match(remoteTags, /v1\.0\.0/);
+
+    await service.deleteTag('v1.0.0');
+    assert.deepEqual(await service.getTagsAtCommit(hash), []);
+
+    await assert.rejects(service.deleteTag('v1.0.0'), /Tag not found/);
+    await assert.rejects(service.deleteTag('-x'), /Invalid tag name/);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('remotes can be added, renamed, re-pointed and removed', async () => {
+  const fixture = createRepository();
+  try {
+    fixture.git('commit', '--allow-empty', '-m', 'init');
+    const { git } = require('./helpers/git-repository');
+    const bare = path.join(fixture.root, 'remote.git');
+    const bare2 = path.join(fixture.root, 'remote2.git');
+    git(fixture.root, 'init', '--bare', 'remote.git');
+    git(fixture.root, 'init', '--bare', 'remote2.git');
+
+    const service = new GitService(fixture.repository);
+    await service.addRemote('origin', bare);
+    await service.addRemote('backup', bare2);
+    assert.equal((await service.getRemotes()).length, 2);
+
+    await service.renameRemote('backup', 'archive');
+    assert.ok((await service.getRemotes()).some(remote => remote.name === 'archive'));
+
+    await service.setRemoteUrl('archive', bare2);
+    assert.equal(
+      (await service.getRemotes()).find(remote => remote.name === 'archive').refs.push,
+      bare2
+    );
+
+    await service.removeRemote('archive');
+    assert.equal((await service.getRemotes()).length, 1);
+
+    await assert.rejects(service.addRemote('bad name', bare), /Invalid remote name/);
+    await assert.rejects(service.addRemote('-origin', bare), /Invalid remote name/);
+    await assert.rejects(service.addRemote('origin', 'not\nallowed'), /Invalid remote URL/);
+    await assert.rejects(service.removeRemote('missing'), /Remote not found/);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('a file can be restored from a previous commit', async () => {
+  const fixture = createRepository();
+  try {
+    fixture.write('a.txt', 'version-one');
+    fixture.git('add', '-A');
+    fixture.git('commit', '-m', 'first');
+    const hashA = fixture.git('rev-parse', 'HEAD');
+    fixture.write('a.txt', 'version-two');
+    fixture.git('add', '-A');
+    fixture.git('commit', '-m', 'second');
+
+    const service = new GitService(fixture.repository);
+    const result = await service.restoreFileFromCommit(hashA, 'a.txt');
+    assert.equal(result.success, true);
+    assert.equal(fs.readFileSync(path.join(fixture.repository, 'a.txt'), 'utf8'), 'version-one');
+
+    await assert.rejects(
+      service.restoreFileFromCommit('--all', 'a.txt'),
+      /Invalid Git ref/
+    );
+    await assert.rejects(
+      service.restoreFileFromCommit(hashA, '../outside.txt'),
+      /outside the repository/
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('stash apply, drop and pop operate on the given stash index', async () => {
+  const fixture = createRepository();
+  try {
+    fixture.write('a.txt', 'base');
+    fixture.git('add', '-A');
+    fixture.git('commit', '-m', 'init');
+
+    fixture.write('a.txt', 'work-in-progress');
+    const service = new GitService(fixture.repository);
+    await service.stash('WIP one');
+    fixture.write('b.txt', 'second');
+    await service.stash('WIP two');
+
+    assert.equal((await service.getStashList()).all.length, 2);
+
+    await service.stashApply(0);
+    assert.equal(fs.readFileSync(path.join(fixture.repository, 'b.txt'), 'utf8'), 'second');
+    assert.equal((await service.getStashList()).all.length, 2);
+
+    await service.stashDrop(0);
+    assert.equal((await service.getStashList()).all.length, 1);
+
+    await service.stashPop(0);
+    assert.equal((await service.getStashList()).all.length, 0);
+    assert.equal(fs.readFileSync(path.join(fixture.repository, 'a.txt'), 'utf8'), 'work-in-progress');
+
+    await assert.rejects(service.stashApply('nope'), /Invalid stash index/);
+    await assert.rejects(service.stashDrop(-1), /Invalid stash index/);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('discardPaths is blocked during a pending merge and rejects stale snapshots', async () => {
+  const fixture = createRepository();
+  try {
+    fixture.write('tracked.txt', 'original');
+    fixture.git('add', '-A');
+    fixture.git('commit', '-m', 'init');
+
+    const service = new GitService(fixture.repository);
+    const snapshot = await service.getWorkingTree();
+    fixture.write('tracked.txt', 'changed-after-snapshot');
+    await assert.rejects(
+      service.discardPaths(snapshot.snapshotId, ['tracked.txt']),
+      /Working tree changed/
+    );
+
+    fixture.git('checkout', '-b', 'feature');
+    fixture.write('a.txt', 'feature');
+    fixture.git('add', '-A');
+    fixture.git('commit', '-m', 'feature');
+    fixture.git('checkout', 'main');
+    fixture.write('a.txt', 'main');
+    fixture.git('add', '-A');
+    fixture.git('commit', '-m', 'main');
+    await assert.rejects(service.merge('feature'), /Failed to merge/);
+    const state = await service.getOperationState();
+    assert.equal(state.type, 'merge');
+    await assert.rejects(
+      service.discardPaths(snapshot.snapshotId, [state.conflicts[0]]),
+      /Finish or abort the pending merge/
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});

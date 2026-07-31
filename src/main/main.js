@@ -192,35 +192,6 @@ function lockDownWindow(win) {
   win.webContents.on('will-attach-webview', event => event.preventDefault());
 }
 
-async function openRepoDialog() {
-  const result = await dialog.showOpenDialog(mainWindow, {
-    properties: ['openDirectory']
-  });
-  if (!result.canceled && result.filePaths.length > 0) {
-    const dirPath = result.filePaths[0];
-    try {
-      if (!await isWorkingTreeRepository(dirPath)) {
-        throw new Error('Not a working tree');
-      }
-      const repo = repoManager.addRepo(dirPath);
-      sendToRenderer('repo:added', repo);
-    } catch {
-      dialog.showErrorBox('Not a Git Repository', `"${dirPath}" is not a valid Git repository.`);
-    }
-  }
-}
-
-function closeActiveRepo() {
-  const active = repoManager.getActiveRepo();
-  if (active) {
-    repoManager.removeRepo(active.path);
-    gitServices.delete(active.path);
-    sendToRenderer('repo:removed', active.path);
-    const newActive = repoManager.getActiveRepo();
-    sendToRenderer('repo:changed', newActive);
-  }
-}
-
 function registerIpcHandlers() {
   ipcMain.handle('window:minimize', () => {
     mainWindow?.minimize();
@@ -405,7 +376,11 @@ function registerIpcHandlers() {
         /^ssh:\/\//i.test(remoteUrl) ||
         /^git\+ssh:\/\//i.test(remoteUrl) ||
         /^[A-Za-z0-9._-]+@[A-Za-z0-9._-]+:[^\s]+$/.test(remoteUrl);
-      if (!isRemoteCloneUrl || /[\x00-\x1f\x7f]/.test(remoteUrl)) {
+      const hasControlChars = [...remoteUrl].some(char => {
+        const code = char.codePointAt(0);
+        return code < 0x20 || code === 0x7f;
+      });
+      if (!isRemoteCloneUrl || hasControlChars) {
         return { error: 'Only remote repository URLs are supported (https, ssh or git@host:path)' };
       }
       if (typeof parentDirectory !== 'string' || !path.isAbsolute(parentDirectory)) {
@@ -419,7 +394,7 @@ function registerIpcHandlers() {
       }
       if (!stat.isDirectory()) return { error: 'Destination is not a folder' };
       const rawName = remoteUrl.split('/').filter(Boolean).pop() || '';
-      const name = rawName.replace(/\.git(\/)?$/, '').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-');
+      const name = rawName.replace(/\.git(\/)?$/, '').replace(/[<>:"/\\|?*]/g, '-');
       if (!name || name === '.' || name === '..') {
         return { error: 'Could not determine repository name from URL' };
       }
@@ -427,7 +402,7 @@ function registerIpcHandlers() {
       try {
         await fs.promises.access(targetPath);
         return { error: `Destination already exists: ${targetPath}` };
-      } catch {}
+      } catch { /* destination is free */ }
       const { execFile } = require('child_process');
       const { promisify } = require('util');
       const execFileAsync = promisify(execFile);
@@ -558,7 +533,7 @@ function registerIpcHandlers() {
       return result;
     } catch (err) {
       let conflictState = null;
-      try { conflictState = await git.getOperationState(); } catch {}
+      try { conflictState = await git.getOperationState(); } catch { /* operation state unavailable */ }
       return { error: err.message, conflictState };
     }
   });
@@ -606,7 +581,7 @@ function registerIpcHandlers() {
       return result;
     } catch (err) {
       let conflictState = null;
-      try { conflictState = await git.getOperationState(); } catch {}
+      try { conflictState = await git.getOperationState(); } catch { /* operation state unavailable */ }
       return { error: err.message, conflictState };
     }
   });
@@ -708,6 +683,14 @@ function registerIpcHandlers() {
     }
   });
 
+  ipcMain.handle('git:discard-paths', async (_event, repoPath, snapshotId, paths) => {
+    try {
+      return await getGitService(repoPath).discardPaths(snapshotId, paths);
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
   ipcMain.handle(
     'git:stage-hunks',
     async (_event, repoPath, snapshotId, filePath, hunkIds) => {
@@ -779,7 +762,7 @@ function registerIpcHandlers() {
       return result;
     } catch (err) {
       let conflictState = null;
-      try { conflictState = await git.getOperationState(); } catch {}
+      try { conflictState = await git.getOperationState(); } catch { /* operation state unavailable */ }
       return { error: err.message, conflictState };
     }
   });
@@ -792,7 +775,7 @@ function registerIpcHandlers() {
       return result;
     } catch (err) {
       let conflictState = null;
-      try { conflictState = await git.getOperationState(); } catch {}
+      try { conflictState = await git.getOperationState(); } catch { /* operation state unavailable */ }
       return { error: err.message, conflictState };
     }
   });
@@ -824,6 +807,24 @@ function registerIpcHandlers() {
     }
   });
 
+  ipcMain.handle('git:stash-apply', async (_event, repoPath, index) => {
+    try {
+      const git = getGitService(repoPath);
+      return await git.stashApply(index);
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:stash-drop', async (_event, repoPath, index) => {
+    try {
+      const git = getGitService(repoPath);
+      return await git.stashDrop(index);
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
   ipcMain.handle('git:remotes', async (_event, repoPath) => {
     try {
       const git = getGitService(repoPath);
@@ -833,10 +834,50 @@ function registerIpcHandlers() {
     }
   });
 
+  ipcMain.handle('git:remote-add', async (_event, repoPath, name, url) => {
+    try {
+      return await getGitService(repoPath).addRemote(name, url);
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:remote-rename', async (_event, repoPath, name, newName) => {
+    try {
+      return await getGitService(repoPath).renameRemote(name, newName);
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:remote-set-url', async (_event, repoPath, name, url) => {
+    try {
+      return await getGitService(repoPath).setRemoteUrl(name, url);
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:remote-remove', async (_event, repoPath, name) => {
+    try {
+      return await getGitService(repoPath).removeRemote(name);
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
   ipcMain.handle('git:file-tree', async (_event, repoPath, commitHash) => {
     try {
       const git = getGitService(repoPath);
       return await git.getFileTree(commitHash);
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:restore-file-from-commit', async (_event, repoPath, commitHash, filePath) => {
+    try {
+      return await getGitService(repoPath).restoreFileFromCommit(commitHash, filePath);
     } catch (err) {
       return { error: err.message };
     }
@@ -856,6 +897,44 @@ function registerIpcHandlers() {
       const result = await getGitService(repoPath).createTag(name, commitHash, message);
       sendToRenderer('operation:log', `Created tag ${result.name}`);
       return result;
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:delete-tag', async (_event, repoPath, name) => {
+    try {
+      const result = await getGitService(repoPath).deleteTag(name);
+      sendToRenderer('operation:log', `Deleted tag ${result.name}`);
+      return result;
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:tags-push', async (_event, repoPath, remote) => {
+    try {
+      const result = await getGitService(repoPath).pushTags(remote);
+      sendToRenderer('operation:log', `Pushed tags to ${remote}`);
+      return result;
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:remote-tag-delete', async (_event, repoPath, remote, name) => {
+    try {
+      const result = await getGitService(repoPath).deleteRemoteTag(remote, name);
+      sendToRenderer('operation:log', `Deleted remote tag ${name} from ${remote}`);
+      return result;
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:tags-at-commit', async (_event, repoPath, commitHash) => {
+    try {
+      return await getGitService(repoPath).getTagsAtCommit(commitHash);
     } catch (err) {
       return { error: err.message };
     }
@@ -993,7 +1072,7 @@ function registerIpcHandlers() {
         try {
           const repository = await getHostingRepository(repoPath, provider);
           organization = repository.organization;
-        } catch {}
+        } catch { /* organization resolution is optional */ }
       }
       return await hostingService.setPat(provider, token, organization);
     } catch (err) {

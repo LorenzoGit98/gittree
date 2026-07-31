@@ -1,3 +1,5 @@
+/* exported StatusBar */
+/* eslint-disable-next-line no-unused-vars -- script-tag global consumed by app.js */
 class StatusBar {
   constructor() {
     this.repoEl = document.getElementById('status-repo');

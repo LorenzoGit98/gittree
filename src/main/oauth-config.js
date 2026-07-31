@@ -14,7 +14,7 @@ function loadOAuthConfig(app) {
       packaged = JSON.parse(
         fs.readFileSync(path.join(process.resourcesPath, 'oauth-config.json'), 'utf8')
       );
-    } catch {}
+    } catch { /* packaged config is optional */ }
   }
   return {
     github: validClientId(

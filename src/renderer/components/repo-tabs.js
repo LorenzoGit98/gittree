@@ -1,3 +1,5 @@
+/* exported RepoTabs */
+/* eslint-disable-next-line no-unused-vars -- script-tag global consumed by app.js */
 class RepoTabs {
   constructor(container, app) {
     this.container = container;
@@ -10,7 +12,7 @@ class RepoTabs {
   }
 
   async init() {
-    try { this.repos = await window.gitTree.getRepos(); } catch(e) {}
+    try { this.repos = await window.gitTree.getRepos(); } catch { /* repo list may be unavailable */ }
     this.render();
     this.refreshAllSync();
     this.startPeriodicSyncRefresh();
