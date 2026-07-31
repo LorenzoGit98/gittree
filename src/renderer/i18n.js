@@ -444,6 +444,9 @@ const I18n = {
             mergeWorkspace: {
               localChangesTitle: 'Local changes are blocking this merge',
               localChangesDetail: 'Commit or stash these files first: {{files}}',
+              localChangesKeptTitle: "Local changes won't be touched",
+              localChangesKeptDetail_one: '{{count}} file with local changes will be preserved',
+              localChangesKeptDetail_other: '{{count}} files with local changes will be preserved',
               unknownChanges: 'working tree changes',
               viewChanges: 'View changes',
               stashAndContinue: 'Stash and continue',
@@ -1045,6 +1048,9 @@ const I18n = {
             mergeWorkspace: {
               localChangesTitle: 'Le modifiche locali bloccano questo merge',
               localChangesDetail: 'Esegui commit o stash prima su questi file: {{files}}',
+              localChangesKeptTitle: 'Le modifiche locali non verranno toccate',
+              localChangesKeptDetail_one: '{{count}} file con modifiche locali verrà conservato',
+              localChangesKeptDetail_other: '{{count}} file con modifiche locali verranno conservati',
               unknownChanges: 'modifiche del working tree',
               viewChanges: 'Vedi modifiche',
               stashAndContinue: 'Stash e continua',

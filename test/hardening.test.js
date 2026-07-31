@@ -238,3 +238,68 @@ test('branch names starting with a dash are rejected before checkout and push', 
     fixture.cleanup();
   }
 });
+
+test('merge proceeds when pending changes do not overlap the branch changes', async () => {
+  const fixture = createRepository();
+  try {
+    fixture.write('a.txt', 'base-a');
+    fixture.write('b.txt', 'base-b');
+    fixture.git('add', '-A');
+    fixture.git('commit', '-m', 'init');
+    fixture.git('checkout', '-b', 'feature');
+    fixture.write('a.txt', 'feature-a');
+    fixture.git('add', '-A');
+    fixture.git('commit', '-m', 'feature');
+    fixture.git('checkout', 'main');
+
+    fixture.write('b.txt', 'local-b');
+    const service = new GitService(fixture.repository);
+    const result = await service.merge('feature');
+    assert.equal(result.success, true);
+    assert.equal(fixture.git('show', 'HEAD:a.txt'), 'feature-a');
+    assert.equal(fs.readFileSync(path.join(fixture.repository, 'b.txt'), 'utf8'), 'local-b');
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('merge rejects only when pending changes overlap the branch changes', async () => {
+  const fixture = createRepository();
+  try {
+    fixture.write('a.txt', 'base-a');
+    fixture.git('add', '-A');
+    fixture.git('commit', '-m', 'init');
+    fixture.git('checkout', '-b', 'feature');
+    fixture.write('a.txt', 'feature-a');
+    fixture.git('add', '-A');
+    fixture.git('commit', '-m', 'feature');
+    fixture.git('checkout', 'main');
+
+    fixture.write('a.txt', 'local-a');
+    const service = new GitService(fixture.repository);
+    await assert.rejects(service.merge('feature'), /overwrite local changes in: a\.txt/);
+    assert.equal(fs.readFileSync(path.join(fixture.repository, 'a.txt'), 'utf8'), 'local-a');
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('merge rejects when the branch adds a file that exists untracked locally', async () => {
+  const fixture = createRepository();
+  try {
+    fixture.write('base.txt', 'base');
+    fixture.git('add', '-A');
+    fixture.git('commit', '-m', 'init');
+    fixture.git('checkout', '-b', 'feature');
+    fixture.write('new.txt', 'from-branch');
+    fixture.git('add', '-A');
+    fixture.git('commit', '-m', 'feature');
+    fixture.git('checkout', 'main');
+
+    fixture.write('new.txt', 'local-untracked');
+    const service = new GitService(fixture.repository);
+    await assert.rejects(service.merge('feature'), /overwrite local changes in: new\.txt/);
+  } finally {
+    fixture.cleanup();
+  }
+});

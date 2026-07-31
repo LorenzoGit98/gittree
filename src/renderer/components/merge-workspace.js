@@ -69,8 +69,10 @@ class MergeWorkspace {
     const preview = this.preview;
     const conflictFiles = preview?.conflictedFiles || [];
     const changedCount = preview?.changedFiles?.length ?? 0;
-    const hasLocalChanges = this.hasLocalChanges(d.status);
-    const blockingSummary = this.blockingSummary(d.status);
+    const changedFiles = preview?.changedFiles || null;
+    const hasBlocking = this.hasBlockingChanges(d.status, changedFiles);
+    const hasPending = this.hasPendingChanges(d.status);
+    const blockingSummary = this.blockingSummary(d.status, changedFiles);
     const conflictList = conflictFiles.slice(0, 6).join(', ');
 
     this.container.innerHTML = `
@@ -129,7 +131,7 @@ class MergeWorkspace {
           <section class="merge-section">
             <div class="merge-section-header">${this.esc(t('mergeWorkspace.riskAssessment'))}</div>
             <div class="merge-risk-list">
-              ${hasLocalChanges ? `
+              ${hasBlocking ? `
                 <div class="merge-risk-item">
                   <i class="ph ph-warning merge-risk-icon warning" aria-hidden="true"></i>
                   <div class="merge-risk-content">
@@ -139,6 +141,15 @@ class MergeWorkspace {
                   <div class="merge-risk-action">
                     <button id="merge-view-changes-btn" class="btn btn-small">${this.esc(t('mergeWorkspace.viewChanges'))}</button>
                     <button id="merge-stash-btn" class="btn btn-small"><i class="ph ph-archive" aria-hidden="true"></i>${this.esc(t('mergeWorkspace.stashAndContinue'))}</button>
+                  </div>
+                </div>
+              ` : ''}
+              ${hasPending && !hasBlocking ? `
+                <div class="merge-risk-item">
+                  <i class="ph ph-check-circle merge-risk-icon info" aria-hidden="true"></i>
+                  <div class="merge-risk-content">
+                    <div class="merge-risk-title">${this.esc(t('mergeWorkspace.localChangesKeptTitle'))}</div>
+                    <div class="merge-risk-detail">${this.esc(t('mergeWorkspace.localChangesKeptDetail', { count: this.pendingFileCount(d.status) }))}</div>
                   </div>
                 </div>
               ` : ''}
@@ -191,12 +202,12 @@ class MergeWorkspace {
         </div>
         <span class="merge-action-summary">${this.esc(t('mergeWorkspace.mergeSummary', { source: d.source, target: d.target }))}</span>
         <button id="merge-only-btn" class="btn btn-primary merge-confirm"
-          ${hasLocalChanges ? `disabled title="${this.esc(t('mergeWorkspace.mergeBlocked'))}"` : ''}>
+          ${hasBlocking ? `disabled title="${this.esc(t('mergeWorkspace.mergeBlocked'))}"` : ''}>
           <i class="ph ph-git-merge" aria-hidden="true"></i>
           <span>${this.esc(t('mergeWorkspace.mergeAction'))}</span>
         </button>
         <button id="merge-push-btn" class="btn merge-confirm"
-          ${hasLocalChanges ? `disabled title="${this.esc(t('mergeWorkspace.mergeBlocked'))}"` : ''}>
+          ${hasBlocking ? `disabled title="${this.esc(t('mergeWorkspace.mergeBlocked'))}"` : ''}>
           <i class="ph ph-git-merge" aria-hidden="true"></i>
           <span>${this.esc(t('mergeWorkspace.mergeAndPush'))}</span>
         </button>
@@ -269,7 +280,8 @@ class MergeWorkspace {
   async executeMerge(andPush = false) {
     const repo = this.app.state.repo;
     if (!repo) return;
-    if (this.mergeData?.status?.isClean === false) {
+    const changedFiles = this.preview?.changedFiles || null;
+    if (this.hasBlockingChanges(this.mergeData?.status, changedFiles)) {
       this.app.showToast(t('mergeWorkspace.mergeBlocked'), 'error');
       return;
     }
@@ -342,7 +354,7 @@ class MergeWorkspace {
     if (this.container) this.container.classList.add('is-hidden');
   }
 
-  hasLocalChanges(status = {}) {
+  hasPendingChanges(status = {}) {
     return status?.isClean === false || Boolean(
       status && (
         status.modified?.length ||
@@ -356,13 +368,15 @@ class MergeWorkspace {
     );
   }
 
-  blockingSummary(status = {}) {
-    const files = this.blockingFiles(status);
-    if (!files.length) return t('mergeWorkspace.unknownChanges');
-    return files.slice(0, 4).join(', ') + (files.length > 4 ? '…' : '');
+  hasBlockingChanges(status = {}, changedFiles = null) {
+    return this.blockingFiles(status, changedFiles).length > 0;
   }
 
-  blockingFiles(status = {}) {
+  pendingFileCount(status = {}) {
+    return this.localFiles(status).length;
+  }
+
+  localFiles(status = {}) {
     const values = [
       ...(status.files || []).map(file => file.path),
       ...(status.modified || []),
@@ -374,6 +388,19 @@ class MergeWorkspace {
       ...(status.renamed || []).flatMap(file => [file.from, file.to])
     ].filter(Boolean);
     return [...new Set(values)];
+  }
+
+  blockingFiles(status = {}, changedFiles = null) {
+    const local = this.localFiles(status);
+    if (changedFiles === null) return local;
+    const incoming = new Set(changedFiles);
+    return local.filter(file => incoming.has(file));
+  }
+
+  blockingSummary(status = {}, changedFiles = null) {
+    const files = this.blockingFiles(status, changedFiles);
+    if (!files.length) return t('mergeWorkspace.unknownChanges');
+    return files.slice(0, 4).join(', ') + (files.length > 4 ? '…' : '');
   }
 
   esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }

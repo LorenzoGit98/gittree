@@ -827,13 +827,37 @@ class GitService {
     const flag = strategies[strategy];
     if (!flag) throw new Error(`Invalid merge strategy: ${strategy}`);
     const status = await this.git.status();
-    if (!status.isClean()) throw new Error('Merge requires a clean working tree');
+    if (!status.isClean()) {
+      const blocking = await this.mergeBlockingFiles(branch, status);
+      if (blocking.length) {
+        throw new Error(
+          `The merge would overwrite local changes in: ${blocking.join(', ')}`
+        );
+      }
+    }
     try {
       const result = await this.git.merge([flag, branch]);
       return { success: true, branch, strategy, result };
     } catch (err) {
       throw new Error(`Failed to merge: ${err.message}`);
     }
+  }
+
+  async mergeBlockingFiles(branch, status) {
+    const changedRaw = await this.git.raw(['diff', '--name-only', `HEAD...${branch}`]);
+    const incoming = new Set(changedRaw.split(/\r?\n/).filter(Boolean));
+    if (!incoming.size) return [];
+    const local = [
+      ...(status.files || []).map(file => file.path),
+      ...(status.modified || []),
+      ...(status.not_added || []),
+      ...(status.created || []),
+      ...(status.deleted || []),
+      ...(status.staged || []),
+      ...(status.conflicted || []),
+      ...(status.renamed || []).flatMap(file => [file.from, file.to])
+    ].filter(Boolean);
+    return [...new Set(local.filter(file => incoming.has(file)))];
   }
 
   async previewMerge(branch) {
