@@ -717,6 +717,22 @@ function registerIpcHandlers() {
     }
   });
 
+  ipcMain.handle('git:merge-preview', async (_event, repoPath, branch) => {
+    try {
+      return await getGitService(repoPath).previewMerge(branch);
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:conflict-parse', async (_event, repoPath, content) => {
+    try {
+      return await getGitService(repoPath).parseConflictBlocks(content);
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
   ipcMain.handle('git:conflict-read', async (_event, repoPath, filePath) => {
     try {
       return await getGitService(repoPath).readConflict(filePath);

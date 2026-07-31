@@ -218,40 +218,47 @@
           </div>
 
           <!-- Unified Batch Operations Footer -->
-          <div class="batch-operations-footer" id="batch-operations-footer">
+          <div class="batch-operations-footer" id="batch-operations-footer" role="toolbar" aria-label="Selected branches actions">
             <div class="batch-operations-content">
-              <div class="batch-selection-info">
-                <i class="ph ph-git-branch"></i>
-                <span class="batch-selection-count"></span>
-                <div class="batch-selected-names" role="list" aria-label="Selected branches"></div>
+              <div class="batch-operations-header">
+                <span class="batch-selection-info">
+                  <i class="ph ph-git-branch" aria-hidden="true"></i>
+                  <span class="batch-selection-count"></span>
+                </span>
+                <button class="btn-icon" type="button" data-batch-dismiss
+                        title="Clear selection"
+                        aria-label="Clear selection">
+                  <i class="ph ph-x" aria-hidden="true"></i>
+                </button>
               </div>
+              <div class="batch-selected-names" role="list" aria-label="Selected branches"></div>
               <div class="batch-actions">
-                <button class="btn btn-small btn-primary batch-pull-all" 
-                        type="button" 
+                <button class="btn btn-small btn-primary batch-pull-all"
+                        type="button"
+                        data-batch-pull
+                        disabled
                         title="Pull all selected branches"
                         aria-label="Pull all selected branches">
-                  <i class="ph ph-download-simple"></i>
+                  <i class="ph ph-download-simple" aria-hidden="true"></i>
                   <span data-i18n="sidebar.pullAll">Pull All</span>
                 </button>
-                <button class="btn btn-small batch-delete" 
-                        type="button" 
-                        title="Delete selected branches"
-                        aria-label="Delete selected branches">
-                  <i class="ph ph-trash"></i>
-                  <span data-i18n="sidebar.batchDelete">Delete</span>
-                </button>
-                <button class="btn btn-small batch-compare" 
-                        type="button" 
+                <button class="btn btn-small batch-compare"
+                        type="button"
+                        data-batch-compare
+                        disabled
                         title="Compare selected branches"
                         aria-label="Compare selected branches">
-                  <i class="ph ph-arrows-left-right"></i>
+                  <i class="ph ph-arrows-left-right" aria-hidden="true"></i>
                   <span data-i18n="sidebar.batchCompare">Compare</span>
                 </button>
-                <button class="btn btn-small batch-dismiss" 
-                        type="button" 
-                        title="Dismiss selection"
-                        aria-label="Dismiss selection">
-                  <i class="ph ph-x"></i>
+                <button class="btn btn-small batch-delete"
+                        type="button"
+                        data-batch-delete
+                        disabled
+                        title="Delete selected branches"
+                        aria-label="Delete selected branches">
+                  <i class="ph ph-trash" aria-hidden="true"></i>
+                  <span data-i18n="sidebar.batchDelete">Delete</span>
                 </button>
               </div>
             </div>
@@ -517,7 +524,7 @@
     </div>
   </div>
 
-  <div id="merge-preview-overlay" class="merge-overlay is-hidden"></div>
+  <div id="merge-preview-overlay" class="merge-workspace-shell fullscreen-workspace is-hidden"></div>
   <div id="merge-workspace-overlay" class="fullscreen-workspace is-hidden"></div>
   <div id="modal-overlay" class="confirm-overlay is-hidden">
     <div class="confirm-dialog" id="modal-dialog"></div>
@@ -528,6 +535,7 @@
 <script src="i18n.js"></script>
 <script src="theme.js"></script>
 <script src="components/diff-parser.js"></script>
+<script src="components/conflict-highlight.js"></script>
 <script src="components/repo-tabs.js"></script>
 <script src="components/settings-view.js"></script>
 <script src="components/branch-context-menu.js"></script>

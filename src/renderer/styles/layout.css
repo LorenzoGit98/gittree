@@ -175,6 +175,7 @@
 }
 
 .sidebar {
+  position: relative;
   display: flex;
   flex-direction: column;
   transition: opacity var(--duration-normal) var(--ease-decel), transform var(--duration-normal) var(--spring-gentle), visibility 0s;

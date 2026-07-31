@@ -174,6 +174,12 @@ contextBridge.exposeInMainWorld('gitTree', {
   getOperationState: (repoPath) =>
     ipcRenderer.invoke('git:operation-state', repoPath),
 
+  previewMerge: (repoPath, branch) =>
+    ipcRenderer.invoke('git:merge-preview', repoPath, branch),
+
+  parseConflictBlocks: (repoPath, content) =>
+    ipcRenderer.invoke('git:conflict-parse', repoPath, content),
+
   readConflict: (repoPath, filePath) =>
     ipcRenderer.invoke('git:conflict-read', repoPath, filePath),
 

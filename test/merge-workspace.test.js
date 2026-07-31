@@ -38,7 +38,13 @@ test('merge preview compares develop against quality without treating the range 
       };
     },
     getLog: async () => ({ latest: { hash: 'quality-commit' } }),
-    getStatus: async () => ({ isClean: true })
+    getStatus: async () => ({ isClean: true }),
+    previewMerge: async () => ({
+      supported: true,
+      canFastForward: false,
+      conflictedFiles: ['a.txt'],
+      changedFiles: ['a.txt', 'b.txt']
+    })
   });
   const errors = [];
   const workspace = new MergeWorkspace({
@@ -63,5 +69,7 @@ test('merge preview compares develop against quality without treating the range 
   assert.equal(workspace.mergeData.target, 'quality');
   assert.equal(workspace.mergeData.commitsCount, 1);
   assert.equal(workspace.mergeData.diff, 'diff --git a/file b/file');
+  assert.deepEqual(workspace.preview.conflictedFiles, ['a.txt']);
+  assert.equal(workspace.preview.changedFiles.length, 2);
   assert.deepEqual(errors, []);
 });

@@ -777,6 +777,57 @@ class GitService {
     }
   }
 
+  async previewMerge(branch) {
+    await this.assertCommitish(branch);
+    const fallback = () => ({
+      supported: false,
+      canFastForward: null,
+      conflictedFiles: [],
+      changedFiles: []
+    });
+    let stdout = '';
+    try {
+      ({ stdout } = await execFileAsync(
+        'git',
+        ['merge-tree', '--write-tree', '--name-only', 'HEAD', branch],
+        { cwd: this.repoPath, encoding: 'utf8' }
+      ));
+    } catch (err) {
+      stdout = String(err.stdout || '');
+      if (!stdout) return fallback();
+    }
+    const conflictedFiles = [];
+    const lines = String(stdout).split(/\r?\n/);
+    for (let index = 1; index < lines.length; index += 1) {
+      const line = lines[index].trim();
+      if (!line) break;
+      if (/^(?:Auto-merging|CONFLICT|warning|error)/i.test(line)) break;
+      conflictedFiles.push(line);
+    }
+    try {
+      const base = (await this.git.raw(['merge-base', 'HEAD', branch])).trim();
+      const head = (await this.git.revparse(['HEAD'])).trim();
+      const changedRaw = await this.git.raw(['diff', '--name-only', `${base}..${branch}`]);
+      return {
+        supported: true,
+        canFastForward: base === head,
+        conflictedFiles,
+        changedFiles: changedRaw.split(/\r?\n/).filter(Boolean)
+      };
+    } catch {
+      return {
+        supported: true,
+        canFastForward: null,
+        conflictedFiles,
+        changedFiles: []
+      };
+    }
+  }
+
+  parseConflictBlocks(content) {
+    return parseConflictBlocks(String(content || ''));
+  }
+
   async getOperationState() {
     const mergePath = await this.resolveGitPath('MERGE_HEAD');
     const rebaseMergePath = await this.resolveGitPath('rebase-merge');

@@ -3,6 +3,7 @@ class ConflictResolver {
     this.app = app;
     this.container = document.getElementById('merge-workspace-overlay');
     this.state = null;
+    this.allFiles = [];
     this.currentPath = null;
     this.current = null;
     this.resultContent = '';
@@ -11,6 +12,11 @@ class ConflictResolver {
     this.pendingBinaryStrategy = null;
     this.dirty = false;
     this.manualEdited = false;
+    this.undoStack = [];
+    this.blockCounts = new Map();
+    this.binaryMap = new Map();
+    this.fileFilter = '';
+    this.reparseTimer = null;
     this.layout = localStorage.getItem('gittree.mergeEditor.layout') === 'vertical'
       ? 'vertical'
       : 'horizontal';
@@ -30,40 +36,70 @@ class ConflictResolver {
       return;
     }
     if (!this.state?.type) return;
+    this.allFiles = [...this.state.conflicts];
+    this.blockCounts = new Map(this.state.conflicts.map(file => [file, null]));
+    this.binaryMap = new Map();
     this.currentPath = this.state.conflicts[0] || null;
     this.current = null;
     this.dirty = false;
+    this.undoStack = [];
+    this.fileFilter = '';
     this.render();
     this.container.classList.remove('is-hidden');
     if (this.currentPath) await this.loadFile(this.currentPath);
   }
 
+  remainingFiles() {
+    return (this.state?.conflicts || []).filter(file => this.allFiles.includes(file));
+  }
+
+  unresolvedCount() {
+    const remaining = this.remainingFiles();
+    const known = remaining
+      .map(file => this.blockCounts.get(file))
+      .filter(count => Number.isInteger(count));
+    return known.length === remaining.length ? known.reduce((sum, count) => sum + count, 0) : null;
+  }
+
   render() {
-    const conflicts = this.state?.conflicts || [];
+    const conflicts = this.remainingFiles();
+    const resolved = this.allFiles.length - conflicts.length;
+    const total = this.allFiles.length;
+    const conflictsSum = this.unresolvedCount();
     this.container.innerHTML = `
       <div class="conflict-workspace">
         <header class="conflict-header">
-          <div>
+          <div class="conflict-header-title">
             <span class="eyebrow">${this.esc(t('conflicts.operation', { operation: this.state.type }))}</span>
             <h2>${this.esc(t('conflicts.title'))}</h2>
+            <span class="conflict-progress">${this.esc(t('conflicts.filesResolved', { resolved, total }))}</span>
           </div>
           <div class="conflict-header-actions">
-            <span class="badge badge-conflict">${conflicts.length} ${this.esc(t('conflicts.remaining'))}</span>
-            <button class="btn" id="conflict-abort"><i class="ph ph-x-circle"></i>${this.esc(t('conflicts.abort'))}</button>
+            ${conflictsSum !== null && conflictsSum > 0
+              ? `<span class="badge badge-conflict">${this.esc(t('conflicts.blockCountTotal', { count: conflictsSum }))}</span>`
+              : ''}
+            <span class="badge ${conflicts.length ? 'badge-conflict' : 'badge-head'}">${conflicts.length} ${this.esc(t('conflicts.remaining'))}</span>
+            <button class="btn" id="conflict-abort"><i class="ph ph-x-circle" aria-hidden="true"></i><span>${this.esc(t('conflicts.abort'))}</span></button>
             ${['rebase', 'cherry-pick'].includes(this.state.type) ? `
-              <button class="btn" id="conflict-skip"><i class="ph ph-skip-forward"></i>${this.esc(t('conflicts.skip'))}</button>
+              <button class="btn" id="conflict-skip"><i class="ph ph-skip-forward" aria-hidden="true"></i><span>${this.esc(t('conflicts.skip'))}</span></button>
             ` : ''}
             <button class="btn btn-primary" id="conflict-continue" ${conflicts.length ? 'disabled' : ''}>
-              <i class="ph ph-arrow-right"></i>${this.esc(t('common.continue'))}
+              <i class="ph ph-arrow-right" aria-hidden="true"></i><span>${this.esc(t('common.continue'))}</span>
             </button>
           </div>
         </header>
         <div class="conflict-body">
           <aside class="conflict-file-list" aria-label="${this.esc(t('conflicts.files'))}">
-            ${conflicts.map(file => `<button class="conflict-file-item${file === this.currentPath ? ' active' : ''}" data-file="${this.esc(file)}">
-              <span class="conflict-file-status pending"></span><span>${this.esc(file)}</span>
-            </button>`).join('')}
-            ${conflicts.length ? '' : `<div class="conflict-complete"><i class="ph ph-check-circle"></i>${this.esc(t('conflicts.allResolved'))}</div>`}
+            <div class="conflict-file-search search-clearable">
+              <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+              <input type="text" id="conflict-file-filter" class="conflict-file-filter-input" placeholder="${this.esc(t('conflicts.filterFiles'))}" data-i18n-placeholder="conflicts.filterFiles">
+              <button type="button" class="search-clear-btn is-hidden" id="conflict-file-filter-clear" aria-label="${this.esc(t('common.clearSearch'))}" data-i18n-aria-label="common.clearSearch">
+                <i class="ph ph-x" aria-hidden="true"></i>
+              </button>
+            </div>
+            <div class="conflict-file-scroll" id="conflict-file-scroll">
+              ${this.renderFileList()}
+            </div>
           </aside>
           <main class="conflict-editor" id="conflict-editor">
             <div class="empty-state">${this.esc(conflicts.length ? t('common.loading') : t('conflicts.readyContinue'))}</div>
@@ -71,15 +107,72 @@ class ConflictResolver {
         </div>
       </div>`;
 
-    this.container.querySelectorAll('[data-file]').forEach(button => {
+    document.getElementById('conflict-abort').onclick = () => this.abort();
+    document.getElementById('conflict-skip')?.addEventListener('click', () => this.skip());
+    document.getElementById('conflict-continue').onclick = () => this.continue();
+    const filterInput = document.getElementById('conflict-file-filter');
+    if (filterInput) {
+      filterInput.value = this.fileFilter;
+      filterInput.oninput = () => {
+        this.fileFilter = filterInput.value;
+        const clearButton = document.getElementById('conflict-file-filter-clear');
+        if (clearButton) clearButton.classList.toggle('is-hidden', !this.fileFilter);
+        this.refreshFileList();
+      };
+      filterInput.onkeydown = event => {
+        if (event.key === 'Escape') {
+          filterInput.value = '';
+          this.fileFilter = '';
+          document.getElementById('conflict-file-filter-clear')?.classList.add('is-hidden');
+          this.refreshFileList();
+        }
+      };
+      document.getElementById('conflict-file-filter-clear').onclick = () => {
+        filterInput.value = '';
+        this.fileFilter = '';
+        document.getElementById('conflict-file-filter-clear').classList.add('is-hidden');
+        this.refreshFileList();
+      };
+    }
+    this.bindGlobalKeys();
+  }
+
+  renderFileList() {
+    const needle = this.fileFilter.trim().toLowerCase();
+    const remaining = this.remainingFiles();
+    const rows = this.allFiles
+      .filter(file => !needle || file.toLowerCase().includes(needle))
+      .map(file => {
+        const isResolved = !remaining.includes(file);
+        const isActive = file === this.currentPath;
+        const blockCount = this.blockCounts.get(file);
+        const binary = this.binaryMap.get(file);
+        const showCount = !isResolved && Number.isInteger(blockCount) && blockCount > 0;
+        return `
+          <button class="conflict-file-item${isActive ? ' active' : ''}${isResolved ? ' is-resolved' : ''}"
+            data-file="${this.esc(file)}" ${isResolved ? 'disabled' : ''} title="${this.esc(file)}">
+            <i class="ph ${isResolved ? 'ph-check-circle' : 'ph-warning-circle'} conflict-file-status" aria-hidden="true"></i>
+            <span class="conflict-file-name">${this.esc(file)}</span>
+            ${this.dirty && file === this.currentPath ? `<i class="ph ph-dot-outline conflict-file-unsaved" aria-hidden="true" title="${this.esc(t('conflicts.unsaved'))}"></i>` : ''}
+            ${showCount ? `<span class="badge badge-conflict conflict-file-count" title="${this.esc(t('conflicts.blockCountTitle', { count: blockCount }))}">${blockCount}</span>` : ''}
+            ${binary ? `<span class="badge conflict-file-binary">${this.esc(t('conflicts.binary'))}</span>` : ''}
+          </button>`;
+      });
+    return rows.length
+      ? rows.join('')
+      : `<div class="conflict-file-empty">${this.esc(t('conflicts.noFilesMatch'))}</div>`;
+  }
+
+  refreshFileList() {
+    const scroll = document.getElementById('conflict-file-scroll');
+    if (!scroll) return;
+    scroll.innerHTML = this.renderFileList();
+    scroll.querySelectorAll('[data-file]').forEach(button => {
       button.onclick = async () => {
         if (!await this.confirmDiscard()) return;
         await this.loadFile(button.dataset.file);
       };
     });
-    document.getElementById('conflict-abort').onclick = () => this.abort();
-    document.getElementById('conflict-skip')?.addEventListener('click', () => this.skip());
-    document.getElementById('conflict-continue').onclick = () => this.continue();
   }
 
   async loadFile(filePath) {
@@ -97,7 +190,10 @@ class ConflictResolver {
     this.pendingBinaryStrategy = null;
     this.manualEdited = false;
     this.dirty = false;
-    this.render();
+    this.undoStack = [];
+    this.blockCounts.set(filePath, this.blocks.length);
+    if (this.current.binary) this.binaryMap.set(filePath, true);
+    this.refreshFileList();
     this.renderEditor();
   }
 
@@ -106,23 +202,36 @@ class ConflictResolver {
     const editor = document.getElementById('conflict-editor');
     if (!editor) return;
     const file = this.current;
+    const blockCount = this.blocks.length;
     editor.innerHTML = `
       <div class="conflict-editor-toolbar">
         <div class="conflict-current-file">
           <strong>${this.esc(file.path)}</strong>
           ${file.binary ? `<span class="badge">${this.esc(t('conflicts.binary'))}</span>` : ''}
+          ${!file.binary && blockCount > 0 ? `<span class="badge badge-conflict">${this.esc(t('conflicts.blockCountTitle', { count: blockCount }))}</span>` : ''}
         </div>
         <div class="conflict-toolbar-actions">
           ${file.binary ? `
             <button class="btn" data-binary="ours">${this.esc(t('conflicts.acceptCurrent'))}</button>
             <button class="btn" data-binary="theirs">${this.esc(t('conflicts.acceptIncoming'))}</button>
           ` : `
-            <button class="btn" data-whole="current">${this.esc(t('conflicts.useCurrentFile'))}</button>
-            <button class="btn" data-whole="incoming">${this.esc(t('conflicts.useIncomingFile'))}</button>
+            <div class="conflict-resolve-all">
+              <button class="btn" id="conflict-resolve-all">${this.esc(t('conflicts.resolveAll'))}<i class="ph ph-caret-down" aria-hidden="true"></i></button>
+              <div class="conflict-resolve-all-menu is-hidden">
+                <button class="conflict-resolve-all-item" data-all="current">${this.esc(t('conflicts.resolveAllCurrent'))}</button>
+                <button class="conflict-resolve-all-item" data-all="incoming">${this.esc(t('conflicts.resolveAllIncoming'))}</button>
+                <button class="conflict-resolve-all-item" data-all="both">${this.esc(t('conflicts.resolveAllBoth'))}</button>
+              </div>
+            </div>
+            <button class="btn" data-whole="current" title="${this.esc(t('conflicts.useCurrentFile'))}">${this.esc(t('conflicts.useCurrentFile'))}</button>
+            <button class="btn" data-whole="incoming" title="${this.esc(t('conflicts.useIncomingFile'))}">${this.esc(t('conflicts.useIncomingFile'))}</button>
             <button class="btn" id="conflict-layout">
               <i class="ph ph-layout" aria-hidden="true"></i>${this.esc(
                 this.layout === 'horizontal' ? t('conflicts.verticalLayout') : t('conflicts.horizontalLayout')
               )}
+            </button>
+            <button class="btn" id="conflict-undo" disabled title="${this.esc(t('conflicts.undo'))}">
+              <i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i>${this.esc(t('conflicts.undo'))}
             </button>
           `}
           <button class="btn btn-primary" id="conflict-mark-resolved" ${this.canMarkResolved() ? '' : 'disabled'}>
@@ -143,22 +252,36 @@ class ConflictResolver {
       };
     });
     editor.querySelectorAll('[data-whole]').forEach(button => {
-      button.onclick = () => {
-        this.resultContent = button.dataset.whole === 'current'
-          ? this.current.current
-          : this.current.incoming;
-        this.blocks = [];
-        this.activeBlockIndex = 0;
-        this.manualEdited = false;
-        this.dirty = true;
-        this.renderEditor();
-      };
+      button.onclick = () => this.useWholeFile(button.dataset.whole);
     });
+    const resolveAllButton = document.getElementById('conflict-resolve-all');
+    if (resolveAllButton) {
+      resolveAllButton.onclick = event => {
+        event.stopPropagation();
+        const menu = document.querySelector('.conflict-resolve-all-menu');
+        menu?.classList.toggle('is-hidden');
+      };
+      editor.querySelectorAll('.conflict-resolve-all-item').forEach(item => {
+        item.onclick = () => {
+          document.querySelector('.conflict-resolve-all-menu')?.classList.add('is-hidden');
+          this.applyToAll(item.dataset.all);
+        };
+      });
+      if (this.closeResolveAllMenu) {
+        document.removeEventListener('click', this.closeResolveAllMenu);
+      }
+      document.addEventListener('click', this.closeResolveAllMenu = event => {
+        if (!event.target.closest('.conflict-resolve-all')) {
+          document.querySelector('.conflict-resolve-all-menu')?.classList.add('is-hidden');
+        }
+      });
+    }
     document.getElementById('conflict-layout')?.addEventListener('click', () => {
       this.layout = this.layout === 'horizontal' ? 'vertical' : 'horizontal';
       localStorage.setItem('gittree.mergeEditor.layout', this.layout);
       this.renderEditor();
     });
+    document.getElementById('conflict-undo')?.addEventListener('click', () => this.undo());
     document.getElementById('conflict-mark-resolved')?.addEventListener('click', () => this.markResolved());
     this.bindTextEditor();
   }
@@ -166,7 +289,7 @@ class ConflictResolver {
   renderBinaryState() {
     return `
       <div class="conflict-binary-state">
-        <i class="ph ph-file-lock"></i>
+        <i class="ph ph-file-lock" aria-hidden="true"></i>
         <h3>${this.esc(t('conflicts.binaryTitle'))}</h3>
         <p>${this.esc(t('conflicts.binaryHelp'))}</p>
         <p class="conflict-selection-note">${this.esc(
@@ -177,14 +300,16 @@ class ConflictResolver {
 
   renderTextEditor() {
     const active = this.blocks[this.activeBlockIndex] || null;
+    const currentRanges = this.blocks.map(block => this.locateLines(this.current.current, block.current));
+    const incomingRanges = this.blocks.map(block => this.locateLines(this.current.incoming, block.incoming));
     return `
       <div class="conflict-block-toolbar">
         <div class="conflict-navigation">
-          <button class="icon-btn" id="conflict-previous" ${this.activeBlockIndex <= 0 ? 'disabled' : ''} aria-label="${this.esc(t('conflicts.previous'))}">
-            <i class="ph ph-arrow-up"></i>
+          <button class="icon-btn" id="conflict-previous" ${this.activeBlockIndex <= 0 ? 'disabled' : ''} aria-label="${this.esc(t('conflicts.previous'))}" title="${this.esc(t('conflicts.previous'))}">
+            <i class="ph ph-arrow-up" aria-hidden="true"></i>
           </button>
-          <button class="icon-btn" id="conflict-next" ${this.activeBlockIndex >= this.blocks.length - 1 ? 'disabled' : ''} aria-label="${this.esc(t('conflicts.next'))}">
-            <i class="ph ph-arrow-down"></i>
+          <button class="icon-btn" id="conflict-next" ${this.activeBlockIndex >= this.blocks.length - 1 ? 'disabled' : ''} aria-label="${this.esc(t('conflicts.next'))}" title="${this.esc(t('conflicts.next'))}">
+            <i class="ph ph-arrow-down" aria-hidden="true"></i>
           </button>
           <strong>${this.esc(t('conflicts.blockCount', {
             current: this.blocks.length ? this.activeBlockIndex + 1 : 0,
@@ -193,6 +318,7 @@ class ConflictResolver {
         </div>
         ${active && !this.manualEdited ? `
           <div class="conflict-block-actions">
+            <span class="conflict-keyhint">${this.esc(t('conflicts.acceptHint'))}</span>
             <button class="btn btn-small" data-choice="current">${this.esc(t('conflicts.acceptCurrent'))}</button>
             <button class="btn btn-small" data-choice="incoming">${this.esc(t('conflicts.acceptIncoming'))}</button>
             <button class="btn btn-small" data-choice="both">${this.esc(t('conflicts.acceptBoth'))}</button>
@@ -205,75 +331,179 @@ class ConflictResolver {
       </div>
       <details class="conflict-base">
         <summary>${this.esc(t('conflicts.base'))}</summary>
-        ${this.codePane(fileOrEmpty(this.current.base), 'base', false)}
+        ${this.codePane(this.current.base, 'base', false, null, [])}
       </details>
       <div class="conflict-merge-grid is-${this.layout}">
-        ${this.sourcePane(t('conflicts.incoming'), this.current.incoming, 'incoming')}
-        ${this.sourcePane(t('conflicts.current'), this.current.current, 'current')}
+        ${this.sourcePane(t('conflicts.incoming'), this.current.incoming, 'incoming', incomingRanges, this.activeBlockIndex)}
+        ${this.sourcePane(t('conflicts.current'), this.current.current, 'current', currentRanges, this.activeBlockIndex)}
         <section class="conflict-pane conflict-result-pane">
           <div class="conflict-pane-header result">${this.esc(t('conflicts.result'))}</div>
-          <div class="conflict-result-editor">
+          <div class="conflict-result-editor" id="conflict-result-stack">
             <pre class="conflict-result-gutter" aria-hidden="true"></pre>
-            <textarea id="conflict-result-editor" spellcheck="false" aria-label="${this.esc(t('conflicts.result'))}">${this.esc(this.resultContent)}</textarea>
+            <div class="conflict-result-overlay">
+              <pre class="conflict-highlight-layer" id="conflict-highlight-layer" aria-hidden="true"></pre>
+              <div class="conflict-action-bar is-hidden" id="conflict-action-bar"></div>
+              <textarea id="conflict-result-editor" spellcheck="false" aria-label="${this.esc(t('conflicts.result'))}">${this.esc(this.resultContent)}</textarea>
+            </div>
           </div>
         </section>
       </div>`;
-
-    function fileOrEmpty(value) {
-      return value || '';
-    }
   }
 
-  sourcePane(label, content, kind) {
+  sourcePane(label, content, kind, blockRanges, activeIndex) {
     return `<section class="conflict-pane conflict-source-pane">
       <div class="conflict-pane-header ${kind}">${this.esc(label)}</div>
-      ${this.codePane(content, kind, true)}
+      ${this.codePane(content, kind, true, blockRanges?.[activeIndex] || null, blockRanges || [])}
     </section>`;
   }
 
-  codePane(content, kind, synchronized) {
-    const lines = String(content || '').split(/\r?\n/);
-    if (lines.at(-1) === '') lines.pop();
+  codePane(content, kind, synchronized, activeRange, blockRanges) {
+    const lines = ConflictHighlight.splitLines(content).map(line => line.replace(/\r?\n|\r$/, ''));
+    const active = activeRange
+      ? new Set(rangeLines(activeRange.start, activeRange.end))
+      : new Set();
+    const blocks = blockRanges
+      .map(range => range ? new Set(rangeLines(range.start, range.end)) : new Set());
+    const dimmed = blockRanges.length > 0 && !activeRange;
     return `<div class="conflict-code-scroll${synchronized ? ' is-synchronized' : ''}" data-pane="${kind}">
       <pre class="conflict-code-gutter" aria-hidden="true">${lines.map((_, index) => index + 1).join('\n')}</pre>
-      <pre class="conflict-pane-content">${this.esc(content)}</pre>
+      <div class="conflict-pane-rows${dimmed ? ' is-dimmed' : ''}">
+        ${lines.map((text, index) => {
+          const inActive = active.has(index + 1);
+          const inBlock = blocks.some(set => set.has(index + 1));
+          const css = inActive ? ' is-active' : (inBlock ? ' is-block' : '');
+          return `<div class="conflict-pane-row${css}" data-pane-line="${index + 1}">${this.esc(text)}</div>`;
+        }).join('')}
+      </div>
     </div>`;
+  }
+
+  buildResultLayer() {
+    const layer = document.getElementById('conflict-highlight-layer');
+    if (!layer) return;
+    const rows = ConflictHighlight.buildHighlightLines(this.resultContent, this.blocks);
+    layer.innerHTML = rows.map(row => {
+      const cls = row.kind === 'plain' ? '' : ` hl-${row.kind}`;
+      const text = (row.kind === 'marker' || row.kind === 'separator') ? '' : row.text;
+      return `<div class="conflict-hl-row${cls}">${text ? this.esc(text) : ' '}</div>`;
+    }).join('');
+    this.highlightRows = rows;
+
+    const textarea = document.getElementById('conflict-result-editor');
+    if (textarea) {
+      this.refreshResultGutter(textarea, document.querySelector('.conflict-result-gutter'));
+      this.syncHighlightScroll(textarea);
+    }
+    this.positionActionBar();
+  }
+
+  positionActionBar() {
+    const bar = document.getElementById('conflict-action-bar');
+    const stack = document.getElementById('conflict-result-stack');
+    if (!bar || !stack) return;
+    const block = this.blocks[this.activeBlockIndex];
+    if (!block || this.current?.binary) {
+      bar.classList.add('is-hidden');
+      return;
+    }
+    const rowIndex = Math.max(0, block.startLine - 1);
+    const lineHeight = 21;
+    const paddingTop = 8;
+    const top = paddingTop + rowIndex * lineHeight - (document.getElementById('conflict-result-editor')?.scrollTop || 0);
+    stack.style.setProperty('--action-bar-top', `${top}px`);
+    bar.innerHTML = `
+      <span class="conflict-action-bar-label"><i class="ph ph-warning-circle" aria-hidden="true"></i>${this.esc(t('conflicts.blockCount', {
+        current: this.activeBlockIndex + 1,
+        total: this.blocks.length
+      }))}</span>
+      <button class="btn btn-small btn-primary" data-choice="current">${this.esc(t('conflicts.acceptCurrent'))}</button>
+      <button class="btn btn-small" data-choice="incoming">${this.esc(t('conflicts.acceptIncoming'))}</button>
+      <button class="btn btn-small" data-choice="both">${this.esc(t('conflicts.acceptBoth'))}</button>
+      <button class="btn btn-small" data-choice="smart" ${block.smartCombination === null ? 'disabled' : ''}>${this.esc(t('conflicts.smartCombination'))}</button>
+    `;
+    bar.classList.remove('is-hidden');
+    bar.querySelectorAll('[data-choice]').forEach(button => {
+      button.onclick = () => this.applyBlockChoice(button.dataset.choice);
+    });
+  }
+
+  syncHighlightScroll(textarea) {
+    const layer = document.getElementById('conflict-highlight-layer');
+    const gutter = document.querySelector('.conflict-result-gutter');
+    const stack = document.getElementById('conflict-result-stack');
+    const bar = document.getElementById('conflict-action-bar');
+    if (layer) layer.scrollTop = textarea.scrollTop;
+    if (gutter) gutter.scrollTop = textarea.scrollTop;
+    if (stack) {
+      stack.style.setProperty('--action-bar-top', `${8 + Math.max(0, (this.blocks[this.activeBlockIndex]?.startLine || 1) - 1) * 21 - textarea.scrollTop}px`);
+    }
+    if (bar) bar.classList.toggle('is-hidden', !this.blocks.length);
   }
 
   bindTextEditor() {
     if (this.current?.binary) return;
-    document.getElementById('conflict-previous')?.addEventListener('click', () => {
-      this.activeBlockIndex = Math.max(0, this.activeBlockIndex - 1);
-      this.renderEditor();
-    });
-    document.getElementById('conflict-next')?.addEventListener('click', () => {
-      this.activeBlockIndex = Math.min(this.blocks.length - 1, this.activeBlockIndex + 1);
-      this.renderEditor();
-    });
+    document.getElementById('conflict-previous')?.addEventListener('click', () => this.jumpToBlock(this.activeBlockIndex - 1));
+    document.getElementById('conflict-next')?.addEventListener('click', () => this.jumpToBlock(this.activeBlockIndex + 1));
     document.querySelectorAll('[data-choice]').forEach(button => {
       button.onclick = () => this.applyBlockChoice(button.dataset.choice);
     });
 
-    const textarea = document.getElementById('conflict-result-editor');
-    const gutter = document.querySelector('.conflict-result-gutter');
-    if (textarea && gutter) {
-      this.refreshResultGutter(textarea, gutter);
-      const active = this.blocks[this.activeBlockIndex];
-      if (active && !this.manualEdited) {
-        textarea.setSelectionRange(active.startOffset, active.endOffset);
-      }
-      textarea.addEventListener('input', () => {
-        this.resultContent = textarea.value;
-        this.dirty = true;
-        this.manualEdited = true;
-        this.refreshResultGutter(textarea, gutter);
-        this.updateMarkButton();
-      });
-      textarea.addEventListener('scroll', () => {
-        gutter.scrollTop = textarea.scrollTop;
-      }, { passive: true });
-    }
+    this.bindResultEditor();
+    this.bindSourcePanes();
+  }
 
+  bindResultEditor() {
+    const textarea = document.getElementById('conflict-result-editor');
+    if (!textarea) return;
+    this.buildResultLayer();
+    const active = this.blocks[this.activeBlockIndex];
+    if (active && !this.manualEdited) {
+      textarea.setSelectionRange(active.startOffset, active.endOffset);
+    }
+    textarea.addEventListener('input', () => {
+      this.resultContent = textarea.value;
+      this.dirty = true;
+      this.manualEdited = true;
+      this.refreshResultGutter(textarea, document.querySelector('.conflict-result-gutter'));
+      this.updateMarkButton();
+      this.scheduleReparse();
+    });
+    textarea.addEventListener('scroll', () => {
+      this.syncHighlightScroll(textarea);
+    }, { passive: true });
+    textarea.addEventListener('keydown', event => this.handleEditorKeys(event));
+  }
+
+  handleEditorKeys(event) {
+    if (event.altKey && event.key === 'ArrowUp') {
+      event.preventDefault();
+      this.jumpToBlock(this.activeBlockIndex - 1);
+      return;
+    }
+    if (event.altKey && event.key === 'ArrowDown') {
+      event.preventDefault();
+      this.jumpToBlock(this.activeBlockIndex + 1);
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+      event.preventDefault();
+      this.markResolved();
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+      event.preventDefault();
+      this.undo();
+    }
+    if (!this.manualEdited && this.blocks[this.activeBlockIndex] && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      const choice = { c: 'current', i: 'incoming', b: 'both' }[event.key.toLowerCase()];
+      if (choice) {
+        event.preventDefault();
+        this.applyBlockChoice(choice);
+      }
+    }
+  }
+
+  bindSourcePanes() {
     const synchronized = [...document.querySelectorAll('.conflict-code-scroll.is-synchronized')];
     synchronized.forEach(source => {
       source.addEventListener('scroll', () => {
@@ -291,16 +521,131 @@ class ConflictResolver {
         });
       }, { passive: true });
     });
+    const pane = document.querySelector('.conflict-code-scroll[data-pane="current"]') ||
+      document.querySelector('.conflict-code-scroll[data-pane="incoming"]');
+    if (pane) {
+      pane.parentElement.querySelectorAll('.conflict-pane-row[data-pane-line]').forEach(row => {
+        row.addEventListener('click', () => {
+          const line = Number(row.dataset.paneLine);
+          const ranges = pane.dataset.pane === 'current'
+            ? this.blocks.map(block => this.locateLines(this.current.current, block.current))
+            : this.blocks.map(block => this.locateLines(this.current.incoming, block.incoming));
+          const index = ranges.findIndex(range => range && line >= range.start && line <= range.end);
+          if (index !== -1) this.jumpToBlock(index);
+        });
+      });
+    }
+  }
+
+  jumpToBlock(index) {
+    if (index < 0 || index >= this.blocks.length) return;
+    this.activeBlockIndex = index;
+    this.renderEditor();
+  }
+
+  locateLines(content, needle) {
+    if (!needle || needle === '') return null;
+    const position = String(content || '').indexOf(needle);
+    if (position === -1) return null;
+    const before = String(content || '').slice(0, position);
+    const start = before.split(/\r?\n|\r/).length;
+    const lines = needle.split(/\r?\n|\r/).length;
+    return { start, end: start + lines - 1 };
+  }
+
+  blockPaneRange(block) {
+    return this.locateLines(this.current?.current || '', block.current);
+  }
+
+  scheduleReparse() {
+    clearTimeout(this.reparseTimer);
+    this.reparseTimer = setTimeout(async () => {
+      const repo = this.app.state.repo;
+      if (!repo || !this.currentPath || this.container.classList.contains('is-hidden')) return;
+      const result = await window.gitTree.parseConflictBlocks(repo.path, this.resultContent);
+      if (result?.error) return;
+      this.blocks = (result || []).map(block => ({ ...block }));
+      this.activeBlockIndex = Math.min(this.activeBlockIndex, Math.max(0, this.blocks.length - 1));
+      this.blockCounts.set(this.currentPath, this.blocks.length);
+      this.updateMarkButton();
+      this.buildResultLayer();
+      this.refreshFileList();
+    }, 500);
+  }
+
+  useWholeFile(kind) {
+    this.snapshot();
+    this.resultContent = kind === 'current' ? this.current.current : this.current.incoming;
+    this.blocks = [];
+    this.activeBlockIndex = 0;
+    this.manualEdited = false;
+    this.dirty = true;
+    this.blockCounts.set(this.currentPath, 0);
+    this.renderEditor();
+  }
+
+  applyToAll(choice) {
+    if (!this.blocks.length) return;
+    this.snapshot();
+    const eol = this.current.eol === 'crlf' ? '\r\n' : '\n';
+    for (const block of [...this.blocks]) {
+      let replacement;
+      if (choice === 'current') replacement = block.current;
+      else if (choice === 'incoming') replacement = block.incoming;
+      else replacement = `${block.current}${block.current.endsWith(eol) || !block.current ? '' : eol}${block.incoming}`;
+      if (replacement === null || replacement === undefined) continue;
+      this.resultContent =
+        this.resultContent.slice(0, block.startOffset) +
+        replacement +
+        this.resultContent.slice(block.endOffset);
+      const delta = replacement.length - (block.endOffset - block.startOffset);
+      for (const other of this.blocks) {
+        if (other.startOffset > block.endOffset) {
+          other.startOffset += delta;
+          other.endOffset += delta;
+        }
+      }
+    }
+    this.blocks = [];
+    this.activeBlockIndex = 0;
+    this.dirty = true;
+    this.blockCounts.set(this.currentPath, 0);
+    this.renderEditor();
+  }
+
+  snapshot() {
+    this.undoStack.push({
+      content: this.resultContent,
+      blocks: this.blocks.map(block => ({ ...block })),
+      activeBlockIndex: this.activeBlockIndex
+    });
+    if (this.undoStack.length > 30) this.undoStack.shift();
+    const undoButton = document.getElementById('conflict-undo');
+    if (undoButton) undoButton.disabled = false;
+  }
+
+  undo() {
+    const snapshot = this.undoStack.pop();
+    if (!snapshot) return;
+    this.resultContent = snapshot.content;
+    this.blocks = snapshot.blocks;
+    this.activeBlockIndex = Math.min(snapshot.activeBlockIndex, Math.max(0, this.blocks.length - 1));
+    this.manualEdited = false;
+    this.dirty = true;
+    this.blockCounts.set(this.currentPath, this.blocks.length);
+    const undoButton = document.getElementById('conflict-undo');
+    if (undoButton) undoButton.disabled = this.undoStack.length === 0;
+    this.renderEditor();
   }
 
   applyBlockChoice(choice) {
     const block = this.blocks[this.activeBlockIndex];
     if (!block) return;
     if (choice === 'ignore') {
-      this.activeBlockIndex = Math.min(this.blocks.length - 1, this.activeBlockIndex + 1);
-      this.renderEditor();
+      this.jumpToBlock(this.activeBlockIndex + 1);
       return;
     }
+    this.snapshot();
     const eol = this.current.eol === 'crlf' ? '\r\n' : '\n';
     let replacement;
     if (choice === 'current') replacement = block.current;
@@ -322,12 +667,13 @@ class ConflictResolver {
     }
     this.activeBlockIndex = Math.min(this.activeBlockIndex, Math.max(0, this.blocks.length - 1));
     this.dirty = true;
+    this.blockCounts.set(this.currentPath, this.blocks.length);
     this.renderEditor();
   }
 
   refreshResultGutter(textarea, gutter) {
     const count = Math.max(1, textarea.value.split(/\r?\n/).length);
-    gutter.textContent = Array.from({ length: count }, (_, index) => index + 1).join('\n');
+    if (gutter) gutter.textContent = Array.from({ length: count }, (_, index) => index + 1).join('\n');
   }
 
   canMarkResolved() {
@@ -368,10 +714,24 @@ class ConflictResolver {
       if (/changed externally/i.test(result.error)) await this.loadFile(this.currentPath);
       return;
     }
+    const resolvedPath = this.currentPath;
+    const nextConflicts = result.state?.conflicts || [];
+    this.allFiles = [...new Set([...this.allFiles, ...nextConflicts])];
+    this.blockCounts.set(resolvedPath, 0);
     this.state = result.state;
-    this.currentPath = this.state.conflicts[0] || null;
+    this.currentPath = nextConflicts[0] || null;
     this.current = null;
     this.dirty = false;
+    this.undoStack = [];
+    const remaining = this.remainingFiles().length;
+    if (remaining) {
+      this.app.showToast(t('conflicts.fileResolvedToast', {
+        file: resolvedPath.split(/[\\/]/).pop(),
+        remaining
+      }), 'success');
+    } else {
+      this.app.showToast(t('conflicts.allFilesResolved'), 'success');
+    }
     this.render();
     if (this.currentPath) await this.loadFile(this.currentPath);
   }
@@ -419,6 +779,29 @@ class ConflictResolver {
     this.app.emit('refresh');
   }
 
+  bindGlobalKeys() {
+    if (this.globalKeysHandler) {
+      document.removeEventListener('keydown', this.globalKeysHandler);
+    }
+    this.globalKeysHandler = event => {
+      if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+        const target = event.target;
+        if (target === document.getElementById('conflict-result-editor')) return;
+        event.preventDefault();
+        const direction = event.key === 'ArrowUp' ? -1 : 1;
+        this.jumpToBlock(this.activeBlockIndex + direction);
+      }
+      if (!event.altKey && !event.ctrlKey && !event.metaKey && !this.manualEdited) {
+        const choice = { c: 'current', i: 'incoming', b: 'both' }[event.key.toLowerCase()];
+        if (choice && !event.target.closest?.('textarea, input')) {
+          event.preventDefault();
+          this.applyBlockChoice(choice);
+        }
+      }
+    };
+    document.addEventListener('keydown', this.globalKeysHandler);
+  }
+
   async confirmDiscard() {
     if (!this.dirty) return true;
     return this.confirm(t('conflicts.discardTitle'), t('conflicts.discardConfirm'));
@@ -448,6 +831,15 @@ class ConflictResolver {
     this.state = null;
     this.current = null;
     this.dirty = false;
+    clearTimeout(this.reparseTimer);
+    if (this.globalKeysHandler) {
+      document.removeEventListener('keydown', this.globalKeysHandler);
+      this.globalKeysHandler = null;
+    }
+    if (this.closeResolveAllMenu) {
+      document.removeEventListener('click', this.closeResolveAllMenu);
+      this.closeResolveAllMenu = null;
+    }
   }
 
   esc(value) {
@@ -455,4 +847,10 @@ class ConflictResolver {
     element.textContent = value ?? '';
     return element.innerHTML;
   }
+}
+
+function rangeLines(start, end) {
+  const lines = [];
+  for (let line = start; line <= end; line += 1) lines.push(line);
+  return lines;
 }

@@ -4,6 +4,7 @@ class MergeWorkspace {
     this.sourceBranch = null;
     this.targetBranch = null;
     this.mergeData = null;
+    this.preview = null;
     this.container = null;
     this.strategy = 'noff';
   }
@@ -18,10 +19,11 @@ class MergeWorkspace {
     this.showLoading();
 
     try {
-      const [comparison, logTgt, status] = await Promise.all([
+      const [comparison, logTgt, status, preview] = await Promise.all([
         window.gitTree.compareBranches(repo.path, target, source),
         window.gitTree.getLog(repo.path, 1, target),
-        window.gitTree.getStatus(repo.path)
+        window.gitTree.getStatus(repo.path),
+        window.gitTree.previewMerge(repo.path, source)
       ]);
       if (comparison?.error) throw new Error(comparison.error);
 
@@ -33,6 +35,7 @@ class MergeWorkspace {
         diff: comparison.diff || '',
         status: status || {}
       };
+      this.preview = preview && !preview.error ? preview : null;
 
       this.renderMerge();
     } catch (e) {
@@ -44,7 +47,7 @@ class MergeWorkspace {
   showLoading() {
     this.ensureContainer();
     this.container.classList.remove('is-hidden');
-    this.container.innerHTML = '<div class="empty-state">Loading merge preview...</div>';
+    this.container.innerHTML = '<div class="empty-state">' + this.esc(t('common.loading')) + '</div>';
   }
 
   ensureContainer() {
@@ -53,9 +56,9 @@ class MergeWorkspace {
     if (!this.container) {
       this.container = document.createElement('div');
       this.container.id = 'merge-preview-overlay';
-      this.container.className = 'merge-overlay is-hidden';
       document.getElementById('app').appendChild(this.container);
     }
+    this.container.className = 'merge-workspace-shell fullscreen-workspace is-hidden';
   }
 
   renderMerge() {
@@ -63,128 +66,141 @@ class MergeWorkspace {
     if (!this.mergeData) return;
 
     const d = this.mergeData;
-    const hasLocalChanges = d.status?.isClean === false || Boolean(
-      d.status && (
-        d.status.modified?.length ||
-        d.status.not_added?.length ||
-        d.status.created?.length ||
-        d.status.deleted?.length ||
-        d.status.renamed?.length ||
-        d.status.staged?.length ||
-        d.status.conflicted?.length
-      )
-    );
-    const blockingFiles = this.blockingFiles(d.status);
-    const blockingSummary = blockingFiles.length
-      ? blockingFiles.slice(0, 4).join(', ') + (blockingFiles.length > 4 ? '…' : '')
-      : t('mergeWorkspace.unknownChanges');
+    const preview = this.preview;
+    const conflictFiles = preview?.conflictedFiles || [];
+    const changedCount = preview?.changedFiles?.length ?? 0;
+    const hasLocalChanges = this.hasLocalChanges(d.status);
+    const blockingSummary = this.blockingSummary(d.status);
+    const conflictList = conflictFiles.slice(0, 6).join(', ');
 
     this.container.innerHTML = `
-      <div class="merge-workspace">
-        <div class="merge-header">
+      <header class="merge-header">
+        <div class="merge-heading">
+          <span class="eyebrow">${this.esc(t('mergeWorkspace.mergeAction'))}</span>
           <div class="merge-direction">
-            <span class="merge-direction-label">Merge</span>
-            <span class="merge-source">${this.esc(d.source)}</span>
-            <i class="ph ph-arrow-right merge-arrow"></i>
-            <span class="merge-target">${this.esc(d.target)}</span>
-          </div>
-          <div class="merge-header-actions">
-            <button id="merge-cancel-btn" class="btn"><i class="ph ph-x"></i>Close</button>
+            <span class="merge-chip merge-chip-source">${this.esc(d.source)}</span>
+            <i class="ph ph-arrow-right merge-arrow" aria-hidden="true"></i>
+            <span class="merge-chip merge-chip-target">${this.esc(d.target)}</span>
           </div>
         </div>
+        <div class="merge-header-actions">
+          ${conflictFiles.length
+            ? `<span class="badge badge-conflict">${this.esc(t('mergeWorkspace.conflictsBadge', { count: conflictFiles.length }))}</span>`
+            : `<span class="badge badge-head">${this.esc(t('mergeWorkspace.noConflictsBadge'))}</span>`}
+          <button id="merge-cancel-btn" class="btn"><i class="ph ph-x" aria-hidden="true"></i><span>${this.esc(t('common.close'))}</span></button>
+        </div>
+      </header>
 
-        <div class="merge-body">
-          <div class="merge-section">
-            <div class="merge-section-header">Summary</div>
+      <div class="merge-body">
+        <aside class="merge-sidebar" aria-label="${this.esc(t('mergeWorkspace.summary'))}">
+          <section class="merge-section">
+            <div class="merge-section-header">${this.esc(t('mergeWorkspace.summary'))}</div>
             <div class="merge-summary">
-              <div class="merge-stat"><div class="merge-stat-label">Commits to merge</div><div class="merge-stat-value">${d.commitsCount}</div></div>
-              <div class="merge-stat"><div class="merge-stat-label">Source branch</div><div class="merge-stat-value merge-branch-value">${this.esc(d.source)}</div></div>
-              <div class="merge-stat"><div class="merge-stat-label">Target branch</div><div class="merge-stat-value merge-branch-value">${this.esc(d.target)}</div></div>
-            </div>
-          </div>
-
-          <div class="merge-section">
-            <div class="merge-section-header">Risk Assessment</div>
-            <div class="merge-risk-list">
-              ${hasLocalChanges ? `
-                <div class="merge-risk-item">
-                  <i class="ph ph-warning merge-risk-icon warning"></i>
-                  <div class="merge-risk-content">
-                    <div class="merge-risk-title">${this.esc(t('mergeWorkspace.localChangesTitle'))}</div>
-                    <div class="merge-risk-detail">${this.esc(t('mergeWorkspace.localChangesDetail', {
-                      files: blockingSummary
-                    }))}</div>
-                  </div>
-                  <div class="merge-risk-action">
-                    <button id="merge-view-changes-btn" class="btn btn-small">
-                      ${this.esc(t('mergeWorkspace.viewChanges'))}
-                    </button>
-                    <button id="merge-stash-btn" class="btn btn-small">
-                      <i class="ph ph-archive" aria-hidden="true"></i>
-                      ${this.esc(t('mergeWorkspace.stashAndContinue'))}
-                    </button>
-                  </div>
-                </div>
-              ` : ''}
-              <div class="merge-risk-item">
-                <i class="ph ph-info merge-risk-icon info"></i>
-                <div class="merge-risk-content">
-                  <div class="merge-risk-title">${d.commitsCount} commit${d.commitsCount !== 1 ? 's' : ''} from ${this.esc(d.source)} will be merged</div>
-                  <div class="merge-risk-detail">Commits made by ${[...new Set(d.commits.map(c => c.author_name))].slice(0, 3).join(', ')}</div>
-                </div>
+              <div class="merge-stat">
+                <div class="merge-stat-label">${this.esc(t('mergeWorkspace.commitsToMerge'))}</div>
+                <div class="merge-stat-value">${d.commitsCount}</div>
+              </div>
+              <div class="merge-stat">
+                <div class="merge-stat-label">${this.esc(t('mergeWorkspace.filesChanged'))}</div>
+                <div class="merge-stat-value">${changedCount}</div>
+              </div>
+              <div class="merge-stat">
+                <div class="merge-stat-label">${this.esc(t('mergeWorkspace.conflictsShort'))}</div>
+                <div class="merge-stat-value${conflictFiles.length ? ' merge-stat-warn' : ''}">${conflictFiles.length}</div>
               </div>
             </div>
-          </div>
+          </section>
 
-          <div class="merge-section">
-            <div class="merge-section-header">Commits (${d.commitsCount})</div>
+          <section class="merge-section merge-commits-section">
+            <div class="merge-section-header">${this.esc(t('mergeWorkspace.commits'))} (${d.commitsCount})</div>
             <div class="merge-commit-scroll">
-              ${d.commits.slice(0, 30).map(c => `
+              ${d.commits.slice(0, 40).map(c => `
                 <div class="compare-commit-item">
-                  <span class="compare-commit-hash">${c.hash.substring(0,7)}</span>
+                  <span class="compare-commit-hash">${c.hash.substring(0, 7)}</span>
                   <span class="compare-commit-message">${this.esc(c.message.split('\n')[0])}</span>
                   <span class="compare-commit-author">${this.esc(c.author_name)}</span>
                   <span class="compare-commit-date">${this.fmtDate(c.date)}</span>
                 </div>
               `).join('')}
-              ${d.commitsCount > 30 ? `<div class="merge-overflow-note">…and ${d.commitsCount - 30} more</div>` : ''}
+              ${d.commitsCount > 40 ? `<div class="merge-overflow-note">…${this.esc(t('mergeWorkspace.conflictPredictionMore', { count: d.commitsCount - 40 }))}</div>` : ''}
             </div>
-          </div>
+          </section>
 
-          <div class="merge-section">
-            <div class="merge-section-header">Advanced Options</div>
-            <div class="merge-advanced">
-              <div class="merge-advanced-options">
-                <div class="merge-option" id="merge-opt-ff">
-                  <div><div class="merge-option-label">Fast-forward</div><div class="merge-option-desc">No merge commit if possible</div></div>
+          <section class="merge-section">
+            <div class="merge-section-header">${this.esc(t('mergeWorkspace.riskAssessment'))}</div>
+            <div class="merge-risk-list">
+              ${hasLocalChanges ? `
+                <div class="merge-risk-item">
+                  <i class="ph ph-warning merge-risk-icon warning" aria-hidden="true"></i>
+                  <div class="merge-risk-content">
+                    <div class="merge-risk-title">${this.esc(t('mergeWorkspace.localChangesTitle'))}</div>
+                    <div class="merge-risk-detail">${this.esc(t('mergeWorkspace.localChangesDetail', { files: blockingSummary }))}</div>
+                  </div>
+                  <div class="merge-risk-action">
+                    <button id="merge-view-changes-btn" class="btn btn-small">${this.esc(t('mergeWorkspace.viewChanges'))}</button>
+                    <button id="merge-stash-btn" class="btn btn-small"><i class="ph ph-archive" aria-hidden="true"></i>${this.esc(t('mergeWorkspace.stashAndContinue'))}</button>
+                  </div>
                 </div>
-                <div class="merge-option selected" id="merge-opt-noff">
-                  <div><div class="merge-option-label">No fast-forward</div><div class="merge-option-desc">Always create merge commit</div></div>
+              ` : ''}
+              ${preview?.canFastForward ? `
+                <div class="merge-risk-item">
+                  <i class="ph ph-lightning merge-risk-icon info" aria-hidden="true"></i>
+                  <div class="merge-risk-content">
+                    <div class="merge-risk-title">${this.esc(t('mergeWorkspace.ff'))}</div>
+                    <div class="merge-risk-detail">${this.esc(t('mergeWorkspace.ffAvailable', { branch: d.source }))}</div>
+                  </div>
                 </div>
-                <div class="merge-option" id="merge-opt-squash">
-                  <div><div class="merge-option-label">Squash</div><div class="merge-option-desc">Squash all commits into one</div></div>
+              ` : ''}
+              <div class="merge-risk-item">
+                <i class="ph ph-info merge-risk-icon info" aria-hidden="true"></i>
+                <div class="merge-risk-content">
+                  <div class="merge-risk-title">${d.commitsCount} commit${d.commitsCount !== 1 ? 's' : ''} from ${this.esc(d.source)} will be merged</div>
+                  <div class="merge-risk-detail">Commits made by ${this.esc([...new Set(d.commits.map(c => c.author_name))].slice(0, 3).join(', '))}</div>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
+          </section>
+        </aside>
 
-        <div class="merge-actions">
-          <span class="merge-action-summary">
-            You are about to merge <strong>${this.esc(d.source)}</strong> into <strong>${this.esc(d.target)}</strong>
-          </span>
-          <button id="merge-only-btn" class="btn btn-primary merge-confirm"
-            ${hasLocalChanges ? `disabled title="${this.esc(t('mergeWorkspace.mergeBlocked'))}"` : ''}>
-            <i class="ph ph-git-merge"></i>
-            Merge ${this.esc(d.source)} into ${this.esc(d.target)}
-          </button>
-          <button id="merge-push-btn" class="btn merge-confirm"
-            ${hasLocalChanges ? `disabled title="${this.esc(t('mergeWorkspace.mergeBlocked'))}"` : ''}>
-            <i class="ph ph-git-merge"></i>
-            Merge &amp; Push
-          </button>
-        </div>
+        <main class="merge-main">
+          ${conflictFiles.length ? `
+            <section class="merge-section merge-conflict-prediction">
+              <div class="merge-conflict-prediction-title">
+                <i class="ph ph-warning merge-risk-icon warning" aria-hidden="true"></i>
+                <span>${this.esc(t('mergeWorkspace.conflictPredictionTitle'))}</span>
+              </div>
+              <div class="merge-conflict-prediction-detail">${this.esc(t('mergeWorkspace.conflictPredictionDetail'))}</div>
+              <div class="merge-conflict-prediction-files">${this.esc(conflictList)}${conflictFiles.length > 6 ? ` ${this.esc(t('mergeWorkspace.conflictPredictionMore', { count: conflictFiles.length - 6 }))}` : ''}</div>
+            </section>
+          ` : ''}
+          <section class="merge-section merge-diff-section">
+            <div class="merge-section-header">
+              <span>${this.esc(t('mergeWorkspace.incomingChanges'))}</span>
+              <span class="merge-section-count">${changedCount}</span>
+            </div>
+            <div class="merge-diff-scroll" id="merge-diff-scroll">${this.renderDiff(d.diff)}</div>
+          </section>
+        </main>
       </div>
+
+      <footer class="merge-actions">
+        <div class="merge-strategy" role="group" aria-label="Merge strategy">
+          <button id="merge-opt-ff" class="btn btn-small merge-strategy-option${this.strategy === 'ff' ? ' active' : ''}" title="${this.esc(t('mergeWorkspace.ffDesc'))}">${this.esc(t('mergeWorkspace.ff'))}</button>
+          <button id="merge-opt-noff" class="btn btn-small merge-strategy-option${this.strategy === 'noff' ? ' active' : ''}" title="${this.esc(t('mergeWorkspace.noffDesc'))}">${this.esc(t('mergeWorkspace.noff'))}</button>
+          <button id="merge-opt-squash" class="btn btn-small merge-strategy-option${this.strategy === 'squash' ? ' active' : ''}" title="${this.esc(t('mergeWorkspace.squashDesc'))}">${this.esc(t('mergeWorkspace.squash'))}</button>
+        </div>
+        <span class="merge-action-summary">${this.esc(t('mergeWorkspace.mergeSummary', { source: d.source, target: d.target }))}</span>
+        <button id="merge-only-btn" class="btn btn-primary merge-confirm"
+          ${hasLocalChanges ? `disabled title="${this.esc(t('mergeWorkspace.mergeBlocked'))}"` : ''}>
+          <i class="ph ph-git-merge" aria-hidden="true"></i>
+          <span>${this.esc(t('mergeWorkspace.mergeAction'))}</span>
+        </button>
+        <button id="merge-push-btn" class="btn merge-confirm"
+          ${hasLocalChanges ? `disabled title="${this.esc(t('mergeWorkspace.mergeBlocked'))}"` : ''}>
+          <i class="ph ph-git-merge" aria-hidden="true"></i>
+          <span>${this.esc(t('mergeWorkspace.mergeAndPush'))}</span>
+        </button>
+      </footer>
     `;
 
     document.getElementById('merge-cancel-btn').onclick = () => this.hide();
@@ -200,23 +216,54 @@ class MergeWorkspace {
     const stashButton = document.getElementById('merge-stash-btn');
     if (stashButton) stashButton.onclick = () => this.stashAndReload();
 
-    document.getElementById('merge-opt-ff').onclick = () => {
-      document.querySelectorAll('.merge-option').forEach(el => el.classList.remove('selected'));
-      document.getElementById('merge-opt-ff').classList.add('selected');
-      this.strategy = 'ff';
-    };
-    document.getElementById('merge-opt-noff').onclick = () => {
-      document.querySelectorAll('.merge-option').forEach(el => el.classList.remove('selected'));
-      document.getElementById('merge-opt-noff').classList.add('selected');
-      this.strategy = 'noff';
-    };
-    document.getElementById('merge-opt-squash').onclick = () => {
-      document.querySelectorAll('.merge-option').forEach(el => el.classList.remove('selected'));
-      document.getElementById('merge-opt-squash').classList.add('selected');
-      this.strategy = 'squash';
-    };
+    document.querySelectorAll('.merge-strategy-option').forEach(button => {
+      button.onclick = () => {
+        this.strategy = button.id.replace('merge-opt-', '');
+        document.querySelectorAll('.merge-strategy-option').forEach(item => {
+          item.classList.toggle('active', item === button);
+        });
+      };
+    });
 
     this.container.classList.remove('is-hidden');
+  }
+
+  renderDiff(diffText) {
+    if (!diffText) {
+      return `<div class="empty-state">${this.esc(t('mergeWorkspace.noDiffPreview'))}</div>`;
+    }
+    const lines = DiffParser.parseUnified(diffText);
+    const scroll = document.createElement('div');
+    const fragment = document.createDocumentFragment();
+    scroll.style.setProperty('--diff-gutter-digits', DiffParser.maxDigits(lines));
+    lines.forEach(line => {
+      if (line.kind === 'file') {
+        const header = document.createElement('div');
+        header.className = 'diff-file-header';
+        const match = line.content.match(/diff --git a\/(.+) b\/(.+)/);
+        header.innerHTML = `<span class="diff-file-path">${this.esc(match ? match[2] : line.content)}</span>`;
+        fragment.appendChild(header);
+        return;
+      }
+      const row = document.createElement('div');
+      row.className = `diff-line ${line.kind === 'no-newline' ? 'header' : line.kind}`;
+      row.appendChild(this.lineNumber(line.oldLine, 'old'));
+      row.appendChild(this.lineNumber(line.newLine, 'new'));
+      const content = document.createElement('span');
+      content.className = 'diff-line-content';
+      content.textContent = line.content;
+      row.appendChild(content);
+      fragment.appendChild(row);
+    });
+    scroll.appendChild(fragment);
+    return scroll.innerHTML;
+  }
+
+  lineNumber(value, side) {
+    const number = document.createElement('span');
+    number.className = `diff-line-num is-${side}`;
+    number.textContent = Number.isInteger(value) ? String(value) : '';
+    return number;
   }
 
   async executeMerge(andPush = false) {
@@ -226,7 +273,7 @@ class MergeWorkspace {
       this.app.showToast(t('mergeWorkspace.mergeBlocked'), 'error');
       return;
     }
-    this.app.showToast('Merging...');
+    this.app.showToast(t('mergeWorkspace.mergeStarted'));
 
     const result = await window.gitTree.merge(repo.path, this.mergeData.source, this.strategy);
     if (result.error) {
@@ -240,7 +287,7 @@ class MergeWorkspace {
 
     if (!andPush) {
       this.hide();
-      this.app.showToast('Merge completed', 'success');
+      this.app.showToast(t('mergeWorkspace.mergeCompleted'), 'success');
       this.app.emit('refresh');
       return;
     }
@@ -250,9 +297,9 @@ class MergeWorkspace {
     this.setPushing(false);
     this.hide();
     if (pushResult.error) {
-      this.app.showToast('Merge done, but push failed: ' + pushResult.error, 'error');
+      this.app.showToast(t('mergeWorkspace.pushFailed', { error: pushResult.error }), 'error');
     } else {
-      this.app.showToast('Merge & Push complete', 'success');
+      this.app.showToast(t('mergeWorkspace.mergeAndPushCompleted'), 'success');
     }
     this.app.emit('refresh');
   }
@@ -264,7 +311,7 @@ class MergeWorkspace {
     });
     const pushButton = this.container.querySelector('#merge-push-btn');
     if (pushButton && pushing) {
-      pushButton.innerHTML = `<i class="ph ph-circle-notch merge-pushing-spinner"></i> ${this.esc(t('mergeWorkspace.pushing'))}`;
+      pushButton.innerHTML = `<i class="ph ph-circle-notch merge-pushing-spinner" aria-hidden="true"></i> ${this.esc(t('mergeWorkspace.pushing'))}`;
     }
   }
 
@@ -286,6 +333,26 @@ class MergeWorkspace {
 
   hide() {
     if (this.container) this.container.classList.add('is-hidden');
+  }
+
+  hasLocalChanges(status = {}) {
+    return status?.isClean === false || Boolean(
+      status && (
+        status.modified?.length ||
+        status.not_added?.length ||
+        status.created?.length ||
+        status.deleted?.length ||
+        status.renamed?.length ||
+        status.staged?.length ||
+        status.conflicted?.length
+      )
+    );
+  }
+
+  blockingSummary(status = {}) {
+    const files = this.blockingFiles(status);
+    if (!files.length) return t('mergeWorkspace.unknownChanges');
+    return files.slice(0, 4).join(', ') + (files.length > 4 ? '…' : '');
   }
 
   blockingFiles(status = {}) {

@@ -69,6 +69,19 @@
   --diff-hunk: #e7f1fb;
   --diff-context: #f6f8fb;
 
+  /* Conflict resolution editor */
+  --conflict-current-line: #e0f4f6;
+  --conflict-current-text: #105c68;
+  --conflict-incoming-line: #edf8f1;
+  --conflict-incoming-text: #205f41;
+  --conflict-base-line: #f2f5f9;
+  --conflict-marker-line: #eef2f8;
+  --conflict-separator: #cbd8e9;
+  --conflict-active-soft: #dceaf7;
+  --conflict-active-dim: #f0f4f9;
+  --conflict-active-ring: #176b7a;
+  --conflict-selection: #b9d4ee;
+
   /* Provider PR status (GitHub / Azure / GitLab brand cues, theme-safe soft/text pairs) */
   --pr-github-open-soft: #dafbe1;
   --pr-github-open-text: #1a7f37;
@@ -255,6 +268,19 @@
   --diff-del-text: #ff867f;
   --diff-hunk: #162435;
   --diff-context: #0d0f12;
+
+  /* Conflict resolution editor */
+  --conflict-current-line: #122238;
+  --conflict-current-text: #6da3ff;
+  --conflict-incoming-line: #0d2e1a;
+  --conflict-incoming-text: #7ee787;
+  --conflict-base-line: #1b1b1e;
+  --conflict-marker-line: #202024;
+  --conflict-separator: #3c3e44;
+  --conflict-active-soft: #1a2f38;
+  --conflict-active-dim: #20232a;
+  --conflict-active-ring: #388bfd;
+  --conflict-selection: #2b4a6b;
 
   --pr-github-open-soft: #0b2a17;
   --pr-github-open-text: #3fb950;
