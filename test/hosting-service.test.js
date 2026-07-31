@@ -18,7 +18,8 @@ function memoryVault(account) {
     removeAccount: async () => {},
     getReviewDraft: async key => drafts.get(key) || null,
     saveReviewDraft: async (key, value) => drafts.set(key, value),
-    removeReviewDraft: async key => drafts.delete(key)
+    removeReviewDraft: async key => drafts.delete(key),
+    removeProviderDrafts: async () => {}
   };
 }
 
