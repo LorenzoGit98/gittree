@@ -43,13 +43,13 @@ class BranchCompare {
           </div>
           <button class="btn btn-small compare-back" id="compare-close">
             <i class="ph ph-arrow-left"></i>
-            Back to history
+            ${this.esc(t('compare.backToHistory'))}
           </button>
         </div>
         <div class="compare-summary">
           <div class="compare-stat">
             <div class="compare-stat-value">${this.data.commitsCount}</div>
-            <div class="compare-stat-label">Commits ahead</div>
+            <div class="compare-stat-label">${this.esc(t('compare.commitsAhead'))}</div>
           </div>
         </div>
         <div class="compare-body">
@@ -76,7 +76,7 @@ class BranchCompare {
     });
   }
 
-  esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+  esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   fmtDate(d) {
     if (!d) return '';
     const dt = new Date(d);
@@ -115,7 +115,7 @@ class BranchCompare {
             </div>
             <button class="btn btn-small compare-back" id="compare-matrix-close">
               <i class="ph ph-arrow-left"></i>
-              Back
+              ${this.esc(t('compare.back'))}
             </button>
           </div>
           <div class="compare-body">

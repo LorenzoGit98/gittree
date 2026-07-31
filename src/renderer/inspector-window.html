@@ -3,34 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; font-src 'self' data:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; font-src 'self' data:; img-src 'self' data:">
   <title>Inspector</title>
+  <link rel="stylesheet" href="../../node_modules/@phosphor-icons/web/src/regular/style.css">
   <link rel="stylesheet" href="styles/variables.css">
   <link rel="stylesheet" href="styles/components.css">
   <link rel="stylesheet" href="styles/diff-viewer.css">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { height: 100%; overflow: hidden; }
-    body {
-      font-family: var(--font-sans);
-      background: var(--surface-primary);
-      color: var(--text-primary);
-    }
-    #inspector-body {
-      height: 100%;
-      overflow-y: auto;
-      padding: var(--space-4);
-      font-size: var(--text-sm);
-    }
-    #inspector-body .diff-placeholder {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: var(--space-2);
-      height: 100%;
-      color: var(--text-tertiary);
-    }
-  </style>
+  <link rel="stylesheet" href="styles/inspector-window.css">
 </head>
 <body>
   <div id="inspector-body">
@@ -39,28 +18,6 @@
       <span>Loading…</span>
     </div>
   </div>
-  <script>
-    const { gitTree } = window;
-    const body = document.getElementById('inspector-body');
-
-    gitTree.onInspectorRender(payload => {
-      if (payload.theme) {
-        document.documentElement.dataset.theme = payload.theme;
-      }
-      document.title = payload.title || 'Inspector';
-
-      if (payload.html) {
-        body.innerHTML = payload.html;
-      } else if (payload.diffText) {
-        body.innerHTML = '';
-        const pre = document.createElement('pre');
-        pre.className = 'diff-raw';
-        pre.textContent = payload.diffText;
-        body.appendChild(pre);
-      } else {
-        body.innerHTML = '<div class="diff-placeholder"><span>No content</span></div>';
-      }
-    });
-  </script>
+  <script src="inspector-window.js"></script>
 </body>
 </html>

@@ -156,6 +156,10 @@ class SettingsView {
               ${this.esc(t('settings.addProfile'))}
             </button>
           </form>
+          <button class="btn btn-secondary btn-sm" id="settings-vault-reset" type="button">
+            <i class="ph ph-key" aria-hidden="true"></i>
+            ${this.esc(t('settings.resetVault'))}
+          </button>
         </section>
 
         <section class="settings-section" data-settings-section="about">
@@ -219,7 +223,7 @@ class SettingsView {
         data-tone-theme="${theme}" data-tone-choice="${this.esc(tone.id)}"
         title="${this.esc(name)}" aria-pressed="false">
       <span class="settings-tone-chips" aria-hidden="true">
-        ${tone.preview.map(color => `<i style="width:${'auto'};background:${this.esc(color)}"></i>`).join('')}
+        ${tone.preview.map(() => '<i></i>').join('')}
       </span>
       <span class="settings-tone-name">${this.esc(name)}</span>
     </button>`;
@@ -233,7 +237,14 @@ class SettingsView {
       button.setAttribute('aria-pressed', String(active));
     });
     this.dialog.querySelectorAll('[data-tone-choice]').forEach(button => {
-      const active = Theme.getTone(button.dataset.toneTheme) === button.dataset.toneChoice;
+      const toneTheme = button.dataset.toneTheme;
+      const toneId = button.dataset.toneChoice;
+      const tone = (Theme.tones[toneTheme] || []).find(t => t.id === toneId);
+      const chips = button.querySelectorAll('.settings-tone-chips i');
+      tone?.preview.forEach((color, index) => {
+        if (chips[index]) chips[index].style.background = color;
+      });
+      const active = Theme.getTone(toneTheme) === toneId;
       button.classList.toggle('is-active', active);
       button.setAttribute('aria-pressed', String(active));
     });
@@ -398,10 +409,21 @@ class SettingsView {
       };
     }
 
+    const vaultResetButton = this.dialog.querySelector('#settings-vault-reset');
+    if (vaultResetButton) {
+      vaultResetButton.onclick = async () => {
+        if (!await this.confirmVaultReset()) return;
+        const result = await window.gitTree.resetHostingVault();
+        if (result?.error) { this.app.showToast(result.error, 'error'); return; }
+        this.app.showToast(t('settings.vaultResetDone'), 'success');
+      };
+    }
+
     this.dialog.querySelectorAll('[data-theme-choice]').forEach(button => {
       button.onclick = () => {
         Theme.apply(button.dataset.themeChoice, true);
         this.syncAppearanceState();
+        this.app.pushInspectorPayload?.();
       };
     });
     this.dialog.querySelectorAll('[data-tone-choice]').forEach(button => {
@@ -412,6 +434,7 @@ class SettingsView {
           Theme.apply(toneTheme, true);
         }
         this.syncAppearanceState();
+        this.app.pushInspectorPayload?.();
       };
     });
 
@@ -679,6 +702,6 @@ class SettingsView {
   esc(value) {
     const element = document.createElement('div');
     element.textContent = value ?? '';
-    return element.innerHTML;
+    return element.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 }

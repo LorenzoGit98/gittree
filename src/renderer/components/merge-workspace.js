@@ -154,8 +154,8 @@ class MergeWorkspace {
               <div class="merge-risk-item">
                 <i class="ph ph-info merge-risk-icon info" aria-hidden="true"></i>
                 <div class="merge-risk-content">
-                  <div class="merge-risk-title">${d.commitsCount} commit${d.commitsCount !== 1 ? 's' : ''} from ${this.esc(d.source)} will be merged</div>
-                  <div class="merge-risk-detail">Commits made by ${this.esc([...new Set(d.commits.map(c => c.author_name))].slice(0, 3).join(', '))}</div>
+                  <div class="merge-risk-title">${this.esc(t('mergeWorkspace.commitsFrom', { count: d.commitsCount, source: d.source }))}</div>
+                  <div class="merge-risk-detail">${this.esc(t('mergeWorkspace.commitsBy', { authors: [...new Set(d.commits.map(c => c.author_name))].slice(0, 3).join(', ') }))}</div>
                 </div>
               </div>
             </div>
@@ -293,7 +293,14 @@ class MergeWorkspace {
     }
 
     this.setPushing(true);
-    const pushResult = await window.gitTree.push(repo.path, 'origin', this.mergeData.target);
+    const metadata = this.app.components.branchList.metadata;
+    const targetBranch = (metadata?.branches || []).find(
+      branch => branch.name === this.mergeData.target && branch.kind === 'local'
+    );
+    const remoteName = targetBranch?.upstream?.split('/')[0]
+      || metadata?.remotes?.[0]?.name
+      || 'origin';
+    const pushResult = await window.gitTree.push(repo.path, remoteName, this.mergeData.target);
     this.setPushing(false);
     this.hide();
     if (pushResult.error) {
@@ -369,7 +376,7 @@ class MergeWorkspace {
     return [...new Set(values)];
   }
 
-  esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+  esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   fmtDate(d) {
     if (!d) return '';
     return new Date(d).toLocaleDateString([], { month: 'short', day: 'numeric' });

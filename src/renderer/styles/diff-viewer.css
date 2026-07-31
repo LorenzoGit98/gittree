@@ -15,7 +15,7 @@
   border-radius: var(--radius-md);
   background: var(--surface-primary);
   animation: motion-fade-in-up var(--duration-normal) var(--ease-decel) both;
-  animation-delay: calc(var(--file-index, 0) * 35ms);
+  animation-delay: calc(min(var(--file-index, 0), 6) * 35ms);
 }
 
 .diff-file-header {

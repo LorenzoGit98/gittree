@@ -210,6 +210,9 @@ contextBridge.exposeInMainWorld('gitTree', {
   logoutProvider: (provider) =>
     ipcRenderer.invoke('auth:provider-logout', provider),
 
+  resetHostingVault: () =>
+    ipcRenderer.invoke('auth:vault-reset'),
+
   setPat: (provider, token, repoPath) =>
     ipcRenderer.invoke('auth:set-pat', provider, token, repoPath),
 
@@ -301,8 +304,13 @@ contextBridge.exposeInMainWorld('gitTree', {
   checkIsGitRepo: (repoPath) =>
     ipcRenderer.invoke('git:is-repo', repoPath),
 
+  cloneRepository: (url, parentDirectory) =>
+    ipcRenderer.invoke('git:clone', url, parentDirectory),
+
   onOperationLog: (callback) => {
-    ipcRenderer.on('operation:log', (_event, message) => callback(message));
+    const listener = (_event, message) => callback(message);
+    ipcRenderer.on('operation:log', listener);
+    return () => ipcRenderer.removeListener('operation:log', listener);
   },
 
   openExternal: (url) =>
@@ -319,6 +327,15 @@ contextBridge.exposeInMainWorld('gitTree', {
 
   openInspectorWindow: (payload) =>
     ipcRenderer.invoke('window:open-inspector', payload),
+
+  updateInspectorWindow: (payload) =>
+    ipcRenderer.invoke('window:update-inspector', payload),
+
+  onInspectorClosed: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on('inspector:closed', listener);
+    return () => ipcRenderer.removeListener('inspector:closed', listener);
+  },
 
   onInspectorRender: (callback) => {
     const listener = (_event, payload) => callback(payload);

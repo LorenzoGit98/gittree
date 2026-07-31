@@ -294,9 +294,74 @@ class WelcomeScreen {
   }
 
   async cloneRepo() {
-    const url = prompt('Repository URL to clone:');
-    if (!url) return;
-    this.app.showToast(t('feedback.cloneSoon'), 'warning');
+    const cloneUrl = await this.cloneDialog();
+    if (!cloneUrl) return;
+    const parentDirectory = await window.gitTree.selectDirectory();
+    if (!parentDirectory) return;
+    this.app.showToast(t('feedback.cloning'), 'info');
+    try {
+      const result = await window.gitTree.cloneRepository(cloneUrl, parentDirectory);
+      if (result?.error) { this.app.showToast(result.error, 'error'); return; }
+      this.app.showToast(t('feedback.cloneComplete'), 'success');
+      await this.app.components.repoTabs.addRepo(result.path);
+    } catch (e) {
+      this.app.showToast('Error: ' + e.message, 'error');
+    }
+  }
+
+  cloneDialog() {
+    return new Promise(resolve => {
+      const overlay = document.createElement('div');
+      overlay.className = 'repository-picker-overlay';
+      overlay.innerHTML = `
+        <section class="repository-picker" role="dialog" aria-modal="true" aria-labelledby="clone-dialog-title">
+          <header class="repository-picker-header">
+            <div>
+              <span class="eyebrow">${t('welcome.clone')}</span>
+              <h2 id="clone-dialog-title">${t('clone.title')}</h2>
+            </div>
+            <button class="icon-btn repository-picker-close" type="button" aria-label="${t('common.close')}">
+              <i class="ph ph-x" aria-hidden="true"></i>
+            </button>
+          </header>
+          <div class="clone-dialog-body">
+            <label>
+              <span>${t('clone.urlLabel')}</span>
+              <input class="clone-url-input" type="text" placeholder="https://github.com/user/repo.git" spellcheck="false" autocomplete="off">
+            </label>
+          </div>
+          <footer class="repository-picker-footer">
+            <div>
+              <button class="btn btn-secondary" type="button" data-action="cancel">${t('common.cancel')}</button>
+              <button class="btn btn-primary" type="button" data-action="next">${t('clone.next')}</button>
+            </div>
+          </footer>
+        </section>`;
+      const finish = value => {
+        overlay.remove();
+        document.removeEventListener('keydown', keydown);
+        resolve(value);
+      };
+      const keydown = event => {
+        if (event.key === 'Escape') finish(null);
+        if (event.key === 'Enter') submit();
+      };
+      const submit = () => {
+        const input = overlay.querySelector('.clone-url-input');
+        const value = input.value.trim();
+        if (!value) return;
+        finish(value);
+      };
+      document.body.appendChild(overlay);
+      overlay.querySelector('.repository-picker-close').onclick = () => finish(null);
+      overlay.addEventListener('mousedown', event => {
+        if (event.target === overlay) finish(null);
+      });
+      overlay.querySelector('[data-action="cancel"]').onclick = () => finish(null);
+      overlay.querySelector('[data-action="next"]').onclick = submit;
+      document.addEventListener('keydown', keydown);
+      overlay.querySelector('.clone-url-input').focus();
+    });
   }
 
   async loadRecent() {
@@ -327,5 +392,5 @@ class WelcomeScreen {
     document.getElementById('workspace').classList.remove('is-hidden');
   }
 
-  esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+  esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 }

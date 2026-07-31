@@ -76,7 +76,16 @@ class BranchListView {
         window.gitTree.getStatus(repoPath),
         window.gitTree.getOperationState(repoPath)
       ]);
-      if (result?.error) { this.container.innerHTML = ''; return; }
+      if (!this.app.isCurrentRepo(repoPath)) return;
+      if (result?.error) {
+        this.data = null;
+        this.metadata = null;
+        this.status = null;
+        this.operationState = null;
+        this.branchMetadataByKey = new Map();
+        this.container.innerHTML = '';
+        return;
+      }
       this.data = result;
       this.metadata = metadata?.error ? null : metadata;
       this.branchMetadataByKey = new Map(
@@ -95,7 +104,14 @@ class BranchListView {
       this.selectionAnchorKey = null;
       this.shouldReveal = true;
       this.render();
-    } catch { this.container.innerHTML = ''; }
+    } catch {
+      this.data = null;
+      this.metadata = null;
+      this.status = null;
+      this.operationState = null;
+      this.branchMetadataByKey = new Map();
+      this.container.innerHTML = '';
+    }
     finally { this.setLoading(false); }
   }
 
@@ -373,7 +389,8 @@ class BranchListView {
   }
 
   syncBadge(direction, count, upstream) {
-    const label = t(`sidebar.${direction}OfUpstream`, { count, upstream });
+    const key = direction === 'ahead' ? 'sidebar.aheadOfUpstream' : 'sidebar.behindUpstream';
+    const label = t(key, { count, upstream });
     const badge = document.createElement('span');
     badge.className = `sync-indicator-part branch-sync-badge is-${direction}`;
     badge.title = label;
@@ -593,8 +610,8 @@ class BranchListView {
     if (infoSection) infoSection.classList.add('is-busy');
     footer?.classList.add('is-busy');
 
-    this.setRemoteActionBusy('btn-pull', true);
-    this.showToast(t('feedback.pullingMultiple', { count: branches.length }), 'info');
+    this.app.setRemoteActionBusy('btn-pull', true);
+    this.app.showToast(t('feedback.pullingMultiple', { count: branches.length }), 'info');
 
     try {
       let successCount = 0;
@@ -611,7 +628,7 @@ class BranchListView {
           );
           if (result.error) {
             failCount++;
-            this.showToast(`Failed to pull ${branch.name}: ${result.error}`, 'error');
+            this.app.showToast(`Failed to pull ${branch.name}: ${result.error}`, 'error');
             if (chip) {
               chip.classList.add('is-error');
               const icon = document.createElement('i');
@@ -633,17 +650,17 @@ class BranchListView {
       }
 
       if (failCount === 0) {
-        this.showToast(t('feedback.pullAllComplete', { count: successCount }), 'success');
+        this.app.showToast(t('feedback.pullAllComplete', { count: successCount }), 'success');
       } else if (successCount > 0) {
-        this.showToast(
+        this.app.showToast(
           t('feedback.pullPartialComplete', { success: successCount, failure: failCount }),
           'warning'
         );
       }
 
-      await this.app.refresh();
+      if (this.app.isCurrentRepo(repo.path)) await this.app.refresh();
     } finally {
-      this.setRemoteActionBusy('btn-pull', false);
+      this.app.setRemoteActionBusy('btn-pull', false);
       if (infoSection) infoSection.classList.remove('is-busy');
       footer?.classList.remove('is-busy');
       setTimeout(() => this.dismissSelection(), 500); // Ritardo per vedere i risultati
@@ -722,7 +739,8 @@ class BranchListView {
     try {
       const r = await window.gitTree.checkoutBranch(repo.path, name);
       if (r.error) { this.app.showToast(r.error, 'error'); return; }
-      await this.app.afterBranchCheckout(r);
+      if (!this.app.isCurrentRepo(repo.path)) return;
+      await this.app.afterBranchCheckout(r, repo.path);
     } finally {
       this.checkoutBusy = false;
       this.switchFromDirection = null;
@@ -741,7 +759,8 @@ class BranchListView {
     try {
       const r = await window.gitTree.checkoutTrackingBranch(repo.path, remoteName);
       if (r.error) { this.app.showToast(r.error, 'error'); return; }
-      await this.app.afterBranchCheckout(r);
+      if (!this.app.isCurrentRepo(repo.path)) return;
+      await this.app.afterBranchCheckout(r, repo.path);
     } finally {
       this.checkoutBusy = false;
       this.switchFromDirection = null;
@@ -951,6 +970,6 @@ class BranchListView {
   esc(value) {
     const element = document.createElement('div');
     element.textContent = value;
-    return element.innerHTML;
+    return element.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 }

@@ -15,7 +15,7 @@ class PullRequestView {
     this.selected = null;
     this.detail = null;
     this.draft = null;
-    this.rowHeight = 72;
+    this.rowHeight = 70;
     this.overscan = 10;
     this.generation = 0;
     this.elements = {
@@ -1074,7 +1074,7 @@ class PullRequestView {
   esc(value) {
     const element = document.createElement('div');
     element.textContent = value ?? '';
-    return element.innerHTML;
+    return element.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 }
 

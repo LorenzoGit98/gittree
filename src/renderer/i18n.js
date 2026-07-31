@@ -35,6 +35,11 @@ const I18n = {
               clone: 'Clone repository',
               recent: 'Recent repositories'
             },
+            clone: {
+              title: 'Clone a repository',
+              urlLabel: 'Repository URL (HTTPS, SSH or local path)',
+              next: 'Choose destination'
+            },
             discovery: {
               eyebrow: 'Add repositories',
               title: 'Choose how to open your workspace',
@@ -166,6 +171,11 @@ const I18n = {
               gitName: 'Git author name',
               gitEmail: 'Git author email',
               addProfile: 'Add profile',
+              resetVault: 'Reset stored credentials',
+              vaultResetTitle: 'Reset stored credentials?',
+              vaultResetConfirm: 'This removes all connected hosting accounts and saved review drafts. You will need to sign in again.',
+              vaultResetAction: 'Reset credentials',
+              vaultResetDone: 'Stored credentials cleared',
               assigned: 'Assigned',
               useForRepository: 'Use for repository',
               deleteProfile: 'Delete profile',
@@ -329,7 +339,14 @@ const I18n = {
               empty: 'No results found',
               branches: 'Branches',
               commits: 'Commits',
-              files: 'Files'
+              files: 'Files',
+              repositories: 'Repositories',
+              actions: 'Actions'
+            },
+            statusBar: {
+              onBranch: 'On {{branch}}',
+              clean: 'Clean',
+              modified: 'Modified'
             },
             details: {
               eyebrow: 'Inspector',
@@ -350,11 +367,17 @@ const I18n = {
               fetch: 'Fetch',
               pull: 'Pull',
               push: 'Push',
+              createBranch: 'Create branch',
               repositoryActions: 'Repository actions',
               previous: 'Previous',
               next: 'Next',
               terminal: 'Terminal',
               explorer: 'Explorer'
+            },
+            compare: {
+              backToHistory: 'Back to history',
+              commitsAhead: 'Commits ahead',
+              back: 'Back'
             },
             gitflow: {
               eyebrow: 'GitFlow',
@@ -455,7 +478,10 @@ const I18n = {
               mergeStarted: 'Merging…',
               mergeCompleted: 'Merge completed',
               mergeAndPushCompleted: 'Merge & Push complete',
-              pushFailed: 'Merge done, but push failed: {{error}}'
+              pushFailed: 'Merge done, but push failed: {{error}}',
+              commitsFrom_one: '{{count}} commit from {{source}} will be merged',
+              commitsFrom_other: '{{count}} commits from {{source}} will be merged',
+              commitsBy: 'Commits made by {{authors}}'
             },
             commitMenu: {
               createTag: 'Create tag at this commit…',
@@ -494,7 +520,8 @@ const I18n = {
               deleted: 'Deleted',
               renamed: 'Renamed',
               selectFile: 'Select a file to view its diff',
-              close: 'Close comparison'
+              close: 'Close comparison',
+              binaryFile: 'Binary file'
             },
             conflicts: {
               operation: '{{operation}} in progress',
@@ -572,7 +599,10 @@ const I18n = {
               refreshed: 'Repository refreshed',
               fetching: 'Fetching…',
               fetchComplete: 'Fetch complete',
+              cloning: 'Cloning repository…',
+              cloneComplete: 'Repository cloned',
               pulling: 'Pulling…',
+              pullingMultiple: 'Pulling {{count}} branches…',
               pullComplete: 'Pull complete',
               pullAllComplete: '{{count}} branch pulled successfully',
               pullPartialComplete: '{{success}} successful, {{failure}} failed',
@@ -605,6 +635,11 @@ const I18n = {
               open: 'Apri repository',
               clone: 'Clona repository',
               recent: 'Repository recenti'
+            },
+            clone: {
+              title: 'Clona un repository',
+              urlLabel: 'URL del repository (HTTPS, SSH o percorso locale)',
+              next: 'Scegli destinazione'
             },
             discovery: {
               eyebrow: 'Aggiungi repository',
@@ -737,6 +772,11 @@ const I18n = {
               gitName: 'Nome autore Git',
               gitEmail: 'Email autore Git',
               addProfile: 'Aggiungi profilo',
+              resetVault: 'Reimposta credenziali salvate',
+              vaultResetTitle: 'Reimpostare le credenziali salvate?',
+              vaultResetConfirm: 'Questa operazione rimuove tutti gli account collegati e le bozze di revisione salvate. Dovrai accedere di nuovo.',
+              vaultResetAction: 'Reimposta credenziali',
+              vaultResetDone: 'Credenziali salvate cancellate',
               assigned: 'Assegnato',
               useForRepository: 'Usa per repository',
               deleteProfile: 'Elimina profilo',
@@ -900,7 +940,14 @@ const I18n = {
               empty: 'Nessun risultato',
               branches: 'Branch',
               commits: 'Commit',
-              files: 'File'
+              files: 'File',
+              repositories: 'Repository',
+              actions: 'Azioni'
+            },
+            statusBar: {
+              onBranch: 'Su {{branch}}',
+              clean: 'Pulito',
+              modified: 'Modificato'
             },
             details: {
               eyebrow: 'Inspector',
@@ -921,11 +968,17 @@ const I18n = {
               fetch: 'Fetch',
               pull: 'Pull',
               push: 'Push',
+              createBranch: 'Crea branch',
               repositoryActions: 'Azioni repository',
               previous: 'Precedente',
               next: 'Successivo',
               terminal: 'Terminale',
               explorer: 'Esplora risorse'
+            },
+            compare: {
+              backToHistory: 'Torna alla cronologia',
+              commitsAhead: 'Commit avanti',
+              back: 'Indietro'
             },
             gitflow: {
               eyebrow: 'GitFlow',
@@ -1026,7 +1079,10 @@ const I18n = {
               mergeStarted: 'Merge in corso…',
               mergeCompleted: 'Merge completato',
               mergeAndPushCompleted: 'Merge e Push completati',
-              pushFailed: 'Merge completato, ma push non riuscito: {{error}}'
+              pushFailed: 'Merge completato, ma push non riuscito: {{error}}',
+              commitsFrom_one: '{{count}} commit da {{source}} verrà unito',
+              commitsFrom_other: '{{count}} commit da {{source}} verranno uniti',
+              commitsBy: 'Commit creati da {{authors}}'
             },
             commitMenu: {
               createTag: 'Crea tag su questo commit…',
@@ -1065,7 +1121,8 @@ const I18n = {
               deleted: 'Eliminato',
               renamed: 'Rinominato',
               selectFile: 'Seleziona un file per vedere il diff',
-              close: 'Chiudi confronto'
+              close: 'Chiudi confronto',
+              binaryFile: 'File binario'
             },
             conflicts: {
               operation: '{{operation}} in corso',
@@ -1143,7 +1200,10 @@ const I18n = {
               refreshed: 'Repository aggiornato',
               fetching: 'Fetch in corso…',
               fetchComplete: 'Fetch completato',
+              cloning: 'Clonazione del repository in corso…',
+              cloneComplete: 'Repository clonato',
               pulling: 'Pull in corso…',
+              pullingMultiple: 'Tirando {{count}} branch…',
               pullComplete: 'Pull completato',
               pullAllComplete: '{{count}} branch tirati con successo',
               pullPartialComplete: '{{success}} riusciti, {{failure}} falliti',

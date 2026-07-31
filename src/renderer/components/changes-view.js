@@ -97,9 +97,11 @@ class ChangesView {
 
   async refresh(force = false) {
     if (!this.repoPath) return null;
+    const pathAtStart = this.repoPath;
     if (this.inflight) return this.inflight;
-    this.inflight = window.gitTree.getWorkingTree(this.repoPath)
+    this.inflight = window.gitTree.getWorkingTree(pathAtStart)
       .then(snapshot => {
+        if (pathAtStart !== this.repoPath) return null;
         if (snapshot?.error) {
           this.app.showToast(snapshot.error, 'error');
           return null;
@@ -243,8 +245,8 @@ class ChangesView {
     this.snapshot = result.snapshot;
     this.render();
     if (this.selected) {
-      const stillPresent = this.snapshot.files.some(file => file.path === this.selected.path);
-      if (stillPresent) await this.selectFile({ path: this.selected.path }, !unstage);
+      const file = this.snapshot.files.find(item => item.path === this.selected.path);
+      if (file) await this.selectFile({ path: file.path }, Boolean(file.staged));
       else this.app.components.diffViewer.clear();
     }
   }
@@ -269,6 +271,7 @@ class ChangesView {
       return;
     }
     this.renderWorkingDiff(diff, staged);
+    this.app.pushInspectorPayload?.();
   }
 
   renderWorkingDiff(diff, staged) {

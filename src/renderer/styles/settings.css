@@ -649,6 +649,10 @@
   border-radius: 4px;
 }
 
+.settings-tone-swatch[data-tone-theme="dark"] .settings-tone-chips i {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
 .settings-tone-name {
   color: var(--text-tertiary);
   font-size: 10px;

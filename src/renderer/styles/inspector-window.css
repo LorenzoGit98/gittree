@@ -1,0 +1,29 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: var(--font-sans);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+}
+#inspector-body {
+  height: 100%;
+  overflow-y: auto;
+  padding: var(--space-4);
+  font-size: var(--text-sm);
+}
+#inspector-body .diff-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 100%;
+  color: var(--text-tertiary);
+}
+
+#inspector-body .diff-raw {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+}

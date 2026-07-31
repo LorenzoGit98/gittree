@@ -160,6 +160,9 @@ class RepoTabs {
     const active = await window.gitTree.removeRepo(repoPath);
     this.repos = await window.gitTree.getRepos();
     this.syncByRepoPath.delete(repoPath);
+    if (active) {
+      this.app.state.activeRepoIndex = this.repos.findIndex(r => r.path === active.path);
+    }
     this.render();
     if (active) this.app.emit('repo:changed', active);
     else this.app.emit('repo:cleared');

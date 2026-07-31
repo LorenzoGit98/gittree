@@ -54,7 +54,7 @@ class GraphView {
       const row = event.target.closest('.graph-row');
       if (!row?.dataset.hash) return;
       event.preventDefault();
-      if (!this.selectedHashes.has(row.dataset.hash)) this.select(row.dataset.hash);
+      if (!this.selectedHashes.has(row.dataset.hash)) this.select(row.dataset.hash, false);
       this.app.components.commitContextMenu?.open(event, [...this.selectedHashes]);
     });
   }

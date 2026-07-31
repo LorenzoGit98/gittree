@@ -7,10 +7,10 @@ function repositoryName(repoPath) {
 }
 
 class RepoManager {
-  constructor() {
+  constructor(options = {}) {
     this.repos = [];
     this.activeRepoIndex = -1;
-    this.configPath = path.join(app.getPath('userData'), 'repos.json');
+    this.configPath = options.configPath || path.join(app.getPath('userData'), 'repos.json');
     this.loadRepos();
   }
 
@@ -106,7 +106,9 @@ class RepoManager {
     const index = this.repos.findIndex(r => r.path === repoPath);
     if (index === -1) return false;
     this.repos.splice(index, 1);
-    if (this.activeRepoIndex >= this.repos.length) {
+    if (index < this.activeRepoIndex) {
+      this.activeRepoIndex -= 1;
+    } else if (this.activeRepoIndex >= this.repos.length) {
       this.activeRepoIndex = this.repos.length - 1;
     }
     this.saveRepos();

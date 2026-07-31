@@ -119,7 +119,7 @@ class CommitCompare {
   renderDiff(container, diff) {
     container.innerHTML = '';
     if (diff.binary) {
-      container.innerHTML = `<div class="diff-placeholder"><i class="ph ph-file-lock"></i>Binary file</div>`;
+      container.innerHTML = `<div class="diff-placeholder"><i class="ph ph-file-lock"></i>${t('commitCompare.binaryFile')}</div>`;
       return;
     }
     if (!diff.hunks?.length) {
@@ -168,7 +168,7 @@ class CommitCompare {
   esc(value) {
     const el = document.createElement('div');
     el.textContent = value ?? '';
-    return el.innerHTML;
+    return el.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 }
 

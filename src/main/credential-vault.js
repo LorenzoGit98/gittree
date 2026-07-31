@@ -68,17 +68,29 @@ class CredentialVault {
     return this.loading;
   }
 
+  async reset() {
+    this.state = { accounts: {}, reviewDrafts: {} };
+    this.loaded = true;
+    try {
+      await fs.promises.rm(this.storagePath, { force: true });
+    } catch {}
+    this.writeQueue = Promise.resolve();
+    return { success: true };
+  }
+
   async persist() {
     if (this.getSecurityState().memoryOnly) return;
     const plaintext = JSON.stringify(this.state);
     const encrypted = this.safeStorage.encryptString(plaintext);
     const directory = path.dirname(this.storagePath);
     const temporaryPath = `${this.storagePath}.tmp`;
-    this.writeQueue = this.writeQueue.then(async () => {
-      await fs.promises.mkdir(directory, { recursive: true });
-      await fs.promises.writeFile(temporaryPath, encrypted, { mode: 0o600 });
-      await fs.promises.rename(temporaryPath, this.storagePath);
-    });
+    this.writeQueue = this.writeQueue
+      .catch(() => {})
+      .then(async () => {
+        await fs.promises.mkdir(directory, { recursive: true });
+        await fs.promises.writeFile(temporaryPath, encrypted, { mode: 0o600 });
+        await fs.promises.rename(temporaryPath, this.storagePath);
+      });
     return this.writeQueue;
   }
 
@@ -126,6 +138,19 @@ class CredentialVault {
     await this.ensureLoaded();
     delete this.state.reviewDrafts[this.validateDraftKey(key)];
     await this.persist();
+  }
+
+  async removeProviderDrafts(provider) {
+    await this.ensureLoaded();
+    const prefix = `${this.validateProvider(provider)}:`;
+    let removed = false;
+    for (const key of Object.keys(this.state.reviewDrafts)) {
+      if (key.startsWith(prefix)) {
+        delete this.state.reviewDrafts[key];
+        removed = true;
+      }
+    }
+    if (removed) await this.persist();
   }
 }
 

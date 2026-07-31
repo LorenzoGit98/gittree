@@ -60,7 +60,7 @@ class DiffViewer {
     this.body.innerHTML = `<div class="diff-placeholder"><i class="ph ph-circle-notch"></i>${t('details.loading')}</div>`;
     try {
       const detail = await window.gitTree.getCommitDetail(repoPath, hash);
-      if (detail?.error) { this.body.innerHTML = `<div class="diff-placeholder">${detail.error}</div>`; return; }
+      if (detail?.error) { this.body.innerHTML = `<div class="diff-placeholder">${this.esc(detail.error)}</div>`; return; }
       this.currentDiff = detail.diff;
       this.render(detail.diff);
 
@@ -68,7 +68,7 @@ class DiffViewer {
         title.title = `${compactTitle} — ${detail.files.join(', ')}`;
       }
     } catch (e) {
-      this.body.innerHTML = `<div class="diff-placeholder">${e.message}</div>`;
+      this.body.innerHTML = `<div class="diff-placeholder">${this.esc(e.message)}</div>`;
     }
   }
 
@@ -185,7 +185,7 @@ class DiffViewer {
     return m ? m[2] : null;
   }
 
-  esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+  esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 
   clear() {
     this.currentDiff = null;

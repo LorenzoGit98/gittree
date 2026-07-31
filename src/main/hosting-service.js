@@ -13,6 +13,23 @@ class HostingService {
     this.loginSessions = new Map();
   }
 
+  async fetchWithTimeout(url, options = {}) {
+    const controller = new AbortController();
+    const timeoutMs = Number.isFinite(Number(options.timeout)) ? Number(options.timeout) : 30000;
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let signal = controller.signal;
+    if (options.signal) signal = AbortSignal.any([options.signal, signal]);
+    try {
+      const response = await this.fetch(url, { ...options, signal });
+      if (!String(response.url || url).startsWith('https://')) {
+        throw new Error('Provider response was not delivered over HTTPS');
+      }
+      return response;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   validateProvider(provider) {
     if (!['github', 'gitlab', 'azure'].includes(provider)) {
       throw new Error(`Unsupported hosting provider: ${provider}`);
@@ -224,11 +241,12 @@ class HostingService {
   async logout(provider) {
     await this.cancelLogin(provider);
     await this.vault.removeAccount(provider);
+    await this.vault.removeProviderDrafts(provider);
     return { success: true, provider };
   }
 
   async requestForm(url, values, signal) {
-    const response = await this.fetch(url, {
+    const response = await this.fetchWithTimeout(url, {
       method: 'POST',
       headers: {
         Accept: 'application/json',
@@ -280,7 +298,7 @@ class HostingService {
           Authorization: `Bearer ${token}`,
           'User-Agent': 'GitTree'
         };
-    const response = await this.fetch(url, { headers });
+    const response = await this.fetchWithTimeout(url, { headers });
     const user = await this.readResponse(response);
     if (provider === 'azure') {
       const identity = user.authenticatedUser || user;
@@ -304,7 +322,15 @@ class HostingService {
   }
 
   async readResponse(response) {
+    const MAX_RESPONSE_BYTES = 20 * 1024 * 1024;
+    const declaredLength = Number(response.headers.get('content-length') || 0);
+    if (declaredLength > MAX_RESPONSE_BYTES) {
+      throw new Error('Provider response is too large');
+    }
     const text = await response.text();
+    if (text.length > MAX_RESPONSE_BYTES) {
+      throw new Error('Provider response is too large');
+    }
     let value = {};
     try {
       value = text ? JSON.parse(text) : {};
@@ -335,7 +361,7 @@ class HostingService {
     const authHeader = repo.provider === 'azure'
       ? `Basic ${Buffer.from(`:${account.accessToken}`).toString('base64')}`
       : `Bearer ${account.accessToken}`;
-    const response = await this.fetch(url, {
+    const response = await this.fetchWithTimeout(url, {
       method: options.method || 'GET',
       headers: {
         Accept: 'application/json',
@@ -877,7 +903,7 @@ class HostingService {
   async githubGraphql(query, variables) {
     const account = await this.getAccessAccount('github');
     if (!account?.accessToken) throw new Error('Connect github first');
-    const response = await this.fetch('https://api.github.com/graphql', {
+    const response = await this.fetchWithTimeout('https://api.github.com/graphql', {
       method: 'POST',
       headers: {
         Accept: 'application/json',
@@ -1136,6 +1162,25 @@ class HostingService {
       });
       await persist(operation);
     }
+    for (let index = 0; index < draft.replies.length; index += 1) {
+      const operation = `reply:${index}`;
+      if (completed.has(operation)) continue;
+      const reply = draft.replies[index];
+      const threadId = this.validateThreadId(reply.threadId);
+      await this.api(
+        repo,
+        `/pullrequests/${id}/threads/${encodeURIComponent(threadId)}/comments`,
+        {
+          method: 'POST',
+          body: {
+            parentCommentId: Number.isSafeInteger(reply.commentId) ? reply.commentId : 0,
+            content: reply.body,
+            commentType: 'text'
+          }
+        }
+      );
+      await persist(operation);
+    }
     if (draft.body && !completed.has('summary')) {
       await this.api(repo, `/pullrequests/${id}/threads`, {
         method: 'POST',
@@ -1252,7 +1297,7 @@ class HostingService {
       `https://vssps.dev.azure.com/${encodeURIComponent(organization)}/_apis/identities`
       + `?searchFilter=General&filterValue=${encodeURIComponent(query)}`
       + '&queryMembership=None&api-version=7.1-preview.1';
-    const response = await this.fetch(url, {
+    const response = await this.fetchWithTimeout(url, {
       headers: {
         Accept: 'application/json',
         Authorization: `Basic ${Buffer.from(`:${account.accessToken}`).toString('base64')}`,

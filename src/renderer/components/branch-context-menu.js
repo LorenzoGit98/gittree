@@ -250,7 +250,8 @@ class BranchContextMenu {
         return;
       }
       if (action === 'checkout') {
-        await this.app.afterBranchCheckout(result);
+        if (!this.app.isCurrentRepo(repo.path)) return;
+        await this.app.afterBranchCheckout(result, repo.path);
         this.app.showToast(t('branchMenu.operationComplete'), 'success');
         return;
       }
@@ -437,6 +438,6 @@ class BranchContextMenu {
   esc(value) {
     const element = document.createElement('div');
     element.textContent = value ?? '';
-    return element.innerHTML;
+    return element.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 }

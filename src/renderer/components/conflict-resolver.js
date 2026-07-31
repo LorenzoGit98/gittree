@@ -36,10 +36,11 @@ class ConflictResolver {
       return;
     }
     if (!this.state?.type) return;
-    this.allFiles = [...this.state.conflicts];
-    this.blockCounts = new Map(this.state.conflicts.map(file => [file, null]));
+    const conflicts = this.state.conflicts || [];
+    this.allFiles = [...conflicts];
+    this.blockCounts = new Map(conflicts.map(file => [file, null]));
     this.binaryMap = new Map();
-    this.currentPath = this.state.conflicts[0] || null;
+    this.currentPath = conflicts[0] || null;
     this.current = null;
     this.dirty = false;
     this.undoStack = [];
@@ -283,6 +284,8 @@ class ConflictResolver {
     });
     document.getElementById('conflict-undo')?.addEventListener('click', () => this.undo());
     document.getElementById('conflict-mark-resolved')?.addEventListener('click', () => this.markResolved());
+    const resultEditor = document.getElementById('conflict-result-editor');
+    if (resultEditor) resultEditor.value = this.resultContent;
     this.bindTextEditor();
   }
 
@@ -343,7 +346,7 @@ class ConflictResolver {
             <div class="conflict-result-overlay">
               <pre class="conflict-highlight-layer" id="conflict-highlight-layer" aria-hidden="true"></pre>
               <div class="conflict-action-bar is-hidden" id="conflict-action-bar"></div>
-              <textarea id="conflict-result-editor" spellcheck="false" aria-label="${this.esc(t('conflicts.result'))}">${this.esc(this.resultContent)}</textarea>
+              <textarea id="conflict-result-editor" spellcheck="false" aria-label="${this.esc(t('conflicts.result'))}"></textarea>
             </div>
           </div>
         </section>
@@ -717,6 +720,9 @@ class ConflictResolver {
     const resolvedPath = this.currentPath;
     const nextConflicts = result.state?.conflicts || [];
     this.allFiles = [...new Set([...this.allFiles, ...nextConflicts])];
+    for (const file of nextConflicts) {
+      if (!this.blockCounts.has(file)) this.blockCounts.set(file, null);
+    }
     this.blockCounts.set(resolvedPath, 0);
     this.state = result.state;
     this.currentPath = nextConflicts[0] || null;
@@ -845,7 +851,7 @@ class ConflictResolver {
   esc(value) {
     const element = document.createElement('div');
     element.textContent = value ?? '';
-    return element.innerHTML;
+    return element.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 }
 

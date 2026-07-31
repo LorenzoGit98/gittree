@@ -105,13 +105,13 @@
 .workspace-body {
   --left-panel: var(--sidebar-width);
   --right-panel: var(--detail-width);
+  position: relative;
   display: grid;
   grid-template-columns: var(--left-panel) 10px minmax(360px, 1fr) 10px var(--right-panel);
   flex: 1;
   min-height: 0;
   gap: 0;
   padding: var(--space-3);
-  transition: grid-template-columns var(--duration-slow) var(--ease-smooth);
 }
 
 .workspace-body.inspector-closed {
@@ -132,6 +132,12 @@
 }
 
 .workspace-body.inspector-closed > .inspector {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  bottom: var(--space-3);
+  width: var(--right-panel);
+  z-index: 6;
   opacity: 0;
   transform: translateX(28px) scale(0.98);
   visibility: hidden;
@@ -140,6 +146,12 @@
 }
 
 .workspace-body.sidebar-collapsed > .sidebar {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  bottom: var(--space-3);
+  width: var(--left-panel);
+  z-index: 6;
   opacity: 0;
   transform: translateX(-28px) scale(0.98);
   visibility: hidden;
@@ -160,7 +172,12 @@
 .workspace-body.inspector-maximized > .inspector {
   display: flex;
   grid-column: 1;
-  animation: motion-overlay-in var(--duration-slow) var(--spring-gentle);
+  animation: motion-panel-expand var(--duration-normal) var(--spring-gentle) both;
+}
+
+.workspace-body.is-restoring > .sidebar,
+.workspace-body.is-restoring > .main {
+  animation: motion-fade-in-up var(--duration-normal) var(--ease-decel) both;
 }
 
 .bento-panel {
@@ -354,14 +371,14 @@
   height: 48px;
   border-radius: var(--radius-pill);
   background: var(--border-default);
-  transform: translate(-50%, -50%);
-  transition: background var(--duration-fast) var(--ease-smooth), height var(--duration-fast) var(--ease-smooth);
+  transform: translate(-50%, -50%) scaleY(1);
+  transition: background var(--duration-fast) var(--ease-smooth), transform var(--duration-fast) var(--ease-smooth);
 }
 
 .resize-handle-v:hover::after,
 .resize-handle-v.is-dragging::after {
-  height: 72px;
   background: var(--primary);
+  transform: translate(-50%, -50%) scaleY(1.5);
 }
 
 .main {

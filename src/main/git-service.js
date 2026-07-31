@@ -4,6 +4,7 @@ const path = require('path');
 const { execFile, spawn } = require('child_process');
 const { promisify } = require('util');
 const crypto = require('crypto');
+const { AsyncLocalStorage } = require('node:async_hooks');
 const { parseRemoteUrl } = require('./provider-links');
 const {
   MAX_CONFLICT_RESULT_BYTES,
@@ -18,11 +19,22 @@ class GitService {
   constructor(repoPath) {
     this.git = simpleGit(repoPath);
     this.repoPath = repoPath;
+    this._queue = Promise.resolve();
+    this._queueContext = new AsyncLocalStorage();
+  }
+
+  runExclusive(fn) {
+    const run = () => this._queueContext.run(this, fn);
+    const task = this._queue.then(run, run);
+    this._queue = task.then(() => {}, () => {});
+    return task;
   }
 
   async getLog(maxCount = 100, branch = null) {
+    const safeMaxCount = Math.min(1000, Math.max(1, Number(maxCount) || 100));
+    if (branch) this.assertSafeRef(branch);
     try {
-      const options = { maxCount, '--date': 'iso' };
+      const options = { maxCount: safeMaxCount, '--date': 'iso' };
       if (branch) options[branch] = null;
       const log = await this.git.log(options);
       return log;
@@ -112,25 +124,49 @@ class GitService {
   }
 
   async getDiff(commitHash = null, file = null) {
+    if (!commitHash) {
+      const relativeFile = file ? this.validateRepositoryPath(file) : null;
+      try {
+        const options = ['--no-ext-diff'];
+        if (relativeFile) options.push('--', relativeFile);
+        return await this.git.diff(options);
+      } catch (err) {
+        throw new Error(`Failed to get diff: ${err.message}`);
+      }
+    }
+    return this.getCommitDiff(commitHash, file);
+  }
+
+  async getCommitDiff(hash, file = null) {
+    this.assertSafeRef(hash);
+    const relativeFile = file ? this.validateRepositoryPath(file) : null;
+    const emptyTree = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
     try {
-      const options = [];
-      if (commitHash) {
-        options.push(`${commitHash}^..${commitHash}`);
-      }
-      if (file) {
-        options.push('--', file);
-      }
-      const diff = await this.git.diff(options);
-      return diff;
+      const options = ['--no-ext-diff'];
+      if (await this.hasParent(hash)) options.push(`${hash}^..${hash}`);
+      else options.push(`${emptyTree}..${hash}`);
+      if (relativeFile) options.push('--', relativeFile);
+      return await this.git.diff(options);
     } catch (err) {
       throw new Error(`Failed to get diff: ${err.message}`);
     }
   }
 
+  async hasParent(commitHash) {
+    try {
+      const parents = await this.git.raw(['rev-list', '--parents', '-n', '1', commitHash]);
+      return parents.split(/\s+/).filter(Boolean).length > 1;
+    } catch {
+      return true;
+    }
+  }
+
   async getBranchComparison(baseBranch, compareBranch, maxCount = 100) {
+    this.assertSafeRef(baseBranch);
+    this.assertSafeRef(compareBranch);
     try {
       const [diff, log] = await Promise.all([
-        this.git.diff([`${baseBranch}...${compareBranch}`]),
+        this.git.diff(['--no-ext-diff', `${baseBranch}...${compareBranch}`]),
         this.getLog(maxCount, `${baseBranch}..${compareBranch}`)
       ]);
       return {
@@ -149,10 +185,10 @@ class GitService {
     await this.assertCommitish(hashB);
     try {
       const nameStatus = await this.git.raw([
-        'diff', '--name-status', '-z', `${hashA}..${hashB}`
+        'diff', '--no-ext-diff', '--name-status', '-z', `${hashA}..${hashB}`
       ]);
       const files = this.parseNameStatus(nameStatus);
-      const diff = await this.git.diff([`${hashA}..${hashB}`]);
+      const diff = await this.git.diff(['--no-ext-diff', `${hashA}..${hashB}`]);
       return { base: hashA, compare: hashB, files, diff };
     } catch (err) {
       throw new Error(`Failed to compare commits: ${err.message}`);
@@ -193,10 +229,11 @@ class GitService {
   }
 
   async getCommitDetail(hash) {
+    this.assertSafeRef(hash);
     try {
       const log = await this.git.log({ maxCount: 1, '--date': 'iso', [hash]: null });
       if (!log.latest) return null;
-      const diff = await this.git.diff([`${hash}^..${hash}`]);
+      const diff = await this.getCommitDiff(hash);
       const show = await this.git.show([hash, '--stat', '--format=']);
       return {
         hash: log.latest.hash,
@@ -339,6 +376,9 @@ class GitService {
       throw new Error(`Invalid remote branch: ${remoteRef}`);
     }
     const localName = remoteRef.slice(separator + 1);
+    if (!localName || localName.startsWith('-')) {
+      throw new Error(`Invalid remote branch: ${remoteRef}`);
+    }
     try {
       await this.git.raw(['show-ref', '--verify', `refs/remotes/${remoteRef}`]);
     } catch {
@@ -570,6 +610,7 @@ class GitService {
         ? await this.getCommitActionMetadata(replayHashes)
         : [];
       const files = (await this.git.diff([
+        '--no-ext-diff',
         '--name-only',
         `${commits[0].hash}...HEAD`
       ])).split(/\r?\n/).filter(Boolean);
@@ -700,6 +741,9 @@ class GitService {
   }
 
   async assertLocalBranch(branch) {
+    if (typeof branch !== 'string' || !branch || branch.startsWith('-')) {
+      throw new Error(`Invalid local branch name: ${branch}`);
+    }
     try {
       await this.git.raw(['show-ref', '--verify', `refs/heads/${branch}`]);
     } catch {
@@ -708,6 +752,9 @@ class GitService {
   }
 
   async assertRemoteBranch(remoteRef) {
+    if (typeof remoteRef !== 'string' || !remoteRef || remoteRef.startsWith('-')) {
+      throw new Error(`Invalid remote branch: ${remoteRef}`);
+    }
     try {
       await this.git.raw(['show-ref', '--verify', `refs/remotes/${remoteRef}`]);
     } catch {
@@ -723,6 +770,18 @@ class GitService {
       await this.git.raw(['check-ref-format', '--branch', branch]);
     } catch {
       throw new Error(`Invalid branch name: ${branch}`);
+    }
+  }
+
+  assertSafeRef(ref) {
+    if (
+      typeof ref !== 'string' ||
+      !ref.trim() ||
+      ref !== ref.trim() ||
+      ref.startsWith('-') ||
+      /[\0\r\n]/.test(ref)
+    ) {
+      throw new Error(`Invalid Git ref: ${ref}`);
     }
   }
 
@@ -790,7 +849,7 @@ class GitService {
       ({ stdout } = await execFileAsync(
         'git',
         ['merge-tree', '--write-tree', '--name-only', 'HEAD', branch],
-        { cwd: this.repoPath, encoding: 'utf8' }
+        { cwd: this.repoPath, encoding: 'utf8', maxBuffer: 50 * 1024 * 1024 }
       ));
     } catch (err) {
       stdout = String(err.stdout || '');
@@ -800,9 +859,12 @@ class GitService {
     const lines = String(stdout).split(/\r?\n/);
     for (let index = 1; index < lines.length; index += 1) {
       const line = lines[index].trim();
-      if (!line) break;
-      if (/^(?:Auto-merging|CONFLICT|warning|error)/i.test(line)) break;
-      conflictedFiles.push(line);
+      if (!line || /^warning|^error|^Auto-merging/i.test(line)) continue;
+      if (/^CONFLICT\b/i.test(line)) {
+        let match = line.match(/^CONFLICT\b.*\bin\s+(\S+)/i);
+        if (!match) match = line.match(/^CONFLICT\b[^:]*:\s*(\S+)/i);
+        if (match) conflictedFiles.push(match[1]);
+      }
     }
     try {
       const base = (await this.git.raw(['merge-base', 'HEAD', branch])).trim();
@@ -976,14 +1038,31 @@ class GitService {
     return path.isAbsolute(value) ? value : path.resolve(this.repoPath, value);
   }
 
-  validateRepositoryPath(filePath) {
+  validateRepositoryPath(filePath, options = {}) {
+    const rejectSymlinks = options.rejectSymlinks !== false;
     if (typeof filePath !== 'string' || !filePath || path.isAbsolute(filePath)) {
       throw new Error('Invalid repository path');
     }
-    const absolute = path.resolve(this.repoPath, filePath);
-    const relative = path.relative(this.repoPath, absolute);
+    const repoRoot = path.resolve(this.repoPath);
+    const absolute = path.resolve(repoRoot, filePath);
+    const relative = path.relative(repoRoot, absolute);
     if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
       throw new Error('Conflict path is outside the repository');
+    }
+    if (rejectSymlinks) {
+      let current = repoRoot;
+      for (const part of relative.split(path.sep)) {
+        current = path.join(current, part);
+        try {
+          if (fs.lstatSync(current).isSymbolicLink()) {
+            throw new Error('Repository paths cannot traverse symbolic links');
+          }
+        } catch (error) {
+          if (error.code === 'ENOENT') break;
+          if (error.message === 'Repository paths cannot traverse symbolic links') throw error;
+          throw new Error('Invalid repository path');
+        }
+      }
     }
     return relative.split(path.sep).join('/');
   }
@@ -1064,6 +1143,7 @@ class GitService {
   }
 
   async fetch(remote = 'origin') {
+    await this.assertRemote(remote);
     try {
       const result = await this.git.fetch(remote);
       return { success: true, remote, result };
@@ -1110,8 +1190,8 @@ class GitService {
       const staged = !untracked && indexStatus !== ' ';
       const unstaged = untracked || worktreeStatus !== ' ';
       return {
-        path: this.validateRepositoryPath(file.path),
-        oldPath: file.from ? this.validateRepositoryPath(file.from) : undefined,
+        path: this.validateRepositoryPath(file.path, { rejectSymlinks: false }),
+        oldPath: file.from ? this.validateRepositoryPath(file.from, { rejectSymlinks: false }) : undefined,
         indexStatus,
         worktreeStatus,
         staged,
@@ -1124,7 +1204,7 @@ class GitService {
     const fileState = await Promise.all(
       files.map(async file => {
         try {
-          const stat = await fs.promises.stat(path.resolve(this.repoPath, file.path));
+          const stat = await fs.promises.lstat(path.resolve(this.repoPath, file.path));
           return [file.path, stat.size, stat.mtimeMs];
         } catch {
           return [file.path, null, null];
@@ -1519,8 +1599,12 @@ class GitService {
   }
 
   async stashPop(index = 0) {
+    const numeric = Number(index);
+    if (!Number.isFinite(numeric) || !Number.isInteger(numeric) || numeric < 0) {
+      throw new Error('Invalid stash index');
+    }
     try {
-      await this.git.stash(['pop', `stash@{${index}}`]);
+      await this.git.stash(['pop', `stash@{${numeric}}`]);
       return { success: true };
     } catch (err) {
       throw new Error(`Failed to pop stash: ${err.message}`);
@@ -1537,6 +1621,7 @@ class GitService {
   }
 
   async getFileTree(commitHash = 'HEAD') {
+    this.assertSafeRef(commitHash);
     try {
       const result = await this.git.raw(['ls-tree', '-r', '--name-only', commitHash]);
       return result.trim().split('\n').filter(Boolean);
@@ -1602,6 +1687,16 @@ class GitService {
       throw new Error(`Failed to create tag: ${error.message}`);
     }
   }
+}
+
+for (const methodName of Object.getOwnPropertyNames(GitService.prototype)) {
+  if (methodName === 'constructor' || methodName === 'runExclusive') continue;
+  const original = GitService.prototype[methodName];
+  if (typeof original !== 'function' || original.constructor.name !== 'AsyncFunction') continue;
+  GitService.prototype[methodName] = function (...args) {
+    if (this._queueContext.getStore() === this) return original.apply(this, args);
+    return this.runExclusive(() => original.apply(this, args));
+  };
 }
 
 module.exports = GitService;

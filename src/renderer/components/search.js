@@ -87,10 +87,10 @@ class GlobalSearch {
     }
 
     this.allData.push(
-      { type: 'action', label: 'Fetch', subtitle: '', detail: 'Fetch from remote', data: { action: 'fetch' } },
-      { type: 'action', label: 'Pull', subtitle: '', detail: 'Pull from remote', data: { action: 'pull' } },
-      { type: 'action', label: 'Push', subtitle: '', detail: 'Push to remote', data: { action: 'push' } },
-      { type: 'action', label: 'Create branch', subtitle: '', detail: 'Create a new branch', data: { action: 'create-branch' } }
+      { type: 'action', label: t('actions.fetch'), subtitle: '', detail: t('actions.fetch'), data: { action: 'fetch' } },
+      { type: 'action', label: t('actions.pull'), subtitle: '', detail: t('actions.pull'), data: { action: 'pull' } },
+      { type: 'action', label: t('actions.push'), subtitle: '', detail: t('actions.push'), data: { action: 'push' } },
+      { type: 'action', label: t('actions.createBranch'), subtitle: '', detail: t('actions.createBranch'), data: { action: 'create-branch' } }
     );
 
     setTimeout(() => this.input.focus(), 50);
@@ -154,9 +154,9 @@ class GlobalSearch {
           <span class="search-result-icon"><i class="${this.iconForType(type)}"></i></span>
           <span class="search-result-content">
             <div class="search-result-title">${this.highlight(item.label, this.input.value)}</div>
-            <div class="search-result-subtitle">${item.subtitle}</div>
+            <div class="search-result-subtitle">${this.esc(item.subtitle)}</div>
           </span>
-          <span class="search-result-meta">${item.detail}</span>
+          <span class="search-result-meta">${this.esc(item.detail)}</span>
         `;
         el.onclick = () => this.select(item);
         this.results.appendChild(el);
@@ -181,20 +181,21 @@ class GlobalSearch {
       branch: t('search.branches'),
       commit: t('search.commits'),
       file: t('search.files'),
-      repo: 'Repositories',
+      repo: t('search.repositories'),
       tag: t('sidebar.tags'),
-      action: 'Actions'
+      action: t('search.actions')
     };
     return labels[type] || type;
   }
 
   highlight(text, query) {
     if (!query) return this.esc(text);
-    const re = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    const safeQuery = this.esc(query).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(${safeQuery})`, 'gi');
     return this.esc(text).replace(re, '<span class="highlight">$1</span>');
   }
 
-  esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+  esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 
   handleKey(e) {
     const items = this.results.querySelectorAll('.search-result-item');

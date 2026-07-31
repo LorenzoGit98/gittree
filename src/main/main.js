@@ -6,9 +6,11 @@ const {
   Menu,
   nativeTheme,
   safeStorage,
+  session,
   shell
 } = require('electron');
 const path = require('path');
+const { pathToFileURL } = require('url');
 const fs = require('fs');
 const crypto = require('node:crypto');
 const GitService = require('./git-service');
@@ -24,15 +26,34 @@ let mainWindow;
 let repoManager;
 let updateService;
 let hostingService;
+let credentialVault;
 
 const gitServices = new Map();
 const repositoryScans = new Map();
 
-function getGitService(repoPath) {
-  if (!gitServices.has(repoPath)) {
-    gitServices.set(repoPath, new GitService(repoPath));
+function normalizeRepoPath(repoPath) {
+  const normalized = path.normalize(repoPath || '');
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+}
+
+function assertManagedRepo(repoPath) {
+  if (typeof repoPath !== 'string' || !repoPath || !path.isAbsolute(repoPath)) {
+    throw new Error('Invalid repository path');
   }
-  return gitServices.get(repoPath);
+  const normalized = normalizeRepoPath(repoPath);
+  const known = (repoManager?.getAllRepos() || []).some(
+    repo => normalizeRepoPath(repo.path) === normalized
+  );
+  if (!known) throw new Error('Repository is not opened in this workspace');
+}
+
+function getGitService(repoPath) {
+  assertManagedRepo(repoPath);
+  const key = normalizeRepoPath(repoPath);
+  if (!gitServices.has(key)) {
+    gitServices.set(key, new GitService(repoPath));
+  }
+  return gitServices.get(key);
 }
 
 async function getHostingRepository(repoPath, provider) {
@@ -49,7 +70,17 @@ async function getHostingRepository(repoPath, provider) {
     throw new Error(`No supported ${provider} remote was found in this repository`);
   }
   const repository = { ...remote.provider, remoteName: remote.name };
-  if (provider === 'azure') repository.host = 'dev.azure.com';
+  if (provider === 'azure') {
+    const organization = remote.provider.organization || '';
+    const project = remote.provider.project || '';
+    if (!/^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/.test(organization)) {
+      throw new Error('Unsupported Azure organization in remote URL');
+    }
+    if (!/^[^/\\:#%?&<>]{1,128}$/.test(project)) {
+      throw new Error('Unsupported Azure project in remote URL');
+    }
+    repository.host = 'dev.azure.com';
+  }
   return repository;
 }
 
@@ -58,7 +89,8 @@ async function isWorkingTreeRepository(repoPath) {
   try {
     const git = new GitService(repoPath);
     await git.git.checkIsRepo();
-    return (await git.git.raw(['rev-parse', '--is-inside-work-tree'])).trim() === 'true';
+    const topLevel = (await git.git.revparse(['--show-toplevel'])).trim();
+    return Boolean(topLevel) && normalizeRepoPath(topLevel) === normalizeRepoPath(repoPath);
   } catch {
     return false;
   }
@@ -80,7 +112,7 @@ function createWindow() {
       preload: path.join(__dirname, '..', 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
       backgroundThrottling: false
     }
   };
@@ -91,6 +123,7 @@ function createWindow() {
     windowOptions.frame = false;
   }
   mainWindow = new BrowserWindow(windowOptions);
+  lockDownWindow(mainWindow);
 
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   if (updateService) updateService.setWindow(mainWindow);
@@ -124,9 +157,39 @@ function buildMenu() {
 }
 
 function sendToRenderer(channel, data) {
-  if (mainWindow) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(channel, data);
   }
+}
+
+const ALLOWED_EXTERNAL_HOSTS = new Set([
+  'github.com',
+  'www.github.com',
+  'gitlab.com',
+  'www.gitlab.com',
+  'dev.azure.com',
+  'bitbucket.org',
+  'www.bitbucket.org'
+]);
+
+function isSafeExternalUrl(url) {
+  if (typeof url !== 'string' || url.length > 8192) return false;
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  return parsed.protocol === 'https:' && ALLOWED_EXTERNAL_HOSTS.has(parsed.hostname);
+}
+
+function lockDownWindow(win) {
+  const rendererDirUrl = pathToFileURL(path.join(__dirname, '..', 'renderer')).toString();
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  win.webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith(rendererDirUrl)) event.preventDefault();
+  });
+  win.webContents.on('will-attach-webview', event => event.preventDefault());
 }
 
 async function openRepoDialog() {
@@ -191,14 +254,14 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle('app:open-external', (_event, url) => {
-    if (typeof url === 'string' && (url.startsWith('https://') || url.startsWith('http://'))) {
-      require('electron').shell.openExternal(url);
+    if (isSafeExternalUrl(url)) {
+      shell.openExternal(url);
     }
   });
 
   ipcMain.handle('app:open-explorer', async (_event, repoPath) => {
     try {
-      if (typeof repoPath !== 'string' || !repoPath) return { error: 'Invalid repository path' };
+      assertManagedRepo(repoPath);
       const error = await shell.openPath(repoPath);
       return error ? { error } : { ok: true };
     } catch (err) {
@@ -208,7 +271,7 @@ function registerIpcHandlers() {
 
   ipcMain.handle('app:open-terminal', (_event, repoPath) => {
     try {
-      if (typeof repoPath !== 'string' || !repoPath) return { error: 'Invalid repository path' };
+      assertManagedRepo(repoPath);
       const { spawn } = require('child_process');
       const launch = (command, args) => {
         const child = spawn(command, args, { cwd: repoPath, detached: true, stdio: 'ignore' });
@@ -216,16 +279,16 @@ function registerIpcHandlers() {
         child.unref();
       };
       if (process.platform === 'win32') {
-        launch('cmd.exe', ['/c', 'start', 'cmd.exe', '/K', `cd /D "${repoPath}"`]);
+        launch('cmd.exe', ['/d', '/c', 'start', 'cmd.exe', '/d', '/k']);
       } else if (process.platform === 'darwin') {
         launch('open', ['-a', 'Terminal', repoPath]);
       } else {
         launch('sh', ['-c',
-          'x-terminal-emulator --working-directory "$0" || ' +
-          'gnome-terminal --working-directory "$0" || ' +
-          'konsole --workdir "$0" || ' +
-          'xterm -e "cd \'$0\' && exec $SHELL"',
-          repoPath]);
+          'x-terminal-emulator --working-directory "$1" || ' +
+          'gnome-terminal --working-directory "$1" || ' +
+          'konsole --workdir "$1" || ' +
+          'xterm -e \'cd "$1" && exec "$SHELL"\' gittree-term "$1"',
+          'gittree-terminal', repoPath]);
       }
       return { ok: true };
     } catch (err) {
@@ -257,11 +320,28 @@ function registerIpcHandlers() {
   });
 
   let inspectorWindow = null;
+  const sanitizeInspectorPayload = payload => ({
+    title: typeof payload?.title === 'string' && payload.title.length <= 200
+      ? payload.title
+      : 'Inspector',
+    theme: ['light', 'dark'].includes(payload?.theme) ? payload.theme : 'light',
+    tone: typeof payload?.tone === 'string' && /^[a-z]{1,32}$/.test(payload.tone)
+      ? payload.tone
+      : '',
+    mode: payload?.mode === 'split' ? 'split' : 'unified',
+    html: typeof payload?.html === 'string' && payload.html.length <= 2_000_000
+      ? payload.html
+      : '',
+    diffText: typeof payload?.diffText === 'string' && payload.diffText.length <= 10_000_000
+      ? payload.diffText
+      : ''
+  });
   ipcMain.handle('window:open-inspector', (_event, payload) => {
+    const safePayload = sanitizeInspectorPayload(payload);
     if (inspectorWindow && !inspectorWindow.isDestroyed()) {
       inspectorWindow.focus();
-      inspectorWindow.webContents.send('inspector:render', payload);
-      return;
+      inspectorWindow.webContents.send('inspector:render', safePayload);
+      return { success: true };
     }
     const iconPath = app.isPackaged
       ? path.join(app.getAppPath(), 'icon.png')
@@ -272,20 +352,32 @@ function registerIpcHandlers() {
       minWidth: 480,
       minHeight: 360,
       parent: mainWindow,
-      title: payload?.title || 'Inspector',
+      title: safePayload.title,
       icon: iconPath,
       backgroundColor: '#f7f9fc',
       webPreferences: {
-        preload: path.join(__dirname, '..', 'preload.js'),
+        preload: path.join(__dirname, '..', 'preload-inspector.js'),
         contextIsolation: true,
-        nodeIntegration: false
+        nodeIntegration: false,
+        sandbox: true
       }
     });
+    lockDownWindow(inspectorWindow);
     inspectorWindow.loadFile(path.join(__dirname, '..', 'renderer', 'inspector-window.html'));
     inspectorWindow.webContents.once('did-finish-load', () => {
-      inspectorWindow.webContents.send('inspector:render', payload);
+      inspectorWindow.webContents.send('inspector:render', safePayload);
     });
-    inspectorWindow.on('closed', () => { inspectorWindow = null; });
+    inspectorWindow.on('closed', () => {
+      inspectorWindow = null;
+      sendToRenderer('inspector:closed');
+    });
+    return { success: true };
+  });
+
+  ipcMain.handle('window:update-inspector', (_event, payload) => {
+    if (!inspectorWindow || inspectorWindow.isDestroyed()) return { success: false };
+    inspectorWindow.webContents.send('inspector:render', sanitizeInspectorPayload(payload));
+    return { success: true };
   });
 
   ipcMain.handle('dialog:select-directory', async () => {
@@ -300,6 +392,55 @@ function registerIpcHandlers() {
 
   ipcMain.handle('git:is-repo', async (_event, repoPath) => {
     return isWorkingTreeRepository(repoPath);
+  });
+
+  ipcMain.handle('git:clone', async (_event, url, parentDirectory) => {
+    try {
+      if (typeof url !== 'string' || !url.trim() || url.length > 4096 || url.trim().startsWith('-')) {
+        return { error: 'Invalid repository URL' };
+      }
+      const remoteUrl = url.trim();
+      const isRemoteCloneUrl =
+        /^https:\/\//i.test(remoteUrl) ||
+        /^ssh:\/\//i.test(remoteUrl) ||
+        /^git\+ssh:\/\//i.test(remoteUrl) ||
+        /^[A-Za-z0-9._-]+@[A-Za-z0-9._-]+:[^\s]+$/.test(remoteUrl);
+      if (!isRemoteCloneUrl || /[\x00-\x1f\x7f]/.test(remoteUrl)) {
+        return { error: 'Only remote repository URLs are supported (https, ssh or git@host:path)' };
+      }
+      if (typeof parentDirectory !== 'string' || !path.isAbsolute(parentDirectory)) {
+        return { error: 'Invalid destination folder' };
+      }
+      let stat;
+      try {
+        stat = await fs.promises.stat(parentDirectory);
+      } catch {
+        return { error: 'Destination folder does not exist' };
+      }
+      if (!stat.isDirectory()) return { error: 'Destination is not a folder' };
+      const rawName = remoteUrl.split('/').filter(Boolean).pop() || '';
+      const name = rawName.replace(/\.git(\/)?$/, '').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-');
+      if (!name || name === '.' || name === '..') {
+        return { error: 'Could not determine repository name from URL' };
+      }
+      const targetPath = path.join(parentDirectory, name);
+      try {
+        await fs.promises.access(targetPath);
+        return { error: `Destination already exists: ${targetPath}` };
+      } catch {}
+      const { execFile } = require('child_process');
+      const { promisify } = require('util');
+      const execFileAsync = promisify(execFile);
+      await execFileAsync('git', ['clone', remoteUrl, targetPath], {
+        cwd: parentDirectory,
+        windowsHide: true,
+        maxBuffer: 10 * 1024 * 1024
+      });
+      const repo = repoManager.addRepo(targetPath);
+      return repo || { path: targetPath, name };
+    } catch (err) {
+      return { error: err.message || String(err) };
+    }
   });
 
   ipcMain.handle('git:log', async (_event, repoPath, maxCount, branch) => {
@@ -416,7 +557,9 @@ function registerIpcHandlers() {
       sendToRenderer('operation:log', `Rebased onto ${branch}`);
       return result;
     } catch (err) {
-      return { error: err.message, conflictState: await git.getOperationState() };
+      let conflictState = null;
+      try { conflictState = await git.getOperationState(); } catch {}
+      return { error: err.message, conflictState };
     }
   });
 
@@ -462,7 +605,9 @@ function registerIpcHandlers() {
       sendToRenderer('operation:log', `Merged ${branch}`);
       return result;
     } catch (err) {
-      return { error: err.message, conflictState: await git.getOperationState() };
+      let conflictState = null;
+      try { conflictState = await git.getOperationState(); } catch {}
+      return { error: err.message, conflictState };
     }
   });
 
@@ -476,6 +621,9 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle('git:batch-delete-branches', async (_event, repoPath, branches, force) => {
+    if (!Array.isArray(branches) || branches.length > 500) {
+      return { error: 'Invalid branch list' };
+    }
     try {
       const git = getGitService(repoPath);
       const result = await git.deleteBranches(branches, force);
@@ -630,7 +778,9 @@ function registerIpcHandlers() {
       sendToRenderer('operation:log', `Rebased onto ${hash.slice(0, 8)}`);
       return result;
     } catch (err) {
-      return { error: err.message, conflictState: await git.getOperationState() };
+      let conflictState = null;
+      try { conflictState = await git.getOperationState(); } catch {}
+      return { error: err.message, conflictState };
     }
   });
 
@@ -641,7 +791,9 @@ function registerIpcHandlers() {
       sendToRenderer('operation:log', `Cherry-picked ${result.commits.length} commit(s)`);
       return result;
     } catch (err) {
-      return { error: err.message, conflictState: await git.getOperationState() };
+      let conflictState = null;
+      try { conflictState = await git.getOperationState(); } catch {}
+      return { error: err.message, conflictState };
     }
   });
 
@@ -785,8 +937,7 @@ function registerIpcHandlers() {
         if (!remote) return { error: 'Remote not found' };
         const url = buildPullRequestUrl(remote?.provider, sourceBranch, targetBranch);
         if (!url) return { error: 'Pull requests are not supported for this remote provider' };
-        const parsed = new URL(url);
-        if (parsed.protocol !== 'https:') return { error: 'Unsafe pull request URL' };
+        if (!isSafeExternalUrl(url)) return { error: 'Unsafe pull request URL' };
         await shell.openExternal(url);
         return { success: true, url };
       } catch (err) {
@@ -822,6 +973,14 @@ function registerIpcHandlers() {
   ipcMain.handle('auth:provider-logout', async (_event, provider) => {
     try {
       return await hostingService.logout(provider);
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('auth:vault-reset', async () => {
+    try {
+      return await credentialVault.reset();
     } catch (err) {
       return { error: err.message };
     }
@@ -979,8 +1138,7 @@ function registerIpcHandlers() {
           : provider === 'azure'
             ? `${repository.webBase}/pullrequest/${safeId}`
             : `${repository.webBase}/-/merge_requests/${safeId}`;
-        const parsed = new URL(url);
-        if (parsed.protocol !== 'https:') throw new Error('Unsafe review URL');
+        if (!isSafeExternalUrl(url)) throw new Error('Unsafe review URL');
         await shell.openExternal(url);
         return { success: true };
       } catch (err) {
@@ -1084,6 +1242,15 @@ function registerIpcHandlers() {
   });
 }
 
+process.on('unhandledRejection', error => {
+  const message = error instanceof Error ? (error.stack || error.message) : String(error);
+  console.error('[GitTree] Unhandled rejection:', message);
+});
+
+process.on('uncaughtException', error => {
+  console.error('[GitTree] Uncaught exception:', error);
+});
+
 app.whenReady().then(() => {
   app.setName('GitTree');
   app.setAppUserModelId('com.lorenzogit.gittree');
@@ -1091,8 +1258,22 @@ app.whenReady().then(() => {
   if (process.platform === 'darwin' && app.dock) {
     app.dock.setIcon(path.join(__dirname, '..', '..', 'icon.png'));
   }
+  if (!app.requestSingleInstanceLock()) {
+    app.quit();
+    return;
+  }
+  session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
+    callback(false);
+  });
+  session.defaultSession.setPermissionCheckHandler(() => false);
+  app.on('second-instance', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
   repoManager = new RepoManager();
-  const credentialVault = new CredentialVault({
+  credentialVault = new CredentialVault({
     storagePath: path.join(app.getPath('userData'), 'hosting-vault.bin'),
     safeStorage,
     platform: process.platform

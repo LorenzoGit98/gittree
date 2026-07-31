@@ -6,7 +6,18 @@ class GitTreeApp {
     this.workspaceMode = 'history';
     this.updateState = null;
     this.repoLoadToken = 0;
+    this.remoteActionBusy = false;
+    this.remoteActionRepo = null;
     this._events = {};
+  }
+
+  pathKey(value) {
+    return window.gitTree?.platform === 'win32' ? String(value).toLocaleLowerCase() : String(value);
+  }
+
+  isCurrentRepo(repoPath) {
+    const current = this.state.repo?.path;
+    return Boolean(current) && this.pathKey(repoPath) === this.pathKey(current);
   }
 
   async init() {
@@ -285,6 +296,7 @@ class GitTreeApp {
     const loadToken = ++this.repoLoadToken;
     this.state.repo = repo;
     this.components.welcome.hide();
+    this.syncRemoteBusyUI();
     this.setProjectLoading(true);
     const savedMode = localStorage.getItem(this.workspaceModeKey(repo.path)) || 'history';
     this.setWorkspaceMode(savedMode, false);
@@ -318,7 +330,7 @@ class GitTreeApp {
         currentBranchMetadata?.ahead || 0,
         currentBranchMetadata?.behind || 0
       );
-      document.getElementById('status-branch').textContent = branchName ? `On ${branchName}` : '';
+      document.getElementById('status-branch').textContent = branchName ? t('statusBar.onBranch', { branch: branchName }) : '';
       document.getElementById('status-repo').textContent = repo.name;
       this.components.statusBar.setRepo(repo.name);
       this.components.statusBar.setBranch(branchName || '');
@@ -348,6 +360,7 @@ class GitTreeApp {
     container.innerHTML = this.projectLoadingMarkup();
     try {
       const list = await window.gitTree.getStashList(repoPath);
+      if (!this.isCurrentRepo(repoPath)) return;
       this.state.stashes = list?.all || [];
       this.renderStashes(document.getElementById('stash-search')?.value || '');
     } catch {
@@ -378,11 +391,12 @@ class GitTreeApp {
     container.innerHTML = this.projectLoadingMarkup();
     try {
       const tags = await window.gitTree.getTags(repoPath);
+      if (!this.isCurrentRepo(repoPath)) return;
       if (!tags?.all?.length) { container.innerHTML = ''; return; }
       container.innerHTML = tags.all.slice(0, 10).map(t => `
         <div class="branch-item">
           <i class="ph ph-tag branch-icon"></i>
-          <span>${t}</span>
+          <span>${this.esc(t)}</span>
         </div>
       `).join('');
     } catch { container.innerHTML = ''; }
@@ -400,12 +414,17 @@ class GitTreeApp {
     try {
       const status = await window.gitTree.getStatus(repoPath);
       if (!status || status.error) return;
+      if (!this.isCurrentRepo(repoPath)) return;
       this.state.currentBranch = status.current;
       const parts = [];
       if (status.ahead) parts.push(`↑${status.ahead}`);
       if (status.behind) parts.push(`↓${status.behind}`);
-      document.getElementById('status-branch').textContent = status.current ? `On ${status.current}` : '';
-      const info = parts.length ? parts.join(' ') : (status.isClean ? 'Clean' : 'Modified');
+      document.getElementById('status-branch').textContent = status.current
+        ? t('statusBar.onBranch', { branch: status.current })
+        : '';
+      const info = parts.length
+        ? parts.join(' ')
+        : (status.isClean ? t('statusBar.clean') : t('statusBar.modified'));
       document.getElementById('status-info').textContent = info;
       this.components.statusBar.setInfo(info);
       this.updatePushPullCounts(status.ahead || 0, status.behind || 0);
@@ -450,23 +469,25 @@ class GitTreeApp {
     if (!this.state.repo) return;
     await this.components.diffViewer.showDiffForCommit(this.state.repo.path, hash);
     this.animateContentRefresh(document.getElementById('detail-body'));
+    this.pushInspectorPayload?.();
   }
 
-  async afterBranchCheckout(result = {}) {
+  async afterBranchCheckout(result = {}, repoPath = null) {
     const repo = this.state.repo;
     const branchName = result.branch;
     if (!repo || !branchName) return;
+    if (repoPath && !this.isCurrentRepo(repoPath)) return;
 
     this.components.branchList.setCurrentBranch(branchName);
     this.components.diffViewer.clear();
+    const fromDirection = this.components.branchList.switchFromDirection;
+    this.components.branchList.switchFromDirection = null;
+    this.animateBranchSwitch(this.components.graphView.body, fromDirection);
     await Promise.all([
       this.components.graphView.load(repo.path),
       this.components.changes.load(repo.path),
       this.updateStatus(repo.path)
     ]);
-    const fromDirection = this.components.branchList.switchFromDirection;
-    this.components.branchList.switchFromDirection = null;
-    this.animateBranchSwitch(this.components.graphView.body, fromDirection);
 
     const currentBranchMetadata = (this.components.branchList.metadata?.branches || [])
       .find(branch => branch.kind === 'local' && branch.name === branchName);
@@ -483,6 +504,7 @@ class GitTreeApp {
       currentBranchMetadata?.behind || 0
     );
     this.components.statusBar.setBranch(branchName);
+    this.pushInspectorPayload?.();
   }
 
   async refresh(options = {}) {
@@ -503,7 +525,7 @@ class GitTreeApp {
       const result = await window.gitTree.fetch(repoPath);
       if (result.error) { this.showToast(result.error, 'error'); return; }
       this.showToast(t('feedback.fetchComplete'), 'success');
-      await this.refresh();
+      if (this.isCurrentRepo(repoPath)) await this.refresh();
     } finally {
       this.components.repoTabs.setSyncBusy(repoPath, false);
       this.setRemoteActionBusy('btn-fetch', false);
@@ -520,7 +542,7 @@ class GitTreeApp {
       const result = await window.gitTree.pull(repoPath);
       if (result.error) { this.showToast(result.error, 'error'); return; }
       this.showToast(t('feedback.pullComplete'), 'success');
-      await this.refresh();
+      if (this.isCurrentRepo(repoPath)) await this.refresh();
     } finally {
       this.components.repoTabs.setSyncBusy(repoPath, false);
       this.setRemoteActionBusy('btn-pull', false);
@@ -578,7 +600,7 @@ class GitTreeApp {
       const result = await window.gitTree.push(repoPath);
       if (result.error) { this.showToast(result.error, 'error'); return; }
       this.showToast(t('feedback.pushComplete'), 'success');
-      await this.refresh();
+      if (this.isCurrentRepo(repoPath)) await this.refresh();
     } finally {
       this.components.repoTabs.setSyncBusy(repoPath, false);
       this.setRemoteActionBusy('btn-push', false);
@@ -586,13 +608,26 @@ class GitTreeApp {
   }
 
   setRemoteActionBusy(activeId, busy) {
-    this.remoteActionBusy = busy;
+    if (busy) {
+      this.remoteActionBusy = true;
+      this.remoteActionRepo = this.state.repo?.path || null;
+    } else {
+      this.remoteActionBusy = false;
+      this.remoteActionRepo = null;
+    }
+    this.syncRemoteBusyUI(activeId);
+  }
+
+  syncRemoteBusyUI(activeId = null) {
+    const busyHere = this.remoteActionBusy &&
+      Boolean(this.remoteActionRepo) &&
+      this.isCurrentRepo(this.remoteActionRepo);
     for (const id of ['btn-fetch', 'btn-pull', 'btn-push']) {
       const button = document.getElementById(id);
       if (!button) continue;
       const icon = button.querySelector(':scope > i');
-      const isActive = busy && id === activeId;
-      button.disabled = busy;
+      const isActive = busyHere && id === activeId;
+      button.disabled = busyHere;
       button.classList.toggle('is-busy', isActive);
       button.setAttribute('aria-busy', String(isActive));
       if (!icon) continue;
@@ -767,19 +802,32 @@ class GitTreeApp {
   }
 
   setupInspectorPopout() {
-    document.getElementById('btn-popout-inspector').onclick = () => {
+    this.popoutOpen = false;
+    this.buildInspectorPayload = () => {
       const body = document.getElementById('detail-body');
       const title = document.getElementById('detail-title').textContent;
       const theme = document.documentElement.dataset.theme || 'light';
+      const tone = document.documentElement.dataset.tone || '';
       const mode = this.components.diffViewer?.mode || 'unified';
       const html = body.innerHTML;
-      const payload = { title, theme, mode };
+      const payload = { title, theme, tone, mode };
       if (html.length > 2_000_000 && this.components.diffViewer?.currentDiff) {
         payload.diffText = this.components.diffViewer.currentDiff;
       } else {
         payload.html = html;
       }
-      window.gitTree.openInspectorWindow(payload);
+      return payload;
+    };
+    this.pushInspectorPayload = () => {
+      if (!this.popoutOpen) return;
+      window.gitTree.updateInspectorWindow(this.buildInspectorPayload());
+    };
+    window.gitTree.onInspectorClosed(() => {
+      this.popoutOpen = false;
+    });
+    document.getElementById('btn-popout-inspector').onclick = async () => {
+      const result = await window.gitTree.openInspectorWindow(this.buildInspectorPayload());
+      this.popoutOpen = Boolean(result?.success);
     };
   }
 
@@ -807,8 +855,16 @@ class GitTreeApp {
 
     if (previousState !== safeState) {
       this.components.diffViewer?.setInspectorExpanded(isMaximized);
+      if (previousState === 'maximized' && !isMaximized) {
+        this.animatePanelRestore(workspace);
+      }
     }
     if (persist) localStorage.setItem('gittree.workspace.inspector', safeState);
+  }
+
+  animatePanelRestore(workspace) {
+    workspace.classList.add('is-restoring');
+    setTimeout(() => workspace.classList.remove('is-restoring'), 320);
   }
 
   setupPersistentSidebarSections() {
@@ -961,7 +1017,7 @@ class GitTreeApp {
   esc(value) {
     const element = document.createElement('div');
     element.textContent = value ?? '';
-    return element.innerHTML;
+    return element.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
   on(event, cb) {

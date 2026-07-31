@@ -585,6 +585,11 @@
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
+@keyframes motion-panel-expand {
+  from { opacity: 0; transform: translateX(48px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
 @keyframes motion-backdrop-in {
   from { opacity: 0; }
   to { opacity: 1; }

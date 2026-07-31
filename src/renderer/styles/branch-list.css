@@ -167,8 +167,8 @@
 }
 
 .branch-list.is-revealing .branch-item {
-  animation: motion-item-reveal var(--duration-normal) var(--ease-decel) both;
-  animation-delay: calc(var(--item-index, 0) * 18ms);
+  animation: motion-item-reveal var(--duration-fast) var(--ease-decel) both;
+  animation-delay: calc(min(var(--item-index, 0), 5) * 12ms);
 }
 
 .branch-item:hover {
