@@ -44,6 +44,7 @@ class GitTreeApp {
     this.components.compare = new BranchCompare(this);
     this.components.commitCompare = new CommitCompare(this);
     this.components.merge = new MergeWorkspace(this);
+    this.components.reflog = new ReflogView(this);
     this.components.conflict = new ConflictResolver(this);
     this.components.gitflow = new GitFlow(this);
     this.components.statusBar = new StatusBar();

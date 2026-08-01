@@ -31,6 +31,7 @@ class SettingsView {
       metadata = response?.error ? null : response;
     }
     const remotes = repo ? await this.readRemotes(repo.path) : [];
+    const worktrees = repo ? await this.readWorktrees(repo.path) : [];
     const schedules = this.readObject(this.autoFetchStorageKey);
     let profiles = this.readArray(this.profilesStorageKey);
     const assignments = this.readObject(this.assignmentsStorageKey);
@@ -153,6 +154,19 @@ class SettingsView {
               ${this.esc(t('settings.addRemote'))}
             </button>
           </form>
+        </section>
+
+        <section class="settings-section" data-settings-section="worktrees">
+          <div class="settings-section-heading">
+            <i class="ph ph-tabs" aria-hidden="true"></i>
+            <div>
+              <h3>${this.esc(t('settings.worktreesTitle'))}</h3>
+              <p>${this.esc(t('settings.worktreesHelp'))}</p>
+            </div>
+          </div>
+          <div class="settings-remotes-list" id="settings-worktrees-list">
+            ${worktrees.map(worktree => this.renderWorktreeRow(worktree)).join('') || `<div class="settings-empty">${this.esc(t('settings.noWorktrees'))}</div>`}
+          </div>
         </section>
 
         <section class="settings-section" data-settings-section="accounts">
@@ -330,6 +344,67 @@ class SettingsView {
     } catch {
       return [];
     }
+  }
+
+  async readWorktrees(repoPath) {
+    try {
+      const result = await window.gitTree.getWorktrees(repoPath);
+      return Array.isArray(result) ? result : [];
+    } catch {
+      return [];
+    }
+  }
+
+  renderWorktreeRow(worktree) {
+    const isCurrent = worktree.path === this.app.state.repo?.path;
+    return `<div class="settings-remote-row" data-worktree-path="${this.esc(worktree.path)}">
+      <i class="ph ph-tabs" aria-hidden="true"></i>
+      <div class="settings-remote-copy">
+        <strong>${this.esc(worktree.branch || worktree.head || '—')}</strong>
+        <span class="settings-remote-url" title="${this.esc(worktree.path)}">${this.esc(worktree.path)}</span>
+      </div>
+      ${isCurrent ? `<span class="badge badge-head">${this.esc(t('settings.currentWorktree'))}</span>` : ''}
+      <div class="settings-remote-actions">
+        <button class="btn btn-small is-danger" type="button" data-action="remove" title="${this.esc(t('settings.removeWorktree'))}" aria-label="${this.esc(t('settings.removeWorktree'))}" ${isCurrent ? 'disabled' : ''}>
+          <i class="ph ph-trash" aria-hidden="true"></i>
+        </button>
+      </div>
+    </div>`;
+  }
+
+  async refreshWorktreesList(repo) {
+    const container = this.dialog.querySelector('#settings-worktrees-list');
+    if (!container || !repo) return;
+    const worktrees = await this.readWorktrees(repo.path);
+    container.innerHTML = worktrees.map(worktree => this.renderWorktreeRow(worktree)).join('')
+      || `<div class="settings-empty">${this.esc(t('settings.noWorktrees'))}</div>`;
+    this.bindWorktrees(repo);
+  }
+
+  bindWorktrees(repo) {
+    if (!repo) return;
+    const list = this.dialog.querySelector('#settings-worktrees-list');
+    list?.querySelectorAll('[data-worktree-path]').forEach(row => {
+      const directory = row.dataset.worktreePath;
+      const removeButton = row.querySelector('[data-action="remove"]');
+      if (!removeButton) return;
+      removeButton.onclick = async () => {
+        const confirmed = await this.app.confirmDialog(
+          t('settings.removeWorktreeTitle'),
+          t('settings.removeWorktreeConfirm', { path: directory }),
+          t('settings.removeWorktree'),
+          true
+        );
+        if (!confirmed) return;
+        const result = await window.gitTree.removeWorktree(repo.path, directory);
+        if (result?.error) {
+          this.app.showToast(result.error, 'error');
+          return;
+        }
+        await this.refreshWorktreesList(repo);
+        this.app.showToast(t('settings.worktreeRemoved'), 'success');
+      };
+    });
   }
 
   renderRemoteRow(remote) {
@@ -681,6 +756,7 @@ class SettingsView {
     };
 
     this.bindRemotes(repo);
+    this.bindWorktrees(repo);
     this.dialog.querySelectorAll('[data-profile-apply]').forEach(button => {
       button.onclick = async () => {
         const profile = this.readArray(this.profilesStorageKey)

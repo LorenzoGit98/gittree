@@ -834,6 +834,62 @@ function registerIpcHandlers() {
     }
   });
 
+  ipcMain.handle('git:reflog', async (_event, repoPath, maxCount) => {
+    try {
+      return await getGitService(repoPath).getReflog(maxCount);
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:worktrees', async (_event, repoPath) => {
+    try {
+      return await getGitService(repoPath).getWorktrees();
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:worktree-create', async (_event, repoPath, directory, branch) => {
+    try {
+      return await getGitService(repoPath).createWorktree(directory, branch);
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:worktree-remove', async (_event, repoPath, directory) => {
+    try {
+      return await getGitService(repoPath).removeWorktree(directory);
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:submodules', async (_event, repoPath) => {
+    try {
+      return await getGitService(repoPath).getSubmodules();
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:submodules-init', async (_event, repoPath) => {
+    try {
+      return await getGitService(repoPath).initSubmodules();
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle('git:submodules-update', async (_event, repoPath) => {
+    try {
+      return await getGitService(repoPath).updateSubmodules();
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
   ipcMain.handle('git:remote-add', async (_event, repoPath, name, url) => {
     try {
       return await getGitService(repoPath).addRemote(name, url);

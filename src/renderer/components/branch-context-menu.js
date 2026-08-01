@@ -145,6 +145,9 @@ class BranchContextMenu {
       this.item('ph-trash', t('branchMenu.delete', { branch: b.name }), 'delete',
         isCurrent || pending, isCurrent ? t('branchMenu.deleteCurrent') : mutationReason, true),
       { separator: true },
+      this.item('ph-tabs', t('branchMenu.newWorktree'), 'worktree',
+        !isLocal || pending,
+        !isLocal ? t('branchMenu.localOnly') : mutationReason),
       this.item('ph-git-pull-request', t('branchMenu.createPullRequest'), 'pull-request',
         !this.hasSupportedProvider() || pending,
         mutationReason || t('branchMenu.unsupportedProvider')),
@@ -153,6 +156,8 @@ class BranchContextMenu {
         remotes.length === 0 || pending,
         remotes.length === 0 ? t('branchMenu.noRemotes') : mutationReason),
       this.item('ph-sliders-horizontal', t('branchMenu.manageRemotes'), 'manage-remotes',
+        pending, mutationReason),
+      this.item('ph-clock-counter-clockwise', t('branchMenu.viewReflog'), 'view-reflog',
         pending, mutationReason)
     ].filter(Boolean);
 
@@ -249,6 +254,9 @@ class BranchContextMenu {
       } else if (action === 'pull-request') {
         await this.openPullRequest(repo.path, b);
         return;
+      } else if (action === 'worktree') {
+        await this.createWorktreeForBranch(repo, b);
+        return;
       }
 
       if (result?.error) {
@@ -275,6 +283,11 @@ class BranchContextMenu {
       if (action === 'manage-remotes') {
         this.close();
         await this.app.components.settings.open('remotes');
+        return;
+      }
+      if (action === 'view-reflog') {
+        this.close();
+        await this.app.components.reflog.open();
         return;
       }
       this.app.showToast(t('branchMenu.operationComplete'), 'success');
@@ -367,6 +380,20 @@ class BranchContextMenu {
           .join('')}</select>
       </label>
     `, form => form.elements.remote.value);
+  }
+
+  async createWorktreeForBranch(repo, branch) {
+    const directory = await window.gitTree.selectDirectory();
+    if (!directory) return;
+    const name = await this.promptText(t('branchMenu.worktreeBranch'), branch.name);
+    if (!name) return;
+    const result = await window.gitTree.createWorktree(repo.path, directory, name);
+    if (result?.error) {
+      this.app.showToast(result.error, 'error');
+      return;
+    }
+    this.app.showToast(t('branchMenu.worktreeCreated', { path: result.path }), 'success');
+    await this.app.components.repoTabs.addRepo(result.path);
   }
 
   formDialog(title, fields, extract) {

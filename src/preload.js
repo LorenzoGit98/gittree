@@ -171,6 +171,27 @@ contextBridge.exposeInMainWorld('gitTree', {
   getRemotes: (repoPath) =>
     ipcRenderer.invoke('git:remotes', repoPath),
 
+  getReflog: (repoPath, maxCount) =>
+    ipcRenderer.invoke('git:reflog', repoPath, maxCount),
+
+  getWorktrees: (repoPath) =>
+    ipcRenderer.invoke('git:worktrees', repoPath),
+
+  createWorktree: (repoPath, directory, branch) =>
+    ipcRenderer.invoke('git:worktree-create', repoPath, directory, branch),
+
+  removeWorktree: (repoPath, directory) =>
+    ipcRenderer.invoke('git:worktree-remove', repoPath, directory),
+
+  getSubmodules: (repoPath) =>
+    ipcRenderer.invoke('git:submodules', repoPath),
+
+  initSubmodules: (repoPath) =>
+    ipcRenderer.invoke('git:submodules-init', repoPath),
+
+  updateSubmodules: (repoPath) =>
+    ipcRenderer.invoke('git:submodules-update', repoPath),
+
   addRemote: (repoPath, name, url) =>
     ipcRenderer.invoke('git:remote-add', repoPath, name, url),
 

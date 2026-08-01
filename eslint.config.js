@@ -24,7 +24,8 @@ const appGlobals = {
   GitFlow: 'readonly',
   StatusBar: 'readonly',
   BranchNaming: 'readonly',
-  I18n: 'readonly'
+  I18n: 'readonly',
+  ReflogView: 'readonly'
 };
 
 module.exports = [

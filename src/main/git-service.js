@@ -1225,6 +1225,19 @@ class GitService {
         binary: false
       };
     });
+    const submodulePaths = new Set();
+    let submodules = [];
+    if (fs.existsSync(path.join(this.repoPath, '.gitmodules'))) {
+      try {
+        submodules = await this.getSubmodules();
+        for (const submodule of submodules) {
+          submodulePaths.add(submodule.path);
+        }
+      } catch { /* submodule detection is best effort */ }
+    }
+    files.forEach(file => {
+      file.submodule = submodulePaths.has(file.path);
+    });
     const fileState = await Promise.all(
       files.map(async file => {
         try {
@@ -1258,6 +1271,7 @@ class GitService {
       snapshotId,
       branch: status.current,
       files,
+      submodules,
       stagedCount: files.filter(file => file.staged).length,
       unstagedCount: files.filter(file => file.unstaged).length
     };
@@ -1698,6 +1712,139 @@ class GitService {
       return remotes;
     } catch (err) {
       throw new Error(`Failed to get remotes: ${err.message}`, { cause: err });
+    }
+  }
+
+  async getReflog(maxCount = 200) {
+    const safeMax = Math.min(500, Math.max(1, Number(maxCount) || 200));
+    try {
+      const raw = await this.git.raw([
+        'reflog',
+        '--date=iso',
+        `--max-count=${safeMax}`,
+        '--format=%H%x1f%gd%x1f%gs%x1f%cd'
+      ]);
+      return raw.split(/\r?\n/).filter(Boolean).map(line => {
+        const [hash, ref, message, date] = line.split('\x1f');
+        return {
+          hash: hash || '',
+          ref: ref || '',
+          message: message || '',
+          date: date || ''
+        };
+      });
+    } catch (err) {
+      throw new Error(`Failed to get reflog: ${err.message}`, { cause: err });
+    }
+  }
+
+  async getWorktrees() {
+    try {
+      const raw = await this.git.raw(['worktree', 'list', '--porcelain']);
+      const worktrees = [];
+      let current = null;
+      for (const line of raw.split(/\r?\n/)) {
+        if (line.startsWith('worktree ')) {
+          if (current) worktrees.push(current);
+          current = { path: line.slice('worktree '.length) };
+        } else if (line.startsWith('branch ')) {
+          current.branch = line.slice('branch '.length).replace(/^refs\/heads\//, '');
+        } else if (line.startsWith('HEAD ')) {
+          current.head = line.slice('HEAD '.length);
+        }
+      }
+      if (current) worktrees.push(current);
+      return worktrees;
+    } catch (error) {
+      throw new Error(`Failed to get worktrees: ${error.message}`, { cause: error });
+    }
+  }
+
+  async createWorktree(directory, branch) {
+    await this.assertNoPendingOperation();
+    await this.assertValidBranchName(branch);
+    if (
+      typeof directory !== 'string' ||
+      !path.isAbsolute(directory) ||
+      /[\0\r\n]/.test(directory)
+    ) {
+      throw new Error('Invalid worktree directory');
+    }
+    try {
+      await this.git.raw(['worktree', 'add', '-b', branch, directory]);
+      return { success: true, path: directory, branch };
+    } catch (error) {
+      throw new Error(`Failed to create worktree: ${error.message}`, { cause: error });
+    }
+  }
+
+  async removeWorktree(directory) {
+    if (
+      typeof directory !== 'string' ||
+      !path.isAbsolute(directory) ||
+      /[\0\r\n]/.test(directory)
+    ) {
+      throw new Error('Invalid worktree directory');
+    }
+    try {
+      await this.git.raw(['worktree', 'remove', directory]);
+      return { success: true, path: directory };
+    } catch (error) {
+      throw new Error(`Failed to remove worktree: ${error.message}`, { cause: error });
+    }
+  }
+
+  async getSubmodules() {
+    try {
+      const raw = await this.git.raw(['submodule', 'status']);
+      return raw.split(/\r?\n/).filter(Boolean).map(line => {
+        const status = line[0] || ' ';
+        const rest = line.slice(1).trim();
+        const [hash, pathPart] = rest.split(/\s+/, 2);
+        const path = pathPart || '';
+        return { status, hash: hash || '', path };
+      });
+    } catch (error) {
+      if (/no submodule mapping found/i.test(error.message)) return [];
+      throw new Error(`Failed to get submodules: ${error.message}`, { cause: error });
+    }
+  }
+
+  async initSubmodules() {
+    await this.assertNoPendingOperation();
+    try {
+      await execFileAsync(
+        'git',
+        ['submodule', 'update', '--init', '--recursive'],
+        {
+          cwd: this.repoPath,
+          encoding: 'utf8',
+          env: { ...process.env, GIT_ALLOW_PROTOCOL: 'file' },
+          maxBuffer: 50 * 1024 * 1024
+        }
+      );
+      return { success: true };
+    } catch (error) {
+      throw new Error(`Failed to initialize submodules: ${error.message}`, { cause: error });
+    }
+  }
+
+  async updateSubmodules() {
+    await this.assertNoPendingOperation();
+    try {
+      await execFileAsync(
+        'git',
+        ['submodule', 'update', '--recursive'],
+        {
+          cwd: this.repoPath,
+          encoding: 'utf8',
+          env: { ...process.env, GIT_ALLOW_PROTOCOL: 'file' },
+          maxBuffer: 50 * 1024 * 1024
+        }
+      );
+      return { success: true };
+    } catch (error) {
+      throw new Error(`Failed to update submodules: ${error.message}`, { cause: error });
     }
   }
 

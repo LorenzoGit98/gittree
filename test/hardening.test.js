@@ -422,6 +422,96 @@ test('a file can be restored from a previous commit', async () => {
   }
 });
 
+test('reflog exposes recent HEAD movements', async () => {
+  const fixture = createRepository();
+  try {
+    fixture.write('a.txt', 'one');
+    fixture.git('add', '-A');
+    fixture.git('commit', '-m', 'first');
+    const first = fixture.git('rev-parse', 'HEAD');
+    fixture.write('a.txt', 'two');
+    fixture.git('add', '-A');
+    fixture.git('commit', '-m', 'second');
+
+    const service = new GitService(fixture.repository);
+    const entries = await service.getReflog(50);
+    assert.ok(entries.length >= 2);
+    assert.ok(entries.some(entry => entry.hash === first));
+    assert.ok(entries.every(entry => /^[a-f0-9]{40}$/.test(entry.hash)));
+    assert.ok(entries.every(entry => typeof entry.message === 'string'));
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('worktrees can be created, listed and removed', async () => {
+  const fixture = createRepository();
+  try {
+    fixture.write('a.txt', 'base');
+    fixture.git('add', '-A');
+    fixture.git('commit', '-m', 'init');
+
+    const service = new GitService(fixture.repository);
+    const worktreeDir = path.join(fixture.root, 'linked-worktree');
+    const result = await service.createWorktree(worktreeDir, 'feature/wt');
+    assert.equal(result.success, true);
+    assert.ok(fs.existsSync(path.join(worktreeDir, '.git')));
+
+    const worktrees = await service.getWorktrees();
+    const match = worktrees.find(wt => path.normalize(wt.path) === path.normalize(worktreeDir));
+    assert.ok(match, `worktree listed (${worktrees.map(wt => wt.path).join(', ')})`);
+    assert.equal(match.branch, 'feature/wt');
+
+    await service.removeWorktree(worktreeDir);
+    assert.equal(fs.existsSync(worktreeDir), false);
+
+    await assert.rejects(service.createWorktree('relative/path', 'x'), /Invalid worktree directory/);
+    await assert.rejects(service.createWorktree(path.join(fixture.root, 'wt2'), '-bad'), /Invalid branch name/);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('submodules are listed, initialized and updated', async () => {
+  const fixture = createRepository();
+  try {
+    const { git } = require('./helpers/git-repository');
+    const sub = path.join(fixture.root, 'sub-repo');
+    fs.mkdirSync(sub);
+    git(sub, 'init', '-b', 'main');
+    git(sub, 'config', 'user.name', 'GitTree Tests');
+    git(sub, 'config', 'user.email', 'gittree@example.test');
+    git(sub, 'commit', '--allow-empty', '-m', 'sub init');
+    const subHash = git(sub, 'rev-parse', 'HEAD');
+    git(sub, 'update-server-info');
+
+    fixture.write('README.md', 'root');
+    fixture.git('add', '-A');
+    fixture.git('commit', '-m', 'init');
+    fixture.git('-c', 'protocol.file.allow=always', 'submodule', 'add', sub, 'vendor/lib');
+    fixture.git('commit', '-m', 'add submodule');
+
+    const service = new GitService(fixture.repository);
+    const snapshot = await service.getWorkingTree();
+    assert.ok(
+      snapshot.submodules.some(submodule => submodule.path === 'vendor/lib'),
+      'submodule listed in the working tree snapshot'
+    );
+
+    await service.initSubmodules();
+    assert.ok(fs.existsSync(path.join(fixture.repository, 'vendor', 'lib', '.git')));
+    const entries = await service.getSubmodules();
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].path, 'vendor/lib');
+    assert.equal(entries[0].hash, subHash);
+
+    await service.updateSubmodules();
+    assert.ok((await service.getSubmodules())[0].status === ' ');
+  } finally {
+    fixture.cleanup();
+  }
+});
+
 test('stash apply, drop and pop operate on the given stash index', async () => {
   const fixture = createRepository();
   try {

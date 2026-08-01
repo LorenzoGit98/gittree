@@ -27,6 +27,7 @@
   <link rel="stylesheet" href="styles/repository-discovery.css">
   <link rel="stylesheet" href="styles/settings.css">
   <link rel="stylesheet" href="styles/gitflow.css">
+  <link rel="stylesheet" href="styles/reflog.css">
 </head>
 <body>
 <div id="app">
@@ -363,6 +364,12 @@
             </div>
           </div>
           <div id="changes-view" class="changes-view is-hidden">
+            <div id="submodule-bar" class="submodule-bar is-hidden">
+              <i class="ph ph-git-submodule" aria-hidden="true"></i>
+              <span data-i18n="changes.submodulesDetected">Submodules detected</span>
+              <button id="btn-submodules-init" class="btn btn-small" type="button" data-i18n="changes.submodulesInit">Initialize submodules</button>
+              <button id="btn-submodules-update" class="btn btn-small" type="button" data-i18n="changes.submodulesUpdate">Update submodules</button>
+            </div>
             <div class="changes-lists">
               <section class="changes-section">
                 <div class="changes-section-header">
@@ -560,6 +567,7 @@
 <script src="components/status-bar.js"></script>
 <script src="components/welcome.js"></script>
 <script src="components/gitflow.js"></script>
+<script src="components/reflog-view.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

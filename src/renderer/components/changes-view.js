@@ -21,6 +21,9 @@ class ChangesView {
       stageAll: document.getElementById('btn-stage-all'),
       unstageAll: document.getElementById('btn-unstage-all'),
       discardAll: document.getElementById('btn-discard-all'),
+      submoduleBar: document.getElementById('submodule-bar'),
+      submodulesInit: document.getElementById('btn-submodules-init'),
+      submodulesUpdate: document.getElementById('btn-submodules-update'),
       composer: document.getElementById('commit-composer'),
       summary: document.getElementById('commit-summary'),
       body: document.getElementById('commit-body'),
@@ -43,6 +46,8 @@ class ChangesView {
     this.elements.stageAll.onclick = () => this.mutatePaths(false, this.unstagedFiles());
     this.elements.unstageAll.onclick = () => this.mutatePaths(true, this.stagedFiles());
     this.elements.discardAll.onclick = () => this.discardPaths(this.unstagedFiles());
+    this.elements.submodulesInit.onclick = () => this.runSubmoduleAction('init');
+    this.elements.submodulesUpdate.onclick = () => this.runSubmoduleAction('update');
     this.elements.composer.onsubmit = event => {
       event.preventDefault();
       this.commit();
@@ -135,6 +140,8 @@ class ChangesView {
   render() {
     const unstaged = this.unstagedFiles();
     const staged = this.stagedFiles();
+    const hasSubmodules = Boolean(this.snapshot?.submodules?.length);
+    this.elements.submoduleBar.classList.toggle('is-hidden', !hasSubmodules);
     this.elements.unstagedCount.textContent = String(unstaged.length);
     this.elements.stagedCount.textContent = String(staged.length);
     this.elements.stageAll.disabled = unstaged.length === 0;
@@ -207,6 +214,12 @@ class ChangesView {
     pathLabel.className = 'changes-file-path';
     pathLabel.textContent = file.path;
     main.appendChild(pathLabel);
+    if (file.submodule) {
+      const badge = document.createElement('span');
+      badge.className = 'badge badge-remote changes-submodule-badge';
+      badge.textContent = t('changes.submodule');
+      main.appendChild(badge);
+    }
     main.onclick = () => this.selectFile(file, staged);
 
     const action = document.createElement('button');
@@ -239,6 +252,24 @@ class ChangesView {
     }
     row.append(status, main, action);
     return row;
+  }
+
+  async runSubmoduleAction(action) {
+    if (!this.repoPath) return;
+    const api = action === 'init'
+      ? window.gitTree.initSubmodules
+      : window.gitTree.updateSubmodules;
+    const result = await api(this.repoPath);
+    if (result?.error) {
+      this.app.showToast(result.error, 'error');
+      return;
+    }
+    this.app.showToast(
+      t(action === 'init' ? 'changes.submodulesInitialized' : 'changes.submodulesUpdated'),
+      'success'
+    );
+    await this.refresh(true);
+    this.app.components.branchList?.load(this.repoPath);
   }
 
   async discardPaths(files) {
