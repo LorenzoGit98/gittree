@@ -896,6 +896,9 @@ class GitTreeApp {
     window.gitTree.onInspectorClosed(() => {
       this.popoutOpen = false;
     });
+    window.gitTree.onDeepLinkOpen(repo => {
+      this.components.repoTabs?.addRepo(repo.path);
+    });
     document.getElementById('btn-popout-inspector').onclick = async () => {
       const result = await window.gitTree.openInspectorWindow(this.buildInspectorPayload());
       this.popoutOpen = Boolean(result?.success);

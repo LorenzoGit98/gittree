@@ -23,6 +23,7 @@ const { loadOAuthConfig } = require('./oauth-config');
 const { buildPullRequestUrl } = require('./provider-links');
 const { getGitVersion } = require('./git-version');
 const { Logger } = require('./logger');
+const { parseDeepLink } = require('./deep-link');
 
 let mainWindow;
 let repoManager;
@@ -166,6 +167,23 @@ function sendToRenderer(channel, data) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(channel, data);
   }
+}
+
+function handleDeepLink(url) {
+  const repoPath = parseDeepLink(url);
+  if (!repoPath) return;
+  isWorkingTreeRepository(repoPath).then(isRepo => {
+    if (!isRepo) return;
+    const repo = repoManager.addRepo(repoPath);
+    if (repo) {
+      logger?.info('Repository opened via deep link', { path: repoPath });
+      sendToRenderer('deep-link:open-repo', repo);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.focus();
+      }
+    }
+  });
 }
 
 const ALLOWED_EXTERNAL_HOSTS = new Set([
@@ -1420,12 +1438,20 @@ app.whenReady().then(() => {
     callback(false);
   });
   session.defaultSession.setPermissionCheckHandler(() => false);
-  app.on('second-instance', () => {
+  app.on('second-instance', (_event, argv) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
     }
+    const link = (argv || []).find(arg => arg.startsWith('gittree://'));
+    if (link) handleDeepLink(link);
   });
+  app.on('open-url', (event, url) => {
+    event.preventDefault();
+    handleDeepLink(url);
+  });
+  const startupLink = process.argv.find(arg => arg.startsWith('gittree://'));
+  if (startupLink) handleDeepLink(startupLink);
   repoManager = new RepoManager();
   logger = new Logger(path.join(app.getPath('userData'), 'logs'));
   const logLevelArg = process.argv.find(arg => arg.startsWith('--log-level='));

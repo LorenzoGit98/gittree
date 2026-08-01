@@ -1,0 +1,88 @@
+name: Sign Windows installer
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to sign (e.g. v0.6.0)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  sign:
+    name: Sign NSIS installer with SignPath
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: ${{ secrets.SIGNPATH_API_TOKEN != '' }}
+
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+      SIGNPATH_ORG_ID: ${{ secrets.SIGNPATH_ORG_ID }}
+      SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG || 'gittree-minimal' }}
+      SIGNPATH_SIGNING_POLICY_ID: ${{ secrets.SIGNPATH_SIGNING_POLICY_ID }}
+
+    steps:
+      - name: Download Windows installer
+        run: |
+          set -euo pipefail
+          tag="${{ github.event.inputs.tag }}"
+          asset=$(gh release view "$tag" --json assets --jq '.assets[] | select(.name | endswith("-win-x64.exe")) | .name' | head -n 1)
+          if [[ -z "$asset" ]]; then
+            echo "No Windows installer found in release $tag" >&2
+            exit 1
+          fi
+          gh release download "$tag" --pattern "$asset" --dir .
+          echo "installer=$asset" >> "$GITHUB_ENV"
+
+      - name: Submit for signing
+        run: |
+          set -euo pipefail
+          response=$(curl -sS -X POST \
+            "https://app.signpath.io/api/v1/$SIGNPATH_ORG_ID/SigningRequests" \
+            -H "Authorization: Bearer $SIGNPATH_API_TOKEN" \
+            -F "SigningPolicySlug=release-signing" \
+            -F "ProjectSlug=$SIGNPATH_PROJECT_SLUG" \
+            -F "Artifact=@$installer" \
+            -F "Description=GitTree ${{ github.event.inputs.tag }}")
+          request_id=$(echo "$response" | jq -r '.SigningRequestId // empty')
+          if [[ -z "$request_id" ]]; then
+            echo "SignPath submission failed: $response" >&2
+            exit 1
+          fi
+          echo "request_id=$request_id" >> "$GITHUB_ENV"
+          echo "SignPath request: https://signpath.io/$SIGNPATH_ORG_ID/SigningRequests/$request_id"
+
+      - name: Poll until signed
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            status=$(curl -sS "https://app.signpath.io/api/v1/$SIGNPATH_ORG_ID/SigningRequests/$request_id" \
+              -H "Authorization: Bearer $SIGNPATH_API_TOKEN" | jq -r '.Status')
+            if [[ "$status" == "Completed" ]]; then
+              echo "Signed."
+              exit 0
+            fi
+            if [[ "$status" == "Denied" || "$status" == "Failed" ]]; then
+              echo "SignPath status: $status" >&2
+              exit 1
+            fi
+            sleep 15
+          done
+          echo "Signing did not complete in time" >&2
+          exit 1
+
+      - name: Download signed artifact and replace release asset
+        run: |
+          set -euo pipefail
+          tag="${{ github.event.inputs.tag }}"
+          signed_name="${installer%.exe}-signed.exe"
+          curl -sS -L -o "$signed_name" \
+            "https://app.signpath.io/api/v1/$SIGNPATH_ORG_ID/SigningRequests/$request_id/SignedArtifact" \
+            -H "Authorization: Bearer $SIGNPATH_API_TOKEN"
+          gh release delete-asset "$tag" "$installer" --yes
+          gh release upload "$tag" "$signed_name" --clobber
+          echo "Signed installer uploaded as $signed_name"

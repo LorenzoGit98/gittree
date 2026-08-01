@@ -397,6 +397,12 @@ contextBridge.exposeInMainWorld('gitTree', {
     return () => ipcRenderer.removeListener('inspector:closed', listener);
   },
 
+  onDeepLinkOpen: (callback) => {
+    const listener = (_event, repo) => callback(repo);
+    ipcRenderer.on('deep-link:open-repo', listener);
+    return () => ipcRenderer.removeListener('deep-link:open-repo', listener);
+  },
+
   onInspectorRender: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('inspector:render', listener);

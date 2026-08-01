@@ -127,6 +127,20 @@ Configurare i seguenti GitHub Actions secrets:
 
 Windows e Linux possono utilizzare gli aggiornamenti GitHub senza un servizio a pagamento. Una build Windows non firmata può mostrare SmartScreen; GitTree può candidarsi alla firma gratuita di [SignPath Foundation](https://signpath.org/) dopo la prima release pubblica documentata.
 
+### Firma Windows con SignPath Foundation (gratuita per open source)
+
+1. Registrare il progetto su [SignPath](https://signpath.org/) e configurare una signing policy.
+2. Configurare i GitHub Actions secrets:
+   - `SIGNPATH_API_TOKEN`;
+   - `SIGNPATH_ORG_ID`;
+   - `SIGNPATH_SIGNING_POLICY_ID`.
+   E la repository variable `SIGNPATH_PROJECT_SLUG` (default `gittree-minimal`).
+3. Dopo la pubblicazione di una release, eseguire manualmente il workflow
+   `Sign Windows installer` indicando il tag: scarica l'installer NSIS dalla
+   release, lo invia a SignPath, attende la firma e sostituisce l'asset nella
+   release (come `-signed.exe`).
+4. Verificare la firma con `Get-AuthenticodeSignature` prima di distribuire.
+
 Su macOS `electron-updater` richiede un’app firmata. Quando i secret macOS non sono configurati, la pipeline carica soltanto i DMG per l’installazione manuale e omette deliberatamente ZIP e `latest-mac.yml`: non viene quindi pubblicato un feed OTA destinato a fallire. L’OTA macOS si abilita automaticamente quando sono presenti tutti i secret di firma e notarizzazione.
 
 La quota Apple Developer resta l’unico costo non eliminabile se si vuole distribuire un OTA macOS ufficiale.

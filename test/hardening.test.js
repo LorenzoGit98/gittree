@@ -8,6 +8,7 @@ const RepoManager = require('../src/main/repo-manager');
 const CredentialVault = require('../src/main/credential-vault');
 const { Logger, sanitizeMessage } = require('../src/main/logger');
 const { parseGitVersion, isVersionAtLeast } = require('../src/main/git-version');
+const { parseDeepLink } = require('../src/main/deep-link');
 const { createRepository } = require('./helpers/git-repository');
 
 test('diff and commit detail work for the repository root commit', async () => {
@@ -543,6 +544,17 @@ test('logger writes redacted lines and rotates large files', async () => {
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('deep links parse only absolute repository paths', () => {
+  assert.equal(parseDeepLink('gittree://open?path=' + encodeURIComponent('C:\\work\\repo')), 'C:\\work\\repo');
+  assert.equal(parseDeepLink('gittree://open?path=' + encodeURIComponent('/home/user/repo')), '/home/user/repo');
+  assert.equal(parseDeepLink('gittree://open?path=relative/path'), null);
+  assert.equal(parseDeepLink('https://github.com/lorenzogit98/gittree-minimal'), null);
+  assert.equal(parseDeepLink('gittree://open?path=' + encodeURIComponent('a' + String.fromCharCode(0) + 'b')), null);
+  assert.equal(parseDeepLink('gittree://other?path=/tmp/x'), null);
+  assert.equal(parseDeepLink(null), null);
+  assert.equal(parseDeepLink('not a url'), null);
 });
 
 test('stash apply, drop and pop operate on the given stash index', async () => {

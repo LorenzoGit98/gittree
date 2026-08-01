@@ -21,6 +21,11 @@ extraResources:
   - from: build/oauth-config.json
     to: oauth-config.json
 
+protocols:
+  - name: GitTree
+    schemes:
+      - gittree
+
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 
 publish:
