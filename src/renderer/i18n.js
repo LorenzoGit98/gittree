@@ -40,6 +40,12 @@ const I18n = {
               urlLabel: 'Repository URL (HTTPS, SSH or local path)',
               next: 'Choose destination'
             },
+            onboarding: {
+              title: 'Get started',
+              open: 'Open a repository',
+              branch: 'Check out a branch',
+              commit: 'Create your first commit'
+            },
             discovery: {
               eyebrow: 'Add repositories',
               title: 'Choose how to open your workspace',
@@ -397,6 +403,7 @@ const I18n = {
               changesIn: 'Changes in {{hash}}',
               unified: 'Unified',
               split: 'Split',
+              wordDiff: 'Word-level changes',
               diffLayout: 'Diff layout',
               maximize: 'Maximize inspector',
               restore: 'Restore inspector',
@@ -723,6 +730,12 @@ const I18n = {
               title: 'Clona un repository',
               urlLabel: 'URL del repository (HTTPS, SSH o percorso locale)',
               next: 'Scegli destinazione'
+            },
+            onboarding: {
+              title: 'Per iniziare',
+              open: 'Apri un repository',
+              branch: 'Passa a un branch',
+              commit: 'Crea il tuo primo commit'
             },
             discovery: {
               eyebrow: 'Aggiungi repository',
@@ -1081,6 +1094,7 @@ const I18n = {
               changesIn: 'Modifiche in {{hash}}',
               unified: 'Unificato',
               split: 'Affiancato',
+              wordDiff: 'Modifiche a livello di parola',
               diffLayout: 'Layout del diff',
               maximize: 'Massimizza inspector',
               restore: 'Ripristina inspector',

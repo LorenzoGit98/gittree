@@ -4,6 +4,9 @@ class WelcomeScreen {
   constructor() {
     this.screen = document.getElementById('welcome-screen');
     this.recentList = document.getElementById('recent-repos');
+    this.onboardingContainer = document.getElementById('welcome-onboarding');
+    this.steps = ['open', 'branch', 'commit'];
+    this.storageKey = 'gittree.onboarding';
   }
 
   async init(app) {
@@ -11,6 +14,42 @@ class WelcomeScreen {
     document.getElementById('btn-open-repo').onclick = () => this.openRepositoryPicker();
     document.getElementById('btn-clone-repo').onclick = () => this.cloneRepo();
     await this.loadRecent();
+    this.renderOnboarding();
+  }
+
+  readProgress() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(this.storageKey));
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  markStep(step) {
+    if (!this.steps.includes(step)) return;
+    const progress = this.readProgress();
+    progress[step] = true;
+    localStorage.setItem(this.storageKey, JSON.stringify(progress));
+    this.renderOnboarding();
+  }
+
+  renderOnboarding() {
+    if (!this.onboardingContainer) return;
+    const progress = this.readProgress();
+    const complete = this.steps.every(step => progress[step]);
+    this.onboardingContainer.classList.toggle('is-hidden', complete);
+    if (complete) return;
+    this.onboardingContainer.innerHTML = `
+      <div class="onboarding-card">
+        <div class="onboarding-title">${this.esc(t('onboarding.title'))}</div>
+        ${this.steps.map(step => `
+          <div class="onboarding-step${progress[step] ? ' is-done' : ''}">
+            <i class="ph ${progress[step] ? 'ph-check-circle' : 'ph-circle'}" aria-hidden="true"></i>
+            <span>${this.esc(t(`onboarding.${step}`))}</span>
+          </div>
+        `).join('')}
+      </div>`;
   }
 
   async openRepo() {

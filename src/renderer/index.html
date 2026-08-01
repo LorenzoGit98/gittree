@@ -51,6 +51,7 @@
           </button>
         </div>
         <div class="welcome-recent" id="recent-repos"></div>
+        <div class="welcome-onboarding is-hidden" id="welcome-onboarding"></div>
       </div>
       <div class="welcome-settings">
         <button class="btn-icon theme-toggle" type="button" title="Toggle theme" data-i18n-title="common.toggleTheme">
@@ -489,6 +490,9 @@
               <button id="btn-diff-unified" class="btn btn-small active" data-i18n="details.unified">Unified</button>
               <button id="btn-diff-split" class="btn btn-small" data-i18n="details.split">Split</button>
             </div>
+            <button id="btn-diff-word" class="btn btn-small active" type="button" title="Word-level changes" data-i18n-title="details.wordDiff" aria-pressed="true">
+              <i class="ph ph-text-t" aria-hidden="true"></i>
+            </button>
             <button id="btn-popout-inspector" class="btn-icon" type="button" title="Open in new window" data-i18n-title="details.popout">
               <i class="ph ph-arrow-square-out"></i>
             </button>

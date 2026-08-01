@@ -90,6 +90,15 @@
   flex: 1;
 }
 
+.diff-word {
+  border-radius: 2px;
+  background: var(--diff-add-bg);
+}
+
+.diff-line.del .diff-word {
+  background: var(--diff-del-bg);
+}
+
 .diff-line.header {
   padding-top: var(--space-1);
   color: var(--text-tertiary);

@@ -13,8 +13,16 @@ class DiffViewer {
     const savedPad = localStorage.getItem('gittree.diff.gutterPad');
     if (savedPad) document.documentElement.style.setProperty('--diff-gutter-pad', savedPad + 'px');
 
+    this.wordLevel = localStorage.getItem('gittree.diff.wordLevel') !== '0';
+
     document.getElementById('btn-diff-unified').onclick = () => this.setMode('unified');
     document.getElementById('btn-diff-split').onclick = () => this.setMode('split');
+    document.getElementById('btn-diff-word').onclick = () => {
+      this.wordLevel = !this.wordLevel;
+      localStorage.setItem('gittree.diff.wordLevel', this.wordLevel ? '1' : '0');
+      this.syncModeButtons();
+      if (this.currentDiff) this.render(this.currentDiff);
+    };
     this.syncModeButtons();
   }
 
@@ -38,6 +46,36 @@ class DiffViewer {
       'active',
       this.mode === 'split'
     );
+    document.getElementById('btn-diff-word')?.classList.toggle('active', this.wordLevel);
+  }
+
+  appendHighlightedLine(contentEl, text, counterpart) {
+    if (!this.wordLevel || !text || !counterpart || text === counterpart) {
+      contentEl.textContent = text;
+      return;
+    }
+    let prefix = 0;
+    const max = Math.min(text.length, counterpart.length);
+    while (prefix < max && text[prefix] === counterpart[prefix]) prefix += 1;
+    let suffix = 0;
+    while (
+      suffix < text.length - prefix &&
+      suffix < counterpart.length - prefix &&
+      text[text.length - 1 - suffix] === counterpart[counterpart.length - 1 - suffix]
+    ) {
+      suffix += 1;
+    }
+    const midStart = prefix;
+    const midEnd = text.length - suffix;
+    if (midStart >= midEnd) {
+      contentEl.textContent = text;
+      return;
+    }
+    contentEl.append(document.createTextNode(text.slice(0, midStart)));
+    const mark = document.createElement('span');
+    mark.className = 'diff-word';
+    mark.textContent = text.slice(midStart, midEnd);
+    contentEl.append(mark, document.createTextNode(text.slice(midEnd)));
   }
 
   setInspectorExpanded(expanded) {
@@ -87,6 +125,7 @@ class DiffViewer {
     const lines = DiffParser.parseUnified(diffText);
     const frag = document.createDocumentFragment();
     this.body.style.setProperty('--diff-gutter-digits', DiffParser.maxDigits(lines));
+    let lastRemoval = null;
 
     lines.forEach(line => {
       if (line.kind === 'file') {
@@ -104,7 +143,13 @@ class DiffViewer {
 
       const content = document.createElement('span');
       content.className = 'diff-line-content';
-      content.textContent = line.content;
+      if (line.kind === 'add') {
+        this.appendHighlightedLine(content, line.content, lastRemoval);
+        lastRemoval = null;
+      } else {
+        content.textContent = line.content;
+        lastRemoval = line.kind === 'del' ? line.content : null;
+      }
       el.appendChild(content);
 
       frag.appendChild(el);
@@ -152,8 +197,8 @@ class DiffViewer {
         return;
       }
       const target = ensureColumns();
-      target.appendChild(this.splitLine(row.left, 'old'));
-      target.appendChild(this.splitLine(row.right, 'new'));
+      target.appendChild(this.splitLine(row.left, 'old', row.right?.content));
+      target.appendChild(this.splitLine(row.right, 'new', row.left?.content));
     });
 
     this.body.innerHTML = '';
@@ -164,13 +209,17 @@ class DiffViewer {
     return DiffParser.parseSplit(diffText);
   }
 
-  splitLine(line, side) {
+  splitLine(line, side, counterpart) {
     const el = document.createElement('div');
     el.className = `diff-line ${line.kind}`;
     el.appendChild(this.lineNumber(side === 'old' ? line.oldLine : line.newLine, side));
     const content = document.createElement('span');
     content.className = 'diff-line-content';
-    content.textContent = line.content;
+    if ((line.kind === 'add' || line.kind === 'del') && counterpart) {
+      this.appendHighlightedLine(content, line.content, counterpart);
+    } else {
+      content.textContent = line.content;
+    }
     el.appendChild(content);
     return el;
   }

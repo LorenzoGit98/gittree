@@ -613,6 +613,7 @@ class ChangesView {
     this.elements.amend.checked = false;
     this.persistComposer();
     this.app.showToast(t('changes.commitCreated'), 'success');
+    this.app.components.welcome?.markStep?.('commit');
     await this.app.refresh({ selectHash: result.hash, silent: true });
   }
 

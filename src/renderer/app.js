@@ -335,6 +335,7 @@ class GitTreeApp {
       document.getElementById('status-repo').textContent = repo.name;
       this.components.statusBar.setRepo(repo.name);
       this.components.statusBar.setBranch(branchName || '');
+    this.components.welcome?.markStep?.('open');
       const operationState = await window.gitTree.getOperationState(repo.path);
       if (loadToken === this.repoLoadToken && operationState?.type) {
         await this.components.conflict.open(operationState);
@@ -575,6 +576,7 @@ class GitTreeApp {
       currentBranchMetadata?.behind || 0
     );
     this.components.statusBar.setBranch(branchName);
+    this.components.welcome?.markStep?.('branch');
     this.pushInspectorPayload?.();
   }
 
