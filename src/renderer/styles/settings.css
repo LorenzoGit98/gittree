@@ -449,6 +449,11 @@
   font-family: var(--font-mono);
 }
 
+.settings-git-version-warning {
+  color: var(--warning-text);
+  font-size: var(--text-xs);
+}
+
 .settings-about-body {
   display: flex;
   flex-direction: column;

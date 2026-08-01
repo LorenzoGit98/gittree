@@ -382,6 +382,9 @@ contextBridge.exposeInMainWorld('gitTree', {
   getAppVersion: () =>
     ipcRenderer.invoke('app:version'),
 
+  getGitVersion: () =>
+    ipcRenderer.invoke('app:git-version'),
+
   openInspectorWindow: (payload) =>
     ipcRenderer.invoke('window:open-inspector', payload),
 

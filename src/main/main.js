@@ -21,12 +21,15 @@ const CredentialVault = require('./credential-vault');
 const HostingService = require('./hosting-service');
 const { loadOAuthConfig } = require('./oauth-config');
 const { buildPullRequestUrl } = require('./provider-links');
+const { getGitVersion } = require('./git-version');
+const { Logger } = require('./logger');
 
 let mainWindow;
 let repoManager;
 let updateService;
 let hostingService;
 let credentialVault;
+let logger;
 
 const gitServices = new Map();
 const repositoryScans = new Map();
@@ -124,6 +127,9 @@ function createWindow() {
   }
   mainWindow = new BrowserWindow(windowOptions);
   lockDownWindow(mainWindow);
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    logger?.error('Renderer process gone', details);
+  });
 
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   if (updateService) updateService.setWindow(mainWindow);
@@ -269,6 +275,14 @@ function registerIpcHandlers() {
 
   ipcMain.handle('app:version', () => {
     return app.getVersion();
+  });
+
+  ipcMain.handle('app:git-version', async () => {
+    try {
+      return await getGitVersion();
+    } catch (err) {
+      return { error: err.message };
+    }
   });
 
   ipcMain.handle('update:get-state', () => {
@@ -1290,7 +1304,9 @@ function registerIpcHandlers() {
     if (!await isWorkingTreeRepository(repoPath)) {
       return { error: 'Not a valid Git repository' };
     }
-    return repoManager.addRepo(repoPath);
+    const repo = repoManager.addRepo(repoPath);
+    logger?.info('Repository added', { path: repoPath });
+    return repo;
   });
 
   ipcMain.handle('repo:scan-start', (_event, rootPath) => {
@@ -1364,7 +1380,8 @@ function registerIpcHandlers() {
 
   ipcMain.handle('repo:remove', (_event, repoPath) => {
     const result = repoManager.removeRepo(repoPath);
-    if (result) gitServices.delete(repoPath);
+    if (result) gitServices.delete(normalizeRepoPath(repoPath));
+    logger?.info('Repository removed', { path: repoPath });
     return repoManager.getActiveRepo();
   });
 
@@ -1380,10 +1397,12 @@ function registerIpcHandlers() {
 process.on('unhandledRejection', error => {
   const message = error instanceof Error ? (error.stack || error.message) : String(error);
   console.error('[GitTree] Unhandled rejection:', message);
+  logger?.error('Unhandled rejection', { message });
 });
 
 process.on('uncaughtException', error => {
   console.error('[GitTree] Uncaught exception:', error);
+  logger?.error('Uncaught exception', { message: error instanceof Error ? error.message : String(error) });
 });
 
 app.whenReady().then(() => {
@@ -1408,6 +1427,14 @@ app.whenReady().then(() => {
     }
   });
   repoManager = new RepoManager();
+  logger = new Logger(path.join(app.getPath('userData'), 'logs'));
+  const logLevelArg = process.argv.find(arg => arg.startsWith('--log-level='));
+  if (logLevelArg) {
+    const map = { debug: 0, info: 1, warn: 2, error: 3 };
+    const requested = map[logLevelArg.slice('--log-level='.length)];
+    if (requested !== undefined) logger.setLevel(requested);
+  }
+  logger.info('GitTree started', { version: app.getVersion(), platform: process.platform });
   credentialVault = new CredentialVault({
     storagePath: path.join(app.getPath('userData'), 'hosting-vault.bin'),
     safeStorage,

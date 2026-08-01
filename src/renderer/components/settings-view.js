@@ -208,6 +208,7 @@ class SettingsView {
             <div>
               <h3>About</h3>
               <p class="settings-about-version">GitTree <span id="about-version">—</span> — Beta</p>
+              <p id="about-git-version" class="settings-git-version-warning is-hidden"></p>
             </div>
           </div>
           <div class="settings-about-body">
@@ -247,6 +248,17 @@ class SettingsView {
     if (el && window.gitTree.getAppVersion) {
       const v = await window.gitTree.getAppVersion();
       el.textContent = v;
+    }
+    const gitStatus = document.getElementById('about-git-version');
+    if (gitStatus && window.gitTree.getGitVersion) {
+      const info = await window.gitTree.getGitVersion();
+      if (info && !info.supported) {
+        gitStatus.textContent = t('settings.gitVersionWarning', {
+          version: info.version || '—',
+          minimum: info.minimum
+        });
+        gitStatus.classList.remove('is-hidden');
+      }
     }
   }
 

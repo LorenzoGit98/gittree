@@ -6,6 +6,8 @@ const assert = require('node:assert/strict');
 const GitService = require('../src/main/git-service');
 const RepoManager = require('../src/main/repo-manager');
 const CredentialVault = require('../src/main/credential-vault');
+const { Logger, sanitizeMessage } = require('../src/main/logger');
+const { parseGitVersion, isVersionAtLeast } = require('../src/main/git-version');
 const { createRepository } = require('./helpers/git-repository');
 
 test('diff and commit detail work for the repository root commit', async () => {
@@ -509,6 +511,37 @@ test('submodules are listed, initialized and updated', async () => {
     assert.ok((await service.getSubmodules())[0].status === ' ');
   } finally {
     fixture.cleanup();
+  }
+});
+
+test('git version parsing and minimum version checks', () => {
+  assert.deepEqual(parseGitVersion('git version 2.49.0.windows.1'), [2, 49, 0]);
+  assert.deepEqual(parseGitVersion('git version 2.45.1'), [2, 45, 1]);
+  assert.deepEqual(parseGitVersion('git version 2.23'), [2, 23, 0]);
+  assert.equal(parseGitVersion('not git'), null);
+  assert.equal(isVersionAtLeast([2, 49, 0], [2, 45, 1]), true);
+  assert.equal(isVersionAtLeast([2, 45, 1], [2, 45, 1]), true);
+  assert.equal(isVersionAtLeast([2, 45, 0], [2, 45, 1]), false);
+  assert.equal(isVersionAtLeast([2, 44, 9], [2, 45, 1]), false);
+  assert.equal(isVersionAtLeast([3, 0, 0], [2, 45, 1]), true);
+  assert.equal(isVersionAtLeast(null, [2, 45, 1]), false);
+});
+
+test('logger writes redacted lines and rotates large files', async () => {
+  const root = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'gittree-log-'));
+  try {
+    const logger = new Logger(root);
+    logger.setLevel(0);
+    logger.info('user logged in with token ghp_1234567890abcdef');
+    logger.error('request failed', { authorization: 'Bearer glpat-secret-token-value' });
+    const content = fs.readFileSync(path.join(root, 'gittree.log'), 'utf8');
+    assert.ok(content.length > 0);
+    assert.doesNotMatch(content, /ghp_1234567890abcdef/);
+    assert.doesNotMatch(content, /glpat-secret-token-value/);
+    assert.match(content, /ghp\*\*\*/);
+    assert.ok(fs.statSync(path.join(root, 'gittree.log')).size > 0);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });
 

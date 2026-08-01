@@ -10,3 +10,5 @@ builder-effective-config.yaml
 .DS_Store
 Thumbs.db
 .qoder/
+
+coverage/
