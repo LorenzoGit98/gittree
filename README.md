@@ -35,15 +35,21 @@ No mandatory accounts. No telemetry. No proprietary sync.
 
 ## Features
 
-- **Multi-repo workspace** — tabs, recursive folder import, worktree-aware discovery, restored layout
+- **Multi-repo workspace** — tabs, recursive folder import, worktree-aware discovery, restored layout, `gittree://` deep links
 - **Branch navigator** — local/remote folders, instant search, ahead/behind, SourceTree-style context menu
-- **Multi-lane commit graph** — real parents, octopus merges, virtualized history, progressive paging
-- **Staging & commit** — hunks, amend, sign-off, GPG/SSH signing, identity setup, hooks always on
-- **Merge / rebase / cherry-pick** — previews, conflict editor (Incoming / Current / Result), Continue / Skip / Abort
-- **Pull request review** — GitHub & GitLab OAuth device flow, diffs, inline comments, encrypted drafts
+- **Multi-lane commit graph** — real parents, octopus merges, virtualized history, progressive paging, word-level diff highlighting
+- **Working tree** — stage/unstage per file and hunk, **discard changes**, commit, amend, sign-off, GPG/SSH signing, identity setup, hooks always on
+- **Merge / rebase / cherry-pick** — previews, conflict editor (Incoming / Current / Result), Continue / Skip / Abort, smart merge when pending changes do not overlap
+- **Branch lifecycle** — create, rename, delete, track, checkout, **checkout into a linked worktree**, recover any commit from the **reflog**
+- **Tags** — create annotated or lightweight, **delete, push to a remote**, multi-select from the commit menu
+- **Remotes** — add, rename, change URL, remove from Settings; provider-aware push menus
+- **Stashes** — create, **apply, pop, drop** straight from the sidebar
+- **Submodules** — detected in the working tree, initialize and update from the Changes view
+- **Pull request review** — GitHub & GitLab OAuth device flow, diffs, inline comments, encrypted drafts, Azure DevOps via PAT
 - **Hosting awareness** — GitHub, GitLab, Bitbucket Cloud, Azure DevOps compare/PR URLs
-- **Themes & i18n** — light, dark, black; English and Italian
+- **Themes & i18n** — light and dark, five tones each; English and Italian
 - **Keyboard-first** — fetch, pull, push, create branch shortcuts on every platform
+- **Safety** — per-repo git operation queue, snapshot-guarded mutations, input validation on every git boundary, encrypted credential vault, code signing workflow for Windows
 
 Full workflow: [User Guide](docs/USER_GUIDE.md).
 
@@ -87,6 +93,8 @@ Sensitive reports: [SECURITY.md](SECURITY.md).
 | --- | --- |
 | `npm start` | Launch the app |
 | `npm test` | Run tests |
+| `npm run lint` | ESLint (error-level, blocks CI) |
+| `npm run test:coverage` | Tests with a coverage report |
 | `npm run validate` | Tests + design audit |
 | `npm run audit:design` | Design-system rules |
 | `npm run perf:renderer` | Renderer benchmark |
@@ -94,12 +102,12 @@ Sensitive reports: [SECURITY.md](SECURITY.md).
 
 ```text
 src/
-├── main/        Git, hosting, vault, IPC, updates
+├── main/        Git, hosting, vault, IPC, updates, logging, deep links
 ├── preload.js   Explicit isolated bridge
 └── renderer/    Workspace, components, themes, i18n
 ```
 
-Release guide: [docs/RELEASING.md](docs/RELEASING.md) · OAuth: [docs/OAUTH.md](docs/OAUTH.md) · Updates: [docs/UPDATES.md](docs/UPDATES.md) · Design: [DESIGN.md](DESIGN.md)
+Release guide: [docs/RELEASING.md](docs/RELEASING.md) · OAuth: [docs/OAUTH.md](docs/OAUTH.md) · Updates: [docs/UPDATES.md](docs/UPDATES.md) · Design: [DESIGN.md](DESIGN.md) · Architecture decisions: [docs/adr/](docs/adr/)
 
 ## Brand
 
