@@ -1,10 +1,9 @@
-const simpleGit = require('simple-git');
 const fs = require('fs');
 const path = require('path');
 const { execFile, spawn } = require('child_process');
 const { promisify } = require('util');
 const crypto = require('crypto');
-const { AsyncLocalStorage } = require('node:async_hooks');
+const RepositorySession = require('./git/repository-session');
 const { parseRemoteUrl } = require('./provider-links');
 const {
   MAX_CONFLICT_RESULT_BYTES,
@@ -17,17 +16,13 @@ const execFileAsync = promisify(execFile);
 
 class GitService {
   constructor(repoPath) {
-    this.git = simpleGit(repoPath);
-    this.repoPath = repoPath;
-    this._queue = Promise.resolve();
-    this._queueContext = new AsyncLocalStorage();
+    this.session = new RepositorySession(repoPath);
+    this.git = this.session.git;
+    this.repoPath = this.session.path;
   }
 
   runExclusive(fn) {
-    const run = () => this._queueContext.run(this, fn);
-    const task = this._queue.then(run, run);
-    this._queue = task.then(() => {}, () => {});
-    return task;
+    return this.session.runExclusive(fn);
   }
 
   async getLog(maxCount = 100, branch = null) {
@@ -2067,7 +2062,7 @@ for (const methodName of Object.getOwnPropertyNames(GitService.prototype)) {
   const original = GitService.prototype[methodName];
   if (typeof original !== 'function' || original.constructor.name !== 'AsyncFunction') continue;
   GitService.prototype[methodName] = function (...args) {
-    if (this._queueContext.getStore() === this) return original.apply(this, args);
+    if (this.session.isCurrent()) return original.apply(this, args);
     return this.runExclusive(() => original.apply(this, args));
   };
 }
