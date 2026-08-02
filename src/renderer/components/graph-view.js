@@ -204,9 +204,26 @@ class GraphView {
     if (!force && start === this.renderedRange[0] && end === this.renderedRange[1]) return;
     this.renderedRange = [start, end];
 
+    const reusableRows = new Map();
+    if (!force) {
+      for (const element of this.layer.children) {
+        if (element.classList.contains('graph-row') && element.dataset.hash) {
+          reusableRows.set(element.dataset.hash, element);
+        }
+      }
+    }
     const fragment = document.createDocumentFragment();
     for (let index = start; index < end; index += 1) {
-      fragment.appendChild(this.createRow(this.visibleRows[index], index));
+      const layoutRow = this.visibleRows[index];
+      const hash = layoutRow.commit.hash;
+      const row = reusableRows.get(hash) || this.createRow(layoutRow, index);
+      if (reusableRows.has(hash)) {
+        const selected = this.selectedHashes.has(hash);
+        row.style.transform = `translateY(${index * this.rowHeight}px)`;
+        row.classList.toggle('selected', selected);
+        row.setAttribute('aria-selected', String(selected));
+      }
+      fragment.appendChild(row);
     }
     this.layer.replaceChildren(fragment);
   }

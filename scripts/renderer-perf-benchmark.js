@@ -127,18 +127,52 @@ async function measureRenderer(page) {
 
       const renderedRows = [...graphView.layer.querySelectorAll('.graph-row')];
       const maxScroll = Math.max(0, graph.scrollHeight - graph.clientHeight);
-      const viewportRender = measureMutations(200, index => {
+      const jumpViewportRender = measureMutations(200, index => {
         graph.scrollTop = maxScroll * (index / 199);
         graphView.renderViewport();
       }, () => graphView.layer.getBoundingClientRect().height);
 
-      const scrollFrames = [];
+      graph.scrollTop = 0;
+      graphView.renderViewport(true);
+      const rowsBeforeProgressiveScroll = new Map(
+        [...graphView.layer.querySelectorAll('.graph-row')].map(row => [
+          row.dataset.hash,
+          row
+        ])
+      );
+      graph.scrollTop = graphView.rowHeight * 3;
+      graphView.renderViewport();
+      const overlappingRows = [...graphView.layer.querySelectorAll('.graph-row')].filter(row =>
+        rowsBeforeProgressiveScroll.has(row.dataset.hash)
+      );
+      const progressiveScrollReusesRows = overlappingRows.length > 0 && overlappingRows.every(row =>
+        rowsBeforeProgressiveScroll.get(row.dataset.hash) === row
+      );
+      graph.scrollTop = 0;
+      graphView.renderViewport(true);
+      const smoothViewportRender = measureMutations(200, index => {
+        graph.scrollTop = index * graphView.rowHeight * 3;
+        graphView.renderViewport();
+      }, () => graphView.layer.getBoundingClientRect().height);
+
+      const jumpScrollFrames = [];
       for (let index = 0; index < 60; index += 1) {
         const startedAt = performance.now();
         graph.scrollTop = maxScroll * (index / 59);
         graphView.scheduleViewport();
         await nextFrame();
-        scrollFrames.push(performance.now() - startedAt);
+        jumpScrollFrames.push(performance.now() - startedAt);
+      }
+
+      graph.scrollTop = 0;
+      graphView.renderViewport(true);
+      const smoothScrollFrames = [];
+      for (let index = 0; index < 120; index += 1) {
+        const startedAt = performance.now();
+        graph.scrollTop = index * graphView.rowHeight * 3;
+        graphView.scheduleViewport();
+        await nextFrame();
+        smoothScrollFrames.push(performance.now() - startedAt);
       }
 
       graph.scrollTop = 0;
@@ -228,8 +262,10 @@ async function measureRenderer(page) {
         initialRenderMs,
         renderedRows: renderedRows.length,
         scrollRange: maxScroll,
-        viewportRender,
-        scrollFrame: summarize(scrollFrames),
+        jumpViewportRender,
+        smoothViewportRender,
+        jumpScrollFrame: summarize(jumpScrollFrames),
+        smoothScrollFrame: summarize(smoothScrollFrames),
         selection,
         resizePreview,
         historyResizePreview,
@@ -238,6 +274,7 @@ async function measureRenderer(page) {
           : null,
         contracts: {
           virtualizesHistory: renderedRows.length < 100,
+          progressiveScrollReusesRows,
           selectionPreservesRows: selectionPreservedRows && selectionMutations === 0,
           resizeAvoidsLiveLayout: widthDuringMove === widthBeforeMove,
           resizePreviewsWithTransform: previewTransform !== 'none',
@@ -340,7 +377,7 @@ async function main() {
   }
 
   const report = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     recordedAt: new Date().toISOString(),
     environment: {
       platform: process.platform,
@@ -354,10 +391,18 @@ async function main() {
       repositoryReadyMs: summarize(results.map(result => result.startup.repositoryReadyMs)),
       workingSetMb: summarize(results.map(result => result.runtime.totalWorkingSetMb)),
       initialRenderMs: summarize(results.map(result => result.renderer.initialRenderMs)),
-      viewportRenderP95Ms: summarize(
-        results.map(result => result.renderer.viewportRender.p95Ms)
+      jumpViewportRenderP95Ms: summarize(
+        results.map(result => result.renderer.jumpViewportRender.p95Ms)
       ),
-      scrollFrameP95Ms: summarize(results.map(result => result.renderer.scrollFrame.p95Ms)),
+      smoothViewportRenderP95Ms: summarize(
+        results.map(result => result.renderer.smoothViewportRender.p95Ms)
+      ),
+      jumpScrollFrameP95Ms: summarize(
+        results.map(result => result.renderer.jumpScrollFrame.p95Ms)
+      ),
+      smoothScrollFrameP95Ms: summarize(
+        results.map(result => result.renderer.smoothScrollFrame.p95Ms)
+      ),
       selectionP95Ms: summarize(results.map(result => result.renderer.selection.p95Ms))
     },
     runs: results

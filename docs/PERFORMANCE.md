@@ -12,7 +12,7 @@ The benchmark records:
 - Electron process working set and renderer JavaScript heap;
 - initial rendering of 10,000 synthetic commits;
 - virtualized DOM row count;
-- synchronous viewport rendering and real animation-frame scroll latency;
+- synchronous viewport rendering and real animation-frame latency for both progressive scrolling and distant history jumps;
 - in-place commit selection cost and DOM preservation;
 - workspace and history-column resize preview cost;
 - resize contracts: transform-only preview and one persisted commit on release.
