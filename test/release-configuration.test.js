@@ -12,6 +12,34 @@ test('release dependencies are assigned to the correct package scopes', () => {
   assert.match(packageJson.devDependencies.electron, /^\^43\./);
   assert.ok(packageJson.scripts['prepare:assets']);
   assert.ok(packageJson.scripts['release:check']);
+  assert.equal(
+    packageJson.scripts.quality,
+    'npm run lint && npm run test && npm run test:coverage && npm run audit:design && npm run test:contracts'
+  );
+});
+
+test('continuous integration validates the actual default branch', () => {
+  const workflow = fs.readFileSync(
+    path.join(root, '.github', 'workflows', 'ci.yml'),
+    'utf8'
+  );
+  assert.match(workflow, /branches:\s*\[master\]/);
+  assert.doesNotMatch(workflow, /branches:\s*\[main,\s*develop\]/);
+  assert.match(workflow, /npm run quality/);
+});
+
+test('continuous integration exercises Electron on required operating systems', () => {
+  const workflow = fs.readFileSync(
+    path.join(root, '.github', 'workflows', 'ci.yml'),
+    'utf8'
+  );
+  assert.match(workflow, /runs-on:\s*ubuntu-latest/);
+  assert.match(workflow, /xvfb-run\s+-a\s+npm run test:e2e/);
+  assert.match(workflow, /runs-on:\s*windows-latest/);
+  assert.match(workflow, /runs-on:\s*macos-latest/);
+  assert.match(workflow, /github\.event_name == 'schedule'/);
+  assert.match(workflow, /startsWith\(github\.ref, 'refs\/tags\/v'\)/);
+  assert.match(workflow, /if:\s*failure\(\)/);
 });
 
 test('electron-builder emits installable and update-compatible artifacts', () => {
@@ -45,6 +73,11 @@ test('semantic-release maps feat and breaking to minor, fixes to patch', () => {
     assert.equal(rule?.release, 'patch', `${type} must bump patch only`);
   }
   assert.match(releaserc.tagFormat, /^v\$\{version\}$/);
+  const gitPlugin = releaserc.plugins.find(plugin => (
+    Array.isArray(plugin) && plugin[0] === '@semantic-release/git'
+  ));
+  assert.ok(gitPlugin, 'semantic-release git plugin missing');
+  assert.ok(gitPlugin[1].assets.includes('CHANGELOG.md'));
 });
 
 test('the master application icon is release ready', () => {

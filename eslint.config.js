@@ -4,6 +4,7 @@ const appGlobals = {
   i18next: 'readonly',
   t: 'readonly',
   Theme: 'readonly',
+  HtmlEncoder: 'readonly',
   DiffParser: 'readonly',
   ConflictHighlight: 'readonly',
   WelcomeScreen: 'readonly',

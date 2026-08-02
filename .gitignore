@@ -12,3 +12,4 @@ Thumbs.db
 .qoder/
 
 coverage/
+test-results/

@@ -241,7 +241,6 @@ const contractExpression = `
     });
     const activeTab = document.querySelector('.repo-tab.active');
     tabSyncVisible =
-      activeTab?.querySelector('.repo-tab-sync-label')?.textContent.trim() === 'Sync' &&
       activeTab?.querySelector('.repo-tab-sync .is-ahead')?.textContent.trim() === '2' &&
       activeTab?.querySelector('.repo-tab-sync .is-behind')?.textContent.trim() === '4';
     repoTabs.updateSync(window.app.state.repo.path, {
@@ -251,8 +250,7 @@ const contractExpression = `
       upstream: 'origin/quality'
     });
     tabSyncVisible = tabSyncVisible &&
-      document.querySelector('.repo-tab.active .repo-tab-sync-label')?.textContent.trim() === 'Sync' &&
-      Boolean(document.querySelector('.repo-tab.active .repo-tab-sync .is-synced'));
+      !document.querySelector('.repo-tab.active .repo-tab-sync');
     repoTabs.syncByRepoPath = originalRepoSyncState || new Map();
     repoTabs.render();
   }
@@ -293,11 +291,6 @@ const contractExpression = `
     const panelBackground = getComputedStyle(document.getElementById('detail-panel')).backgroundColor;
     themeSmoke[theme] = panelBackground.startsWith('rgb(');
   });
-  Theme.apply('black', false);
-  const blackRootStyle = getComputedStyle(document.documentElement);
-  const blackThemeIsOpaque =
-    blackRootStyle.getPropertyValue('--surface-shell').trim() === '#000000' &&
-    blackRootStyle.getPropertyValue('--surface-primary').trim() === '#000000';
   Theme.apply(originalTheme, false);
   if (originalThemeStorage == null) localStorage.removeItem(Theme.storageKey);
   else localStorage.setItem(Theme.storageKey, originalThemeStorage);
@@ -592,7 +585,7 @@ const contractExpression = `
   const pullRequestModeVisible =
     !document.getElementById('pull-requests-view').classList.contains('is-hidden');
   const pullRequestControls =
-    document.querySelectorAll('[data-pr-provider]').length === 2 &&
+    document.querySelectorAll('[data-pr-provider]').length === 3 &&
     document.querySelectorAll('[data-pr-filter]').length === 4 &&
     Boolean(document.getElementById('pr-search')) &&
     Boolean(document.getElementById('btn-pr-auth'));
@@ -637,7 +630,7 @@ const contractExpression = `
     shortcutNavigation?.click();
     settingsShortcutsDedicated =
       Boolean(document.querySelector('[data-shortcuts-back]')) &&
-      document.querySelectorAll('.settings-shortcut-list kbd').length === 7;
+      document.querySelectorAll('.settings-shortcut-list kbd').length === 6;
     window.app.components.settings.close();
   }
 
@@ -791,7 +784,6 @@ const contractExpression = `
     },
     themes: {
       available: Theme.themes,
-      blackThemeIsOpaque,
       smoke: themeSmoke
     },
     localization: {
@@ -868,9 +860,8 @@ async function main() {
         !contracts.inspector.compactTitle ||
         !contracts.persistence.branchGroups ||
         !contracts.persistence.sidebarSections ||
-        !contracts.themes.blackThemeIsOpaque ||
         !Object.values(contracts.themes.smoke).every(Boolean) ||
-        contracts.themes.available.length !== 3 ||
+        contracts.themes.available.length !== 2 ||
         !contracts.localization.english ||
         !contracts.localization.italian ||
         !Object.values(contracts.platformChrome)

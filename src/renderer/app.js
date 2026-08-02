@@ -772,7 +772,6 @@ class GitTreeApp {
           : document.getElementById('detail-panel');
         const startWidth = panel.getBoundingClientRect().width;
         let latestX = startX;
-        let pendingWidth = startWidth;
         let animationFrame = 0;
 
         const calculateWidth = clientX => {
@@ -780,28 +779,26 @@ class GitTreeApp {
           return Math.min(max, Math.max(min, startWidth + (side === 'left' ? delta : -delta)));
         };
 
-        // ponytail: realtime CSS vars + rAF; pointer-events off during drag keeps layout cheap
-        const paintWidth = () => {
+        const paintPreview = () => {
           animationFrame = 0;
-          pendingWidth = calculateWidth(latestX);
-          workspace.style.setProperty(`--${side}-panel`, `${Math.round(pendingWidth)}px`);
+          handle.style.transform = `translate3d(${Math.round(latestX - startX)}px, 0, 0)`;
         };
 
         handle.classList.add('is-dragging');
         workspace.classList.add('is-resizing');
         document.body.style.cursor = 'col-resize';
-        handle.setPointerCapture?.(event.pointerId);
+        if (event.isTrusted) handle.setPointerCapture?.(event.pointerId);
 
         const onMove = moveEvent => {
           latestX = moveEvent.clientX;
-          if (!animationFrame) animationFrame = requestAnimationFrame(paintWidth);
+          if (!animationFrame) animationFrame = requestAnimationFrame(paintPreview);
         };
 
         const onUp = upEvent => {
           latestX = upEvent.clientX;
           if (animationFrame) cancelAnimationFrame(animationFrame);
-          pendingWidth = calculateWidth(latestX);
-          const width = Math.round(pendingWidth);
+          const width = Math.round(calculateWidth(latestX));
+          handle.style.removeProperty('transform');
           workspace.style.setProperty(`--${side}-panel`, `${width}px`);
           localStorage.setItem(`gittree.panel.${side}`, String(width));
           handle.classList.remove('is-dragging');
@@ -1091,9 +1088,7 @@ class GitTreeApp {
   }
 
   esc(value) {
-    const element = document.createElement('div');
-    element.textContent = value ?? '';
-    return element.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    return HtmlEncoder.encode(value);
   }
 
   on(event, cb) {

@@ -1,5 +1,4 @@
 /* exported SettingsView */
-/* eslint-disable-next-line no-unused-vars -- script-tag global consumed by app.js */
 class SettingsView {
   constructor(app) {
     this.app = app;
@@ -206,14 +205,14 @@ class SettingsView {
           <div class="settings-section-heading">
             <i class="ph ph-info" aria-hidden="true"></i>
             <div>
-              <h3>About</h3>
+              <h3>${this.esc(t('settings.aboutTitle'))}</h3>
               <p class="settings-about-version">GitTree <span id="about-version">—</span> — Beta</p>
               <p id="about-git-version" class="settings-git-version-warning is-hidden"></p>
             </div>
           </div>
           <div class="settings-about-body">
-            <p>A fast, visual Git desktop client. Open source under the ISC license.</p>
-            <p>Created by <strong>Lorenzo Giannoccaro</strong> &lt;lorenzo.giannoccaro998@gmail.com&gt;</p>
+            <p>${this.esc(t('settings.aboutDescription'))}</p>
+            <p>${this.esc(t('settings.aboutCreatedBy'))} <strong>Lorenzo Giannoccaro</strong> &lt;lorenzo.giannoccaro998@gmail.com&gt;</p>
             <p class="settings-about-repo">
               <a href="#" id="about-repo-link">github.com/LorenzoGit98/gittree-minimal</a>
             </p>
@@ -222,8 +221,16 @@ class SettingsView {
                 <i class="ph ph-arrows-clockwise" aria-hidden="true"></i>
                 <span data-i18n="settings.checkUpdate">Check for updates</span>
               </button>
-              <span id="check-update-status" class="settings-update-status"></span>
+              <span id="check-update-status" class="settings-update-status" aria-live="polite"></span>
             </div>
+            <div class="settings-update-row">
+              <button class="btn btn-small" id="btn-export-diagnostics" type="button">
+                <i class="ph ph-file-zip" aria-hidden="true"></i>
+                <span>${this.esc(t('settings.exportDiagnostics'))}</span>
+              </button>
+              <span id="export-diagnostics-status" class="settings-update-status" aria-live="polite"></span>
+            </div>
+            <p class="text-tertiary">${this.esc(t('settings.exportDiagnosticsHelp'))}</p>
           </div>
         </section>
       </div>
@@ -687,6 +694,31 @@ class SettingsView {
     </div>`;
   }
 
+  async exportDiagnostics(button, status) {
+    button.disabled = true;
+    status.textContent = t('settings.exportingDiagnostics');
+    try {
+      const result = await window.gitTree.exportDiagnostics();
+      if (result?.canceled) {
+        status.textContent = '';
+        return;
+      }
+      if (result?.error) {
+        status.textContent = result.error;
+        this.app.showToast(result.error, 'error');
+        return;
+      }
+      status.textContent = t('settings.diagnosticsExported');
+      this.app.showToast(t('settings.diagnosticsExported'), 'success');
+    } catch (error) {
+      const message = error?.message || t('settings.diagnosticsFailed');
+      status.textContent = message;
+      this.app.showToast(message, 'error');
+    } finally {
+      button.disabled = false;
+    }
+  }
+
   bindSettingsEvents(repo) {
     this.dialog.querySelector('[data-settings-close]').onclick = () => this.close();
     this.dialog.querySelector('[data-settings-shortcuts]').onclick = () => this.openShortcuts();
@@ -700,6 +732,15 @@ class SettingsView {
         event.preventDefault();
         window.gitTree.openExternal('https://github.com/lorenzogit98/gittree-minimal');
       };
+    }
+
+    const exportDiagnosticsButton = this.dialog.querySelector('#btn-export-diagnostics');
+    const exportDiagnosticsStatus = this.dialog.querySelector('#export-diagnostics-status');
+    if (exportDiagnosticsButton && exportDiagnosticsStatus) {
+      exportDiagnosticsButton.onclick = () => this.exportDiagnostics(
+        exportDiagnosticsButton,
+        exportDiagnosticsStatus
+      );
     }
 
     const vaultResetButton = this.dialog.querySelector('#settings-vault-reset');
@@ -996,8 +1037,8 @@ class SettingsView {
   }
 
   esc(value) {
-    const element = document.createElement('div');
-    element.textContent = value ?? '';
-    return element.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    return HtmlEncoder.encode(value);
   }
 }
+
+if (typeof module !== 'undefined') module.exports = SettingsView;

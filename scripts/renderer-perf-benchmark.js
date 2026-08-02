@@ -115,25 +115,34 @@ const expression = `
   }, () => mainPanel.getBoundingClientRect().width, 20);
 
   const storedLeft = localStorage.getItem('gittree.panel.left');
+  workspace.style.setProperty('--left-panel', '260px');
+  await new Promise(resolve => requestAnimationFrame(resolve));
   const contractStart = leftHandle.getBoundingClientRect();
+  const contractDelta = 48;
+  const contractPointerX = contractStart.left + (contractStart.width / 2);
+  const contractStartWidth = document.getElementById('sidebar').getBoundingClientRect().width;
+  const contractExpectedWidth = Math.min(380, Math.max(220, contractStartWidth + contractDelta));
   const widthBeforePointerMove = workspace.style.getPropertyValue('--left-panel');
   leftHandle.dispatchEvent(new PointerEvent('pointerdown', {
     bubbles: true,
-    clientX: contractStart.left + (contractStart.width / 2),
+    clientX: contractPointerX,
     clientY: contractStart.top + 10
   }));
   document.dispatchEvent(new PointerEvent('pointermove', {
     bubbles: true,
-    clientX: contractStart.left + 60,
+    clientX: contractPointerX + contractDelta,
     clientY: contractStart.top + 10
   }));
+  await new Promise(resolve => requestAnimationFrame(resolve));
   const widthDuringPointerMove = workspace.style.getPropertyValue('--left-panel');
+  const resizePreviewTransform = getComputedStyle(leftHandle).transform;
   document.dispatchEvent(new PointerEvent('pointerup', {
     bubbles: true,
-    clientX: contractStart.left + 60,
+    clientX: contractPointerX + contractDelta,
     clientY: contractStart.top + 10
   }));
   const widthAfterPointerUp = workspace.style.getPropertyValue('--left-panel');
+  const storedWidthAfterPointerUp = Number(localStorage.getItem('gittree.panel.left'));
 
   const historyHandle = document.querySelector(
     '.graph-column-resizer[data-column="message"]'
@@ -196,7 +205,10 @@ const expression = `
     resizeCommit,
     resizeContract: {
       avoidsLiveLayout: widthDuringPointerMove === widthBeforePointerMove,
-      commitsOnRelease: widthAfterPointerUp !== widthBeforePointerMove
+      previewsWithTransform: resizePreviewTransform !== 'none',
+      commitsOnRelease:
+        widthAfterPointerUp === Math.round(contractExpectedWidth) + 'px' &&
+        storedWidthAfterPointerUp === Math.round(contractExpectedWidth)
     },
     historyColumnResizePreview: historyResizePreview,
     historyColumnResizeContract: {

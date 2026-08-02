@@ -21,7 +21,7 @@ The interface must feel bright, stable, precise, and calm. Visual hierarchy come
 
 ### Color
 
-Light theme is the product default. Dark and Black are equal, fully opaque alternatives.
+Light theme is the product default. Dark is the fully opaque alternative. Each theme exposes five surface tones.
 
 | Role | Light | Dark |
 | --- | --- | --- |
@@ -35,7 +35,7 @@ Light theme is the product default. Dark and Black are equal, fully opaque alter
 | Subtle border | `#E3E8EF` | `#2A394B` |
 | Informational signal | `#176B7A` | `#00F5FF` |
 
-Semantic status colors are always paired with text or an icon. Never rely on color alone. Dark and Black may use a high-chroma solid cyan for informational signals, sync state, HEAD, and non-critical selection. This is a semantic color—not a neon effect—and must never be paired with glow, colored shadows, transparency, or illuminated borders. Amber remains reserved for real warnings, dirty state, and risky actions.
+Semantic status colors are always paired with text or an icon. Never rely on color alone. Dark may use a high-chroma solid cyan for informational signals, sync state, HEAD, and non-critical selection. This is a semantic color—not a neon effect—and must never be paired with glow, colored shadows, transparency, or illuminated borders. Amber remains reserved for real warnings, dirty state, and risky actions.
 
 ### Typography
 
