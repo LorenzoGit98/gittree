@@ -167,24 +167,20 @@ test('Electron opens a deep-linked repository and renders its deterministic hist
         bodyText: document.body.innerText.slice(0, 500)
       })).catch(diagError => ({ evaluateFailed: String(diagError) })));
     }
-    if (application && application.process()) {
-      const stderr = application.process().stderr;
-      const chunks = [];
-      stderr?.on('data', chunk => chunks.push(String(chunk)));
-      await new Promise(resolve => setTimeout(resolve, 200));
-      if (chunks.length) {
-        fs.writeFileSync(
-          path.join(artifactDirectory, 'stderr.log'),
-          chunks.join('')
-        );
-      }
-    }
-    console.error('E2E diagnostics:', JSON.stringify(diagnostics, null, 2));
     if (application) {
+      diagnostics.push(await application.evaluate(() => ({
+        argv: process.argv.slice(1),
+        cwd: process.cwd()
+      })).catch(mainError => ({ mainEvaluateFailed: String(mainError) })));
+      const logPath = path.join(fixture.userData, 'logs', 'gittree.log');
+      if (fs.existsSync(logPath)) {
+        diagnostics.push({ mainLog: fs.readFileSync(logPath, 'utf8').slice(-2000) });
+      }
       await application.context().tracing.stop({
         path: path.join(artifactDirectory, 'trace.zip')
       }).catch(() => {});
     }
+    console.error('E2E diagnostics:', JSON.stringify(diagnostics, null, 2));
     throw error;
   } finally {
     if (!failed && application) await application.context().tracing.stop();
