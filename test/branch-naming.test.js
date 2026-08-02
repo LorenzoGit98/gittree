@@ -1,23 +1,16 @@
-const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const vm = require('node:vm');
 
 function loadBranchNaming() {
-  const filename = path.join(
+  return require(path.join(
     __dirname,
     '..',
     'src',
     'renderer',
     'components',
     'branch-naming.js'
-  );
-  const source = fs.readFileSync(filename, 'utf8');
-  const context = {};
-  vm.createContext(context);
-  vm.runInContext(`${source}\nthis.BranchNamingUnderTest = BranchNaming;`, context);
-  return context.BranchNamingUnderTest;
+  ));
 }
 
 test('quick branch naming follows folders already used by local and remote branches', () => {

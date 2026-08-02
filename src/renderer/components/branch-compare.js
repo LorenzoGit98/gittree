@@ -78,7 +78,7 @@ class BranchCompare {
     });
   }
 
-  esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  esc(value) { return HtmlEncoder.encode(value); }
   fmtDate(d) {
     if (!d) return '';
     const dt = new Date(d);

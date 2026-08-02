@@ -331,8 +331,6 @@ class GitFlow {
   }
 
   esc(value) {
-    const element = document.createElement('div');
-    element.textContent = value ?? '';
-    return element.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    return HtmlEncoder.encode(value);
   }
 }

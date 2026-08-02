@@ -1,5 +1,4 @@
 /* exported MergeWorkspace */
-/* eslint-disable-next-line no-unused-vars -- script-tag global consumed by app.js */
 class MergeWorkspace {
   constructor(app) {
     this.app = app;
@@ -405,9 +404,11 @@ class MergeWorkspace {
     return files.slice(0, 4).join(', ') + (files.length > 4 ? '…' : '');
   }
 
-  esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  esc(value) { return HtmlEncoder.encode(value); }
   fmtDate(d) {
     if (!d) return '';
     return new Date(d).toLocaleDateString([], { month: 'short', day: 'numeric' });
   }
 }
+
+if (typeof module !== 'undefined') module.exports = MergeWorkspace;

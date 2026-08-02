@@ -1,5 +1,4 @@
 /* exported BranchNaming */
-/* eslint-disable-next-line no-unused-vars -- script-tag global consumed by app.js */
 const BranchNaming = {
   aliases: {
     feature: ['feature', 'features', 'feat'],
@@ -57,3 +56,5 @@ const BranchNaming = {
     return `${this.detectPrefix(type, metadata)}/${slug}`;
   }
 };
+
+if (typeof module !== 'undefined') module.exports = BranchNaming;

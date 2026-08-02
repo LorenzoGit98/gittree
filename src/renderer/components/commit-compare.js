@@ -165,9 +165,7 @@ class CommitCompare {
   }
 
   esc(value) {
-    const el = document.createElement('div');
-    el.textContent = value ?? '';
-    return el.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    return HtmlEncoder.encode(value);
   }
 }
 

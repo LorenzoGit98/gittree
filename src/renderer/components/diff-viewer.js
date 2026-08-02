@@ -1,5 +1,4 @@
 /* exported DiffViewer */
-/* eslint-disable-next-line no-unused-vars -- script-tag global consumed by app.js */
 class DiffViewer {
   constructor(bodyEl, app) {
     this.body = bodyEl;
@@ -236,7 +235,7 @@ class DiffViewer {
     return m ? m[2] : null;
   }
 
-  esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  esc(value) { return HtmlEncoder.encode(value); }
 
   clear() {
     this.currentDiff = null;
@@ -246,3 +245,5 @@ class DiffViewer {
     title.title = '';
   }
 }
+
+if (typeof module !== 'undefined') module.exports = DiffViewer;

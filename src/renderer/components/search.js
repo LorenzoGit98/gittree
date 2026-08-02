@@ -197,7 +197,7 @@ class GlobalSearch {
     return this.esc(text).replace(re, '<span class="highlight">$1</span>');
   }
 
-  esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  esc(value) { return HtmlEncoder.encode(value); }
 
   handleKey(e) {
     const items = this.results.querySelectorAll('.search-result-item');

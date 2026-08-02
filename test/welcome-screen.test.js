@@ -1,8 +1,6 @@
-const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const vm = require('node:vm');
 
 function loadWelcomeScreen(gitTree) {
   const filename = path.join(
@@ -13,30 +11,24 @@ function loadWelcomeScreen(gitTree) {
     'components',
     'welcome.js'
   );
-  const source = fs.readFileSync(filename, 'utf8');
   const elements = new Map();
-  const context = {
-    window: { gitTree },
-    document: {
-      getElementById(id) {
-        if (!elements.has(id)) {
-          elements.set(id, {
-            classList: { add() {}, remove() {} },
-            innerHTML: ''
-          });
-        }
-        return elements.get(id);
-      },
-      createElement() {
-        return { textContent: '', innerHTML: '' };
+  global.window = { gitTree };
+  global.document = {
+    getElementById(id) {
+      if (!elements.has(id)) {
+        elements.set(id, {
+          classList: { add() {}, remove() {} },
+          innerHTML: ''
+        });
       }
+      return elements.get(id);
     },
-    t: key => key,
-    console
+    createElement() {
+      return { textContent: '', innerHTML: '' };
+    }
   };
-  vm.createContext(context);
-  vm.runInContext(`${source}\nthis.WelcomeScreenUnderTest = WelcomeScreen;`, context);
-  return context.WelcomeScreenUnderTest;
+  global.t = key => key;
+  return require(filename);
 }
 
 test('a fresh install adds the first repository through the registered tabs component', async () => {

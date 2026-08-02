@@ -1,8 +1,6 @@
-const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const vm = require('node:vm');
 
 function loadMergeWorkspace(gitTree) {
   const filename = path.join(
@@ -13,18 +11,13 @@ function loadMergeWorkspace(gitTree) {
     'components',
     'merge-workspace.js'
   );
-  const source = fs.readFileSync(filename, 'utf8');
-  const context = {
-    window: { gitTree },
-    document: {
-      createElement: () => ({ textContent: '', innerHTML: '' }),
-      getElementById: () => null
-    },
-    t: key => key
+  global.window = { gitTree };
+  global.document = {
+    createElement: () => ({ textContent: '', innerHTML: '' }),
+    getElementById: () => null
   };
-  vm.createContext(context);
-  vm.runInContext(`${source}\nthis.MergeWorkspaceUnderTest = MergeWorkspace;`, context);
-  return context.MergeWorkspaceUnderTest;
+  global.t = key => key;
+  return require(filename);
 }
 
 test('merge preview compares develop against quality without treating the range as a commit', async () => {

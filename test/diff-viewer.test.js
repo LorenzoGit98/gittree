@@ -1,8 +1,6 @@
-const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const vm = require('node:vm');
 
 function loadDiffViewer() {
   const filename = path.join(
@@ -13,38 +11,29 @@ function loadDiffViewer() {
     'components',
     'diff-viewer.js'
   );
-  const source = fs.readFileSync(filename, 'utf8');
-  const parserSource = fs.readFileSync(
-    path.join(__dirname, '..', 'src', 'renderer', 'components', 'diff-parser.js'),
-    'utf8'
-  );
   const buttons = new Map();
   const storage = new Map();
-  const context = {
-    localStorage: {
-      getItem: key => storage.get(key) ?? null,
-      setItem: (key, value) => storage.set(key, value)
-    },
-    document: {
-      getElementById(id) {
-        if (!buttons.has(id)) {
-          buttons.set(id, {
-            classList: { toggle() {} },
-            onclick: null
-          });
-        }
-        return buttons.get(id);
-      }
-    },
-    window: { gitTree: {} },
-    t: key => key
+  global.localStorage = {
+    getItem: key => storage.get(key) ?? null,
+    setItem: (key, value) => storage.set(key, value)
   };
-  vm.createContext(context);
-  vm.runInContext(
-    `${parserSource}\nvar DiffParser = window.DiffParser;\n${source}\nthis.DiffViewerUnderTest = DiffViewer;`,
-    context
-  );
-  return context.DiffViewerUnderTest;
+  global.document = {
+    getElementById(id) {
+      if (!buttons.has(id)) {
+        buttons.set(id, {
+          classList: { toggle() {} },
+          onclick: null
+        });
+      }
+      return buttons.get(id);
+    }
+  };
+  global.window = { gitTree: {} };
+  global.t = key => key;
+  global.DiffParser = require(path.join(
+    __dirname, '..', 'src', 'renderer', 'components', 'diff-parser.js'
+  ));
+  return require(filename);
 }
 
 test('maximizing the inspector temporarily selects the side-by-side diff', () => {
