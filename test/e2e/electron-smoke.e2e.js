@@ -1,4 +1,4 @@
-/* global window */
+/* global document, window */
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -32,8 +32,12 @@ test('Electron opens a deep-linked repository and renders its deterministic hist
     page = await application.firstWindow();
     await page.locator('.repo-tab.active').waitFor();
     await page.locator('.graph-row').first().waitFor();
+    await page.waitForFunction(() => (
+      document.getElementById('workspace')?.dataset.loadState === 'settled'
+    ));
 
     assert.equal(await page.locator('.repo-tab.active').count(), 1);
+    assert.equal(await page.locator('#workspace').getAttribute('aria-busy'), 'false');
     assert.match(
       await page.locator('.repo-tab.active .repo-tab-name').getAttribute('title'),
       /repo/i

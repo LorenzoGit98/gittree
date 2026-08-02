@@ -50,3 +50,13 @@ test('a new repository activation always performs fresh reads', async () => {
 
   assert.equal(calls.status, 2);
 });
+
+test('repository reads start immediately in caller priority order', async () => {
+  const { bridge, calls } = createBridge();
+  const session = new RepositoryLoadSession(bridge, 'C:\\repo');
+
+  const pending = session.branchMetadata();
+
+  assert.equal(calls.metadata, 1);
+  await pending;
+});

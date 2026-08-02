@@ -19,7 +19,13 @@ class RepositoryLoadSession {
   }
 
   readOnce(key, load) {
-    if (!this.reads.has(key)) this.reads.set(key, Promise.resolve().then(load));
+    if (!this.reads.has(key)) {
+      try {
+        this.reads.set(key, Promise.resolve(load()));
+      } catch (error) {
+        this.reads.set(key, Promise.reject(error));
+      }
+    }
     return this.reads.get(key);
   }
 }

@@ -80,10 +80,13 @@ class ChangesView {
     if (this.repoPath !== repoPath) {
       this.repoPath = repoPath;
       this.snapshot = null;
+      this.identity = null;
       this.selected = null;
       this.restoreComposer();
     }
-    await Promise.all([this.refresh(true), this.refreshIdentity()]);
+    const tasks = [this.refresh(true)];
+    if (this.active) tasks.push(this.refreshIdentity());
+    await Promise.all(tasks);
     this.syncPolling();
   }
 
@@ -91,7 +94,10 @@ class ChangesView {
     this.active = active;
     this.root.classList.toggle('is-hidden', !active);
     this.syncPolling();
-    if (active && this.repoPath) this.refresh();
+    if (active && this.repoPath && this.app.isCurrentRepo(this.repoPath)) {
+      this.refresh();
+      this.refreshIdentity();
+    }
   }
 
   syncPolling() {

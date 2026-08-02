@@ -86,6 +86,8 @@ async function installSwitchInstrumentation(page) {
     wrap(app.components.graphView, 'load', 'graph');
     wrap(app.components.branchList, 'load', 'branches');
     wrap(app.components.changes, 'load', 'changes');
+    wrap(app.components.changes, 'refresh', 'workingTree');
+    wrap(app.components.changes, 'refreshIdentity', 'identity');
     wrap(app.components.pullRequests, 'load', 'pullRequests');
     wrap(app, 'loadStashes', 'stashes');
     wrap(app, 'loadTags', 'tags');
@@ -103,19 +105,29 @@ async function switchRepository(page, target, switchId) {
   await page.waitForFunction(({ repoPath, subject }) => {
     const activeTitle = document.querySelector('.repo-tab.active .repo-tab-name')?.title;
     const firstSubject = document.querySelector('.graph-row .graph-commit-message')?.textContent;
-    const workspace = document.getElementById('workspace');
     return window.app.state.repo?.path === repoPath
       && activeTitle === repoPath
-      && firstSubject?.includes(subject)
-      && workspace?.getAttribute('aria-busy') === 'false';
+      && firstSubject?.includes(subject);
   }, { repoPath: target.path, subject: target.subject });
-  const durationMs = nodePerformance.now() - startedAt;
+  const graphReadyMs = nodePerformance.now() - startedAt;
+  await page.waitForFunction(() => {
+    const workspace = document.getElementById('workspace');
+    return ['interactive', 'settled'].includes(workspace?.dataset.loadState)
+      || workspace?.getAttribute('aria-busy') === 'false';
+  });
+  const interactiveMs = nodePerformance.now() - startedAt;
+  await page.waitForFunction(() => {
+    const workspace = document.getElementById('workspace');
+    return workspace?.dataset.loadState === 'settled'
+      || (!workspace?.dataset.loadState && workspace?.getAttribute('aria-busy') === 'false');
+  });
+  const settledMs = nodePerformance.now() - startedAt;
   const loaders = await page.evaluate(id => {
     const state = window.__workspacePerformance;
     state.activeSwitch = null;
     return state.records.filter(record => record.switchId === id);
   }, switchId);
-  return { target: target.subject, durationMs, loaders };
+  return { target: target.subject, graphReadyMs, interactiveMs, settledMs, loaders };
 }
 
 async function runBenchmark() {
@@ -162,7 +174,9 @@ async function runBenchmark() {
       switches.flatMap(sample => sample.loaders.map(loader => loader.label))
     )];
     return {
-      switchSummary: summarize(switches.map(sample => sample.durationMs)),
+      graphReadySummary: summarize(switches.map(sample => sample.graphReadyMs)),
+      interactiveSummary: summarize(switches.map(sample => sample.interactiveMs)),
+      settledSummary: summarize(switches.map(sample => sample.settledMs)),
       loaderSummary: Object.fromEntries(loaderLabels.map(label => [
         label,
         summarize(switches.flatMap(sample => sample.loaders
@@ -195,8 +209,9 @@ async function main() {
       totalMemoryMb: os.totalmem() / (1024 * 1024)
     },
     summary: {
-      repositorySwitchP50Ms: summarize(runs.map(run => run.switchSummary.p50Ms)),
-      repositorySwitchP95Ms: summarize(runs.map(run => run.switchSummary.p95Ms)),
+      graphReadyP95Ms: summarize(runs.map(run => run.graphReadySummary.p95Ms)),
+      repositoryInteractiveP95Ms: summarize(runs.map(run => run.interactiveSummary.p95Ms)),
+      repositorySettledP95Ms: summarize(runs.map(run => run.settledSummary.p95Ms)),
       workingSetAfterSwitchesMb: summarize(runs.map(run =>
         run.memory.find(sample => sample.label === 'after-ten-switches')?.totalWorkingSetMb
       ))

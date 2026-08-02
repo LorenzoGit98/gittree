@@ -305,8 +305,8 @@ class GitTreeApp {
     this.setWorkspaceMode(savedMode, false);
 
     try {
-      await Promise.all([
-        this.components.graphView.load(repo.path),
+      const graphLoad = this.components.graphView.load(repo.path);
+      const supportingLoad = Promise.all([
         this.components.branchList.load(repo.path, loadSession),
         this.components.changes.load(repo.path),
         this.components.pullRequests.load(repo.path, loadSession),
@@ -314,10 +314,19 @@ class GitTreeApp {
         this.loadTags(repo.path),
         this.updateStatus(repo.path, loadSession)
       ]);
+      // Keep a rejection handler attached while the graph gets first priority.
+      // The same promise is still awaited below, so errors keep their semantics.
+      supportingLoad.catch(() => {});
+
+      await graphLoad;
 
       if (loadToken !== this.repoLoadToken) return;
       this.components.diffViewer.clear();
       if (options.selectHash) this.components.graphView.select(options.selectHash);
+      this.setProjectInteractive();
+
+      await supportingLoad;
+      if (loadToken !== this.repoLoadToken) return;
       const branchName = this.components.branchList.current;
       const currentBranchMetadata = (this.components.branchList.metadata?.branches || [])
         .find(branch => branch.kind === 'local' && branch.current);
@@ -351,11 +360,21 @@ class GitTreeApp {
     const workspace = document.getElementById('workspace');
     workspace?.classList.toggle('is-project-loading', loading);
     workspace?.setAttribute('aria-busy', String(loading));
+    if (workspace) workspace.dataset.loadState = loading ? 'loading' : 'settled';
     document.querySelectorAll('#branch-loading-indicator, #workspace-loading-indicator, #inspector-loading-indicator')
       .forEach(indicator => indicator.classList.toggle('is-hidden', !loading));
     document.getElementById('sidebar')?.setAttribute('aria-busy', String(loading));
     document.querySelector('.main')?.setAttribute('aria-busy', String(loading));
     document.getElementById('detail-panel')?.setAttribute('aria-busy', String(loading));
+  }
+
+  setProjectInteractive() {
+    const workspace = document.getElementById('workspace');
+    if (workspace) workspace.dataset.loadState = 'interactive';
+    document.querySelectorAll('#workspace-loading-indicator, #inspector-loading-indicator')
+      .forEach(indicator => indicator.classList.add('is-hidden'));
+    document.querySelector('.main')?.setAttribute('aria-busy', 'false');
+    document.getElementById('detail-panel')?.setAttribute('aria-busy', 'false');
   }
 
   async loadStashes(repoPath) {
