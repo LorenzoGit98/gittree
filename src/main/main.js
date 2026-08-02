@@ -88,7 +88,15 @@ async function isWorkingTreeRepository(repoPath) {
     const git = new GitService(repoPath);
     await git.git.checkIsRepo();
     const topLevel = (await git.git.revparse(['--show-toplevel'])).trim();
-    return Boolean(topLevel) && normalizeRepoPath(topLevel) === normalizeRepoPath(repoPath);
+    if (!topLevel) return false;
+    const canonicalKey = value => {
+      try {
+        return fs.realpathSync(value).toLowerCase();
+      } catch {
+        return normalizeRepoPath(value);
+      }
+    };
+    return canonicalKey(topLevel) === canonicalKey(repoPath);
   } catch {
     return false;
   }
