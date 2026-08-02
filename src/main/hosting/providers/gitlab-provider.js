@@ -132,6 +132,144 @@ class GitLabProviderAdapter {
       hasMore: false
     };
   }
+
+  async resolveThread(repo, id, thread, resolved) {
+    const noteId = Number(thread.noteId);
+    if (!Number.isSafeInteger(noteId) || noteId <= 0) {
+      throw new Error('Invalid GitLab discussion note');
+    }
+    const project = encodeURIComponent(`${repo.ownerPath}/${repo.repository}`);
+    await this.api(
+      repo,
+      `/projects/${project}/merge_requests/${id}/discussions/${encodeURIComponent(thread.id)}/notes/${noteId}`,
+      { method: 'PUT', body: { resolved: Boolean(resolved) } }
+    );
+    return { success: true, resolved: Boolean(resolved) };
+  }
+
+  async submitReview(repo, id, draft, { markCompleted, validateThreadId }) {
+    if (draft.event === 'REQUEST_CHANGES') {
+      throw new Error('GitLab does not support Request changes in GitTree');
+    }
+    const project = encodeURIComponent(`${repo.ownerPath}/${repo.repository}`);
+    const completed = new Set(draft.completedOperations);
+    const perform = async (operation, action) => {
+      if (completed.has(operation)) return;
+      await action();
+      completed.add(operation);
+      await markCompleted(operation);
+    };
+    for (let index = 0; index < draft.inlineComments.length; index += 1) {
+      const comment = draft.inlineComments[index];
+      await perform(`inline:${index}`, () => this.api(
+        repo,
+        `/projects/${project}/merge_requests/${id}/discussions`,
+        {
+          method: 'POST',
+          body: {
+            body: comment.body,
+            position: {
+              position_type: 'text',
+              head_sha: draft.headSha,
+              new_path: comment.path,
+              new_line: comment.line
+            }
+          }
+        }
+      ));
+    }
+    for (let index = 0; index < draft.replies.length; index += 1) {
+      const reply = draft.replies[index];
+      const threadId = validateThreadId(reply.threadId);
+      await perform(`reply:${index}`, () => this.api(
+        repo,
+        `/projects/${project}/merge_requests/${id}/discussions/${encodeURIComponent(threadId)}/notes`,
+        { method: 'POST', body: { body: reply.body } }
+      ));
+    }
+    if (draft.body) {
+      await perform('summary', () => this.api(
+        repo,
+        `/projects/${project}/merge_requests/${id}/notes`,
+        { method: 'POST', body: { body: draft.body } }
+      ));
+    }
+    if (draft.event === 'APPROVE') {
+      await perform('approve', () => this.api(
+        repo,
+        `/projects/${project}/merge_requests/${id}/approve`,
+        { method: 'POST', body: { sha: draft.headSha } }
+      ));
+    }
+    return { success: true };
+  }
+
+  async resolveUserIds(repo, names) {
+    const ids = [];
+    for (const name of names) {
+      const byUsername = await this.api(
+        repo,
+        `/users?username=${encodeURIComponent(name)}`
+      ).catch(() => ({ data: [] }));
+      let user = Array.isArray(byUsername.data) ? byUsername.data[0] : null;
+      if (!user) {
+        const search = await this.api(
+          repo,
+          `/users?search=${encodeURIComponent(name)}&per_page=5`
+        );
+        user = (search.data || []).find(item => (
+          item.username?.toLowerCase() === name.toLowerCase()
+          || item.name?.toLowerCase() === name.toLowerCase()
+        )) || search.data?.[0];
+      }
+      if (!user?.id) throw new Error(`GitLab user not found: ${name}`);
+      ids.push(user.id);
+    }
+    return ids;
+  }
+
+  async createPullRequest(repo, options, { viewer }) {
+    const project = encodeURIComponent(`${repo.ownerPath}/${repo.repository}`);
+    const warnings = [];
+    let reviewerIds = [];
+    let assigneeIds = [];
+    if (options.reviewers.length) {
+      try {
+        reviewerIds = await this.resolveUserIds(repo, options.reviewers);
+      } catch (error) {
+        warnings.push(error.message);
+      }
+    }
+    if (options.assignees.length) {
+      try {
+        assigneeIds = await this.resolveUserIds(repo, options.assignees);
+      } catch (error) {
+        warnings.push(error.message);
+      }
+    }
+    const created = await this.api(repo, `/projects/${project}/merge_requests`, {
+      method: 'POST',
+      body: {
+        source_branch: options.source,
+        target_branch: options.target,
+        title: options.draft && !/^draft:/i.test(options.title)
+          ? `Draft: ${options.title}`
+          : options.title,
+        description: options.body,
+        draft: options.draft,
+        labels: options.labels.join(',') || undefined,
+        reviewer_ids: reviewerIds.length ? reviewerIds : undefined,
+        assignee_ids: assigneeIds.length ? assigneeIds : undefined,
+        remove_source_branch: options.removeSourceBranch
+      }
+    });
+    return {
+      success: true,
+      pullRequest: this.normalizeSummary(created.data, viewer),
+      url: created.data.web_url || '',
+      warnings
+    };
+  }
 }
 
 module.exports = GitLabProviderAdapter;

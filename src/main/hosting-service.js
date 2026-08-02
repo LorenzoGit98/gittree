@@ -24,7 +24,8 @@ class HostingService {
       gitlab: new GitLabProviderAdapter({ api: (...args) => this.api(...args) }),
       azure: new AzureProviderAdapter({
         api: (...args) => this.api(...args),
-        identityMatches: (...args) => this.azureIdentityMatches(...args)
+        identityMatches: (...args) => this.azureIdentityMatches(...args),
+        identitySearch: (...args) => this.azureIdentitySearch(...args)
       })
     };
   }
@@ -450,18 +451,6 @@ class HostingService {
     });
   }
 
-  normalizeGitHubSummary(item, user) {
-    return this.providerAdapter('github').normalizeSummary(item, user);
-  }
-
-  normalizeGitLabSummary(item, user) {
-    return this.providerAdapter('gitlab').normalizeSummary(item, user);
-  }
-
-  normalizeAzureSummary(item, user) {
-    return this.providerAdapter('azure').normalizeSummary(item, user);
-  }
-
   async pullRequestDetail(repository, id) {
     const repo = this.validateRepository(repository);
     const pullRequestId = this.validatePullRequestId(id);
@@ -508,34 +497,12 @@ class HostingService {
     const repo = this.validateRepository(repository);
     const pullRequestId = this.validatePullRequestId(id);
     const threadId = this.validateThreadId(thread?.id);
-    if (repo.provider === 'github') {
-      const mutation = resolved ? 'resolveReviewThread' : 'unresolveReviewThread';
-      const result = await this.githubGraphql(
-        `mutation($threadId: ID!) { ${mutation}(input: {threadId: $threadId}) { thread { id isResolved } } }`,
-        { threadId }
-      );
-      const updated = result.data?.[mutation]?.thread;
-      return { success: true, resolved: Boolean(updated?.isResolved) };
-    }
-    if (repo.provider === 'azure') {
-      await this.api(
-        repo,
-        `/pullrequests/${pullRequestId}/threads/${threadId}`,
-        { method: 'PATCH', body: { status: resolved ? 'closed' : 'active' } }
-      );
-      return { success: true, resolved: Boolean(resolved) };
-    }
-    const noteId = Number(thread?.noteId);
-    if (!Number.isSafeInteger(noteId) || noteId <= 0) {
-      throw new Error('Invalid GitLab discussion note');
-    }
-    const project = encodeURIComponent(`${repo.ownerPath}/${repo.repository}`);
-    await this.api(
+    return this.providerAdapter(repo.provider).resolveThread(
       repo,
-      `/projects/${project}/merge_requests/${pullRequestId}/discussions/${encodeURIComponent(threadId)}/notes/${noteId}`,
-      { method: 'PUT', body: { resolved: Boolean(resolved) } }
+      pullRequestId,
+      { ...thread, id: threadId },
+      Boolean(resolved)
     );
-    return { success: true, resolved: Boolean(resolved) };
   }
 
   validateReviewDraft(draft) {
@@ -633,180 +600,27 @@ class HostingService {
         ])
       ];
     }
-    if (repo.provider === 'github') {
-      const result = await this.api(
-        repo,
-        `/repos/${encodeURIComponent(repo.ownerPath)}/${encodeURIComponent(repo.repository)}/pulls/${pullRequestId}/reviews`,
-        {
-          method: 'POST',
-          body: {
-            commit_id: safeDraft.headSha,
-            body: safeDraft.body,
-            event: safeDraft.event,
-            comments: safeDraft.inlineComments
-          }
-        }
-      );
-      for (const reply of safeDraft.replies) {
-        if (!reply.commentId) throw new Error('GitHub reply is missing its comment ID');
-        await this.api(
-          repo,
-          `/repos/${encodeURIComponent(repo.ownerPath)}/${encodeURIComponent(repo.repository)}/pulls/${pullRequestId}/comments/${reply.commentId}/replies`,
-          { method: 'POST', body: { body: reply.body } }
-        );
-      }
-      await this.vault.removeReviewDraft(this.draftKey(repo, pullRequestId));
-      return { success: true, review: { id: result.data.id, state: result.data.state } };
-    }
-    if (repo.provider === 'azure') {
-      return this.submitAzureReview(repo, pullRequestId, safeDraft);
-    }
-    if (safeDraft.event === 'REQUEST_CHANGES') {
-      throw new Error('GitLab does not support Request changes in GitTree');
-    }
-    return this.submitGitLabReview(repo, pullRequestId, safeDraft);
-  }
-
-  async submitGitLabReview(repo, id, draft) {
-    const project = encodeURIComponent(`${repo.ownerPath}/${repo.repository}`);
-    const completed = new Set(draft.completedOperations);
-    const persist = async operation => {
+    const completed = new Set(safeDraft.completedOperations);
+    const markCompleted = async operation => {
       completed.add(operation);
       await this.vault.saveReviewDraft(this.draftKey(repo, id), {
-        ...draft,
+        ...safeDraft,
         completedOperations: [...completed]
       });
     };
-    for (let index = 0; index < draft.inlineComments.length; index += 1) {
-      const operation = `inline:${index}`;
-      if (completed.has(operation)) continue;
-      const comment = draft.inlineComments[index];
-      await this.api(repo, `/projects/${project}/merge_requests/${id}/discussions`, {
-        method: 'POST',
-        body: {
-          body: comment.body,
-          position: {
-            position_type: 'text',
-            head_sha: draft.headSha,
-            new_path: comment.path,
-            new_line: comment.line
-          }
-        }
-      });
-      await persist(operation);
-    }
-    for (let index = 0; index < draft.replies.length; index += 1) {
-      const operation = `reply:${index}`;
-      if (completed.has(operation)) continue;
-      const reply = draft.replies[index];
-      const threadId = this.validateThreadId(reply.threadId);
-      await this.api(
-        repo,
-        `/projects/${project}/merge_requests/${id}/discussions/${encodeURIComponent(threadId)}/notes`,
-        { method: 'POST', body: { body: reply.body } }
-      );
-      await persist(operation);
-    }
-    if (draft.body && !completed.has('summary')) {
-      await this.api(repo, `/projects/${project}/merge_requests/${id}/notes`, {
-        method: 'POST',
-        body: { body: draft.body }
-      });
-      await persist('summary');
-    }
-    if (draft.event === 'APPROVE' && !completed.has('approve')) {
-      await this.api(repo, `/projects/${project}/merge_requests/${id}/approve`, {
-        method: 'POST',
-        body: { sha: draft.headSha }
-      });
-      await persist('approve');
-    }
-    await this.vault.removeReviewDraft(this.draftKey(repo, id));
-    return { success: true };
-  }
-
-  async submitAzureReview(repo, id, draft) {
-    const completed = new Set(draft.completedOperations);
-    const persist = async operation => {
-      completed.add(operation);
-      await this.vault.saveReviewDraft(this.draftKey(repo, id), {
-        ...draft,
-        completedOperations: [...completed]
-      });
-    };
-    for (let index = 0; index < draft.inlineComments.length; index += 1) {
-      const operation = `inline:${index}`;
-      if (completed.has(operation)) continue;
-      const comment = draft.inlineComments[index];
-      await this.api(repo, `/pullrequests/${id}/threads`, {
-        method: 'POST',
-        body: {
-          comments: [{ parentCommentId: 0, content: comment.body, commentType: 'text' }],
-          status: 'active',
-          threadContext: { filePath: comment.path, rightFileEnd: { line: comment.line, offset: 1 } }
-        }
-      });
-      await persist(operation);
-    }
-    for (let index = 0; index < draft.replies.length; index += 1) {
-      const operation = `reply:${index}`;
-      if (completed.has(operation)) continue;
-      const reply = draft.replies[index];
-      const threadId = this.validateThreadId(reply.threadId);
-      await this.api(
-        repo,
-        `/pullrequests/${id}/threads/${encodeURIComponent(threadId)}/comments`,
-        {
-          method: 'POST',
-          body: {
-            parentCommentId: Number.isSafeInteger(reply.commentId) ? reply.commentId : 0,
-            content: reply.body,
-            commentType: 'text'
-          }
-        }
-      );
-      await persist(operation);
-    }
-    if (draft.body && !completed.has('summary')) {
-      await this.api(repo, `/pullrequests/${id}/threads`, {
-        method: 'POST',
-        body: {
-          comments: [{ parentCommentId: 0, content: draft.body, commentType: 'text' }],
-          status: 'active'
-        }
-      });
-      await persist('summary');
-    }
-    if (draft.event === 'APPROVE' && !completed.has('approve')) {
-      const reviewersResult = await this.api(repo, `/pullrequests/${id}/reviewers`);
-      const account = await this.vault.getAccount('azure');
-      const reviewer = (reviewersResult.data.value || []).find(
-        r => this.azureIdentityMatches(account.user, r)
-      );
-      if (reviewer) {
-        await this.api(repo, `/pullrequests/${id}/reviewers/${reviewer.id}`, {
-          method: 'PUT',
-          body: { vote: 10 }
-        });
+    const viewer = (await this.vault.getAccount(repo.provider))?.user;
+    const result = await this.providerAdapter(repo.provider).submitReview(
+      repo,
+      pullRequestId,
+      safeDraft,
+      {
+        viewer,
+        markCompleted,
+        validateThreadId: value => this.validateThreadId(value)
       }
-      await persist('approve');
-    }
-    if (draft.event === 'REQUEST_CHANGES' && !completed.has('request-changes')) {
-      const reviewersResult = await this.api(repo, `/pullrequests/${id}/reviewers`);
-      const account = await this.vault.getAccount('azure');
-      const reviewer = (reviewersResult.data.value || []).find(
-        r => this.azureIdentityMatches(account.user, r)
-      );
-      if (reviewer) {
-        await this.api(repo, `/pullrequests/${id}/reviewers/${reviewer.id}`, {
-          method: 'PUT',
-          body: { vote: -10 }
-        });
-      }
-      await persist('request-changes');
-    }
-    await this.vault.removeReviewDraft(this.draftKey(repo, id));
-    return { success: true };
+    );
+    await this.vault.removeReviewDraft(this.draftKey(repo, pullRequestId));
+    return result;
   }
 
   validateBranchName(value, label) {
@@ -872,7 +686,8 @@ class HostingService {
       reviewers: this.parseNameList(input.reviewers, 'reviewers'),
       assignees: this.parseNameList(input.assignees, 'assignees'),
       labels: this.parseNameList(input.labels, 'labels'),
-      workItems: this.parseWorkItemIds(input.workItems)
+      workItems: this.parseWorkItemIds(input.workItems),
+      removeSourceBranch: Boolean(input.removeSourceBranch)
     };
   }
 
@@ -894,194 +709,14 @@ class HostingService {
     return data.value || [];
   }
 
-  async resolveAzureReviewers(repo, names) {
-    const reviewers = [];
-    for (const name of names) {
-      const matches = await this.azureIdentitySearch(repo.organization, name);
-      const exact = matches.find(item => this.azureIdentityMatches(
-        { login: name, name, id: name },
-        {
-          id: item.id,
-          uniqueName: item.properties?.Account?.$value || item.properties?.Mail?.$value,
-          displayName: item.providerDisplayName || item.customDisplayName,
-          login: item.properties?.Account?.$value
-        }
-      )) || matches.find(item => {
-        const hay = [
-          item.providerDisplayName,
-          item.customDisplayName,
-          item.properties?.Account?.$value,
-          item.properties?.Mail?.$value
-        ].filter(Boolean).map(value => String(value).toLowerCase());
-        return hay.includes(name.toLowerCase());
-      }) || matches[0];
-      if (!exact?.id) throw new Error(`Azure reviewer not found: ${name}`);
-      reviewers.push({ id: exact.id });
-    }
-    return reviewers;
-  }
-
-  async resolveGitLabUserIds(repo, names) {
-    const ids = [];
-    for (const name of names) {
-      const byUsername = await this.api(
-        repo,
-        `/users?username=${encodeURIComponent(name)}`
-      ).catch(() => ({ data: [] }));
-      let user = Array.isArray(byUsername.data) ? byUsername.data[0] : null;
-      if (!user) {
-        const search = await this.api(
-          repo,
-          `/users?search=${encodeURIComponent(name)}&per_page=5`
-        );
-        user = (search.data || []).find(item => (
-          item.username?.toLowerCase() === name.toLowerCase()
-          || item.name?.toLowerCase() === name.toLowerCase()
-        )) || search.data?.[0];
-      }
-      if (!user?.id) throw new Error(`GitLab user not found: ${name}`);
-      ids.push(user.id);
-    }
-    return ids;
-  }
-
   async createPullRequest(repository, input = {}) {
     const repo = this.validateRepository(repository);
     const options = this.validateCreatePullRequestInput(input);
     const account = await this.vault.getAccount(repo.provider);
     if (!account?.accessToken) throw new Error(`Connect ${repo.provider} first`);
-
-    if (repo.provider === 'github') {
-      const prefix =
-        `/repos/${encodeURIComponent(repo.ownerPath)}/${encodeURIComponent(repo.repository)}`;
-      const created = await this.api(repo, `${prefix}/pulls`, {
-        method: 'POST',
-        body: {
-          title: options.title,
-          head: options.source,
-          base: options.target,
-          body: options.body,
-          draft: options.draft,
-          maintainer_can_modify: options.maintainerCanModify
-        }
-      });
-      const number = created.data.number;
-      const warnings = [];
-      if (options.reviewers.length) {
-        try {
-          await this.api(repo, `${prefix}/pulls/${number}/requested_reviewers`, {
-            method: 'POST',
-            body: { reviewers: options.reviewers }
-          });
-        } catch (error) {
-          warnings.push(error.message);
-        }
-      }
-      if (options.assignees.length) {
-        try {
-          await this.api(repo, `${prefix}/issues/${number}/assignees`, {
-            method: 'POST',
-            body: { assignees: options.assignees }
-          });
-        } catch (error) {
-          warnings.push(error.message);
-        }
-      }
-      if (options.labels.length) {
-        try {
-          await this.api(repo, `${prefix}/issues/${number}/labels`, {
-            method: 'POST',
-            body: { labels: options.labels }
-          });
-        } catch (error) {
-          warnings.push(error.message);
-        }
-      }
-      return {
-        success: true,
-        pullRequest: this.normalizeGitHubSummary(created.data, account.user),
-        url: created.data.html_url || '',
-        warnings
-      };
-    }
-
-    if (repo.provider === 'azure') {
-      const body = {
-        sourceRefName: `refs/heads/${options.source}`,
-        targetRefName: `refs/heads/${options.target}`,
-        title: options.title,
-        description: options.body,
-        isDraft: options.draft
-      };
-      if (options.reviewers.length) {
-        body.reviewers = await this.resolveAzureReviewers(repo, options.reviewers);
-      }
-      if (options.workItems.length) {
-        body.workItemRefs = options.workItems.map(id => ({ id: String(id) }));
-      }
-      const created = await this.api(repo, '/pullrequests', { method: 'POST', body });
-      const warnings = [];
-      if (options.labels.length) {
-        for (const label of options.labels) {
-          try {
-            await this.api(repo, `/pullrequests/${created.data.pullRequestId}/labels`, {
-              method: 'POST',
-              body: { name: label }
-            });
-          } catch (error) {
-            warnings.push(error.message);
-          }
-        }
-      }
-      const summary = this.normalizeAzureSummary(created.data, account.user);
-      return {
-        success: true,
-        pullRequest: summary,
-        url: `https://dev.azure.com/${encodeURIComponent(repo.organization)}/${encodeURIComponent(repo.project)}/_git/${encodeURIComponent(repo.repository)}/pullrequest/${summary.number}`,
-        warnings
-      };
-    }
-
-    const project = encodeURIComponent(`${repo.ownerPath}/${repo.repository}`);
-    const warnings = [];
-    let reviewerIds = [];
-    let assigneeIds = [];
-    if (options.reviewers.length) {
-      try {
-        reviewerIds = await this.resolveGitLabUserIds(repo, options.reviewers);
-      } catch (error) {
-        warnings.push(error.message);
-      }
-    }
-    if (options.assignees.length) {
-      try {
-        assigneeIds = await this.resolveGitLabUserIds(repo, options.assignees);
-      } catch (error) {
-        warnings.push(error.message);
-      }
-    }
-    const created = await this.api(repo, `/projects/${project}/merge_requests`, {
-      method: 'POST',
-      body: {
-        source_branch: options.source,
-        target_branch: options.target,
-        title: options.draft && !/^draft:/i.test(options.title)
-          ? `Draft: ${options.title}`
-          : options.title,
-        description: options.body,
-        draft: options.draft,
-        labels: options.labels.join(',') || undefined,
-        reviewer_ids: reviewerIds.length ? reviewerIds : undefined,
-        assignee_ids: assigneeIds.length ? assigneeIds : undefined,
-        remove_source_branch: Boolean(input.removeSourceBranch)
-      }
+    return this.providerAdapter(repo.provider).createPullRequest(repo, options, {
+      viewer: account.user
     });
-    return {
-      success: true,
-      pullRequest: this.normalizeGitLabSummary(created.data, account.user),
-      url: created.data.web_url || '',
-      warnings
-    };
   }
 }
 

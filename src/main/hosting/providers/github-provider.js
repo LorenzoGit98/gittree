@@ -167,6 +167,78 @@ class GitHubProviderAdapter {
       hasMore: /rel="next"/.test(result.headers.get('link') || '')
     };
   }
+
+  async resolveThread(_repo, _id, thread, resolved) {
+    const mutation = resolved ? 'resolveReviewThread' : 'unresolveReviewThread';
+    const result = await this.graphql(
+      `mutation($threadId: ID!) { ${mutation}(input: {threadId: $threadId}) { thread { id isResolved } } }`,
+      { threadId: thread.id }
+    );
+    const updated = result.data?.[mutation]?.thread;
+    return { success: true, resolved: Boolean(updated?.isResolved) };
+  }
+
+  async submitReview(repo, id, draft) {
+    const prefix =
+      `/repos/${encodeURIComponent(repo.ownerPath)}/${encodeURIComponent(repo.repository)}`;
+    const result = await this.api(repo, `${prefix}/pulls/${id}/reviews`, {
+      method: 'POST',
+      body: {
+        commit_id: draft.headSha,
+        body: draft.body,
+        event: draft.event,
+        comments: draft.inlineComments
+      }
+    });
+    for (const reply of draft.replies) {
+      if (!reply.commentId) throw new Error('GitHub reply is missing its comment ID');
+      await this.api(
+        repo,
+        `${prefix}/pulls/${id}/comments/${reply.commentId}/replies`,
+        { method: 'POST', body: { body: reply.body } }
+      );
+    }
+    return { success: true, review: { id: result.data.id, state: result.data.state } };
+  }
+
+  async createPullRequest(repo, options, { viewer }) {
+    const prefix =
+      `/repos/${encodeURIComponent(repo.ownerPath)}/${encodeURIComponent(repo.repository)}`;
+    const created = await this.api(repo, `${prefix}/pulls`, {
+      method: 'POST',
+      body: {
+        title: options.title,
+        head: options.source,
+        base: options.target,
+        body: options.body,
+        draft: options.draft,
+        maintainer_can_modify: options.maintainerCanModify
+      }
+    });
+    const number = created.data.number;
+    const warnings = [];
+    for (const [values, endpoint, key] of [
+      [options.reviewers, `pulls/${number}/requested_reviewers`, 'reviewers'],
+      [options.assignees, `issues/${number}/assignees`, 'assignees'],
+      [options.labels, `issues/${number}/labels`, 'labels']
+    ]) {
+      if (!values.length) continue;
+      try {
+        await this.api(repo, `${prefix}/${endpoint}`, {
+          method: 'POST',
+          body: { [key]: values }
+        });
+      } catch (error) {
+        warnings.push(error.message);
+      }
+    }
+    return {
+      success: true,
+      pullRequest: this.normalizeSummary(created.data, viewer),
+      url: created.data.html_url || '',
+      warnings
+    };
+  }
 }
 
 module.exports = GitHubProviderAdapter;

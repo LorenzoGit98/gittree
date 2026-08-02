@@ -89,9 +89,10 @@ Before extracting a Module, answer these questions:
 
 - The Application runtime and domain IPC registration are extracted and
   covered behind stable contracts.
-- Hosting provider Adapters own pull-request list, detail and diff. Creation,
-  review and thread operations still live in `HostingService` and should move
-  only in characterization-first checkpoints.
+- Hosting provider Adapters own the complete normalized pull-request capability:
+  list, detail, diff, thread resolution, review submission and creation.
+  `HostingService` retains validation, authenticated transport, vault ownership
+  and the retry journal without exposing credentials to an Adapter.
 - `GitService` remains intentionally stable while cohesive internals migrate
   behind repository sessions.
 - `GitTreeApp` is still a large renderer coordinator. New work should deepen

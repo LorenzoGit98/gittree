@@ -1,7 +1,8 @@
 class AzureProviderAdapter {
-  constructor({ api, identityMatches }) {
+  constructor({ api, identityMatches, identitySearch }) {
     this.api = api;
     this.identityMatches = identityMatches;
+    this.identitySearch = identitySearch;
   }
 
   normalizeSummary(item, user) {
@@ -165,6 +166,148 @@ class AzureProviderAdapter {
   async pullRequestDiff(repo, id) {
     const { files } = await this.listPullRequestFiles(repo, id);
     return { files, page: 1, hasMore: false };
+  }
+
+  async resolveThread(repo, id, thread, resolved) {
+    await this.api(
+      repo,
+      `/pullrequests/${id}/threads/${thread.id}`,
+      { method: 'PATCH', body: { status: resolved ? 'closed' : 'active' } }
+    );
+    return { success: true, resolved: Boolean(resolved) };
+  }
+
+  async submitReview(repo, id, draft, {
+    viewer,
+    markCompleted,
+    validateThreadId
+  }) {
+    const completed = new Set(draft.completedOperations);
+    const perform = async (operation, action) => {
+      if (completed.has(operation)) return;
+      await action();
+      completed.add(operation);
+      await markCompleted(operation);
+    };
+    for (let index = 0; index < draft.inlineComments.length; index += 1) {
+      const comment = draft.inlineComments[index];
+      await perform(`inline:${index}`, () => this.api(repo, `/pullrequests/${id}/threads`, {
+        method: 'POST',
+        body: {
+          comments: [{ parentCommentId: 0, content: comment.body, commentType: 'text' }],
+          status: 'active',
+          threadContext: {
+            filePath: comment.path,
+            rightFileEnd: { line: comment.line, offset: 1 }
+          }
+        }
+      }));
+    }
+    for (let index = 0; index < draft.replies.length; index += 1) {
+      const reply = draft.replies[index];
+      const threadId = validateThreadId(reply.threadId);
+      await perform(`reply:${index}`, () => this.api(
+        repo,
+        `/pullrequests/${id}/threads/${encodeURIComponent(threadId)}/comments`,
+        {
+          method: 'POST',
+          body: {
+            parentCommentId: Number.isSafeInteger(reply.commentId) ? reply.commentId : 0,
+            content: reply.body,
+            commentType: 'text'
+          }
+        }
+      ));
+    }
+    if (draft.body) {
+      await perform('summary', () => this.api(repo, `/pullrequests/${id}/threads`, {
+        method: 'POST',
+        body: {
+          comments: [{ parentCommentId: 0, content: draft.body, commentType: 'text' }],
+          status: 'active'
+        }
+      }));
+    }
+    const votes = { APPROVE: ['approve', 10], REQUEST_CHANGES: ['request-changes', -10] };
+    const vote = votes[draft.event];
+    if (vote) {
+      await perform(vote[0], async () => {
+        const reviewersResult = await this.api(repo, `/pullrequests/${id}/reviewers`);
+        const reviewer = (reviewersResult.data.value || []).find(
+          item => this.identityMatches(viewer, item)
+        );
+        if (reviewer) {
+          await this.api(repo, `/pullrequests/${id}/reviewers/${reviewer.id}`, {
+            method: 'PUT',
+            body: { vote: vote[1] }
+          });
+        }
+      });
+    }
+    return { success: true };
+  }
+
+  async resolveReviewers(repo, names) {
+    const reviewers = [];
+    for (const name of names) {
+      const matches = await this.identitySearch(repo.organization, name);
+      const exact = matches.find(item => this.identityMatches(
+        { login: name, name, id: name },
+        {
+          id: item.id,
+          uniqueName: item.properties?.Account?.$value || item.properties?.Mail?.$value,
+          displayName: item.providerDisplayName || item.customDisplayName,
+          login: item.properties?.Account?.$value
+        }
+      )) || matches.find(item => {
+        const haystack = [
+          item.providerDisplayName,
+          item.customDisplayName,
+          item.uniqueName,
+          item.properties?.Account?.$value,
+          item.properties?.Mail?.$value
+        ].filter(Boolean).map(value => String(value).toLowerCase());
+        return haystack.includes(name.toLowerCase());
+      }) || matches[0];
+      if (!exact?.id) throw new Error(`Azure reviewer not found: ${name}`);
+      reviewers.push({ id: exact.id });
+    }
+    return reviewers;
+  }
+
+  async createPullRequest(repo, options, { viewer }) {
+    const body = {
+      sourceRefName: `refs/heads/${options.source}`,
+      targetRefName: `refs/heads/${options.target}`,
+      title: options.title,
+      description: options.body,
+      isDraft: options.draft
+    };
+    if (options.reviewers.length) {
+      body.reviewers = await this.resolveReviewers(repo, options.reviewers);
+    }
+    if (options.workItems.length) {
+      body.workItemRefs = options.workItems.map(id => ({ id: String(id) }));
+    }
+    const created = await this.api(repo, '/pullrequests', { method: 'POST', body });
+    const warnings = [];
+    for (const label of options.labels) {
+      try {
+        await this.api(repo, `/pullrequests/${created.data.pullRequestId}/labels`, {
+          method: 'POST',
+          body: { name: label }
+        });
+      } catch (error) {
+        warnings.push(error.message);
+      }
+    }
+    const summary = this.normalizeSummary(created.data, viewer);
+    return {
+      success: true,
+      pullRequest: summary,
+      url: `https://dev.azure.com/${encodeURIComponent(repo.organization)}/${encodeURIComponent(repo.project)}/_git/${encodeURIComponent(repo.repository)}/pullrequest/${summary.number}`,
+      warnings
+    };
   }
 }
 
