@@ -1,4 +1,4 @@
-/* global document, MutationObserver, window */
+/* global CSSAnimation, document, MutationObserver, window */
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -7,6 +7,32 @@ const { _electron: electron } = require('playwright');
 const { createElectronFixture } = require('../helpers/electron-fixture');
 
 const projectRoot = path.resolve(__dirname, '..', '..');
+
+async function capturePanelMotion(page, buttonId, panelId) {
+  await page.locator(buttonId).click();
+  return page.evaluate(id => {
+    const panel = document.getElementById(id);
+    const workspace = document.getElementById('workspace-body');
+    const animation = panel.getAnimations().find(candidate => (
+      candidate instanceof CSSAnimation && candidate.animationName.startsWith('motion-panel-')
+    ));
+    const keyframeProperties = animation
+      ? [...new Set(animation.effect.getKeyframes().flatMap(keyframe => (
+          Object.keys(keyframe).filter(key => ![
+            'offset',
+            'computedOffset',
+            'easing',
+            'composite'
+          ].includes(key))
+        )))]
+      : [];
+    return {
+      animationName: animation?.animationName || '',
+      keyframeProperties,
+      workspaceTransitionProperty: getComputedStyle(workspace).transitionProperty
+    };
+  }, panelId);
+}
 
 test('Electron opens a deep-linked repository and renders its deterministic history', async t => {
   const fixture = createElectronFixture({ withRemote: true });
@@ -44,6 +70,19 @@ test('Electron opens a deep-linked repository and renders its deterministic hist
     );
     assert.ok(await page.locator('.graph-row').count() < 100);
     assert.match(await page.locator('.graph-row').first().innerText(), /Initial fixture commit/);
+
+    const panelMotions = [
+      ['#btn-toggle-sidebar', 'sidebar', 'motion-panel-exit-left'],
+      ['#btn-toggle-sidebar', 'sidebar', 'motion-panel-enter-left'],
+      ['#btn-toggle-inspector', 'detail-panel', 'motion-panel-exit-right'],
+      ['#btn-toggle-inspector', 'detail-panel', 'motion-panel-enter-right']
+    ];
+    for (const [buttonId, panelId, expectedName] of panelMotions) {
+      const motion = await capturePanelMotion(page, buttonId, panelId);
+      assert.equal(motion.animationName, expectedName);
+      assert.deepEqual(motion.keyframeProperties.sort(), ['opacity', 'transform']);
+      assert.equal(motion.workspaceTransitionProperty.includes('grid-template-columns'), false);
+    }
 
     await page.locator('#branch-search').fill('feature');
     await page.getByText('feature/known-branch', { exact: true }).waitFor();

@@ -139,10 +139,9 @@
   width: var(--right-panel);
   z-index: 6;
   opacity: 0;
-  transform: translateX(28px) scale(0.98);
+  transform: translate3d(52px, 0, 0) scale(0.985);
   visibility: hidden;
   pointer-events: none;
-  transition: opacity var(--duration-normal) var(--ease-accel), transform var(--duration-normal) var(--ease-accel), visibility 0s var(--duration-normal);
 }
 
 .workspace-body.sidebar-collapsed > .sidebar {
@@ -153,10 +152,9 @@
   width: var(--left-panel);
   z-index: 6;
   opacity: 0;
-  transform: translateX(-28px) scale(0.98);
+  transform: translate3d(-52px, 0, 0) scale(0.985);
   visibility: hidden;
   pointer-events: none;
-  transition: opacity var(--duration-normal) var(--ease-accel), transform var(--duration-normal) var(--ease-accel), visibility 0s var(--duration-normal);
 }
 
 .workspace-body.inspector-maximized {
@@ -195,7 +193,6 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  transition: opacity var(--duration-normal) var(--ease-decel), transform var(--duration-normal) var(--spring-gentle), visibility 0s;
 }
 
 .sidebar-branches-area {
@@ -422,7 +419,6 @@
 .inspector {
   display: flex;
   flex-direction: column;
-  transition: opacity var(--duration-normal) var(--ease-decel), transform var(--duration-normal) var(--spring-gentle), visibility 0s;
 }
 
 .detail-panel-body {
@@ -536,5 +532,28 @@
   #resize-handle-left {
     display: none;
   }
+}
+
+.workspace-body.is-sidebar-opening > .sidebar {
+  animation: motion-panel-enter-left var(--transition-normal) both;
+}
+
+.workspace-body.is-sidebar-closing.sidebar-collapsed > .sidebar {
+  display: flex;
+  visibility: visible;
+  pointer-events: none;
+  animation: motion-panel-exit-left var(--transition-normal) both;
+}
+
+.workspace-body.is-inspector-opening > .inspector {
+  display: flex;
+  animation: motion-panel-enter-right var(--transition-normal) both;
+}
+
+.workspace-body.is-inspector-closing.inspector-closed > .inspector {
+  display: flex;
+  visibility: visible;
+  pointer-events: none;
+  animation: motion-panel-exit-right var(--transition-normal) both;
 }
 
