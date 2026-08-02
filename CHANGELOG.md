@@ -1,3 +1,10 @@
+## [0.9.4](https://github.com/lorenzogit98/gittree-minimal/compare/v0.9.3...v0.9.4) (2026-08-02)
+
+
+### Performance Improvements
+
+* **renderer:** resize workspace panels in realtime ([5894cfe](https://github.com/lorenzogit98/gittree-minimal/commit/5894cfe5028db381fa57826ea60101d29c626714))
+
 ## [0.9.3](https://github.com/lorenzogit98/gittree-minimal/compare/v0.9.2...v0.9.3) (2026-08-02)
 
 
