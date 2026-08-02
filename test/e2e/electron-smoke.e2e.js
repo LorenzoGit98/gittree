@@ -165,7 +165,7 @@ test('Electron opens a deep-linked repository and renders its deterministic hist
         loadState: document.getElementById('workspace')?.dataset.loadState || null,
         busy: document.getElementById('workspace')?.getAttribute('aria-busy') || null,
         bodyText: document.body.innerText.slice(0, 500)
-      })).catch(diagError => ({ evaluateFailed: String(diagError) }));
+      })).catch(diagError => ({ evaluateFailed: String(diagError) })));
     }
     if (application && application.process()) {
       const stderr = application.process().stderr;
