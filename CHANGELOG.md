@@ -1,3 +1,5 @@
+## [0.9.6](https://github.com/lorenzogit98/gittree-minimal/compare/v0.9.5...v0.9.6) (2026-08-02)
+
 ## [0.9.5](https://github.com/lorenzogit98/gittree-minimal/compare/v0.9.4...v0.9.5) (2026-08-02)
 
 ## [0.9.4](https://github.com/lorenzogit98/gittree-minimal/compare/v0.9.3...v0.9.4) (2026-08-02)
