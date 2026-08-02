@@ -1,4 +1,9 @@
 const path = require('node:path');
+const {
+  GitHubProviderAdapter,
+  GitLabProviderAdapter,
+  AzureProviderAdapter
+} = require('./hosting/providers');
 
 class HostingService {
   constructor(options) {
@@ -11,6 +16,14 @@ class HostingService {
       setTimeout(resolve, milliseconds);
     }));
     this.loginSessions = new Map();
+    this.providerAdapters = options.providerAdapters || {
+      github: new GitHubProviderAdapter({ api: (...args) => this.api(...args) }),
+      gitlab: new GitLabProviderAdapter({ api: (...args) => this.api(...args) }),
+      azure: new AzureProviderAdapter({
+        api: (...args) => this.api(...args),
+        identityMatches: (...args) => this.azureIdentityMatches(...args)
+      })
+    };
   }
 
   async fetchWithTimeout(url, options = {}) {
@@ -35,6 +48,12 @@ class HostingService {
       throw new Error(`Unsupported hosting provider: ${provider}`);
     }
     return provider;
+  }
+
+  providerAdapter(provider) {
+    const adapter = this.providerAdapters[this.validateProvider(provider)];
+    if (!adapter) throw new Error(`Unsupported hosting provider: ${provider}`);
+    return adapter;
   }
 
   validateRepository(repository) {
@@ -420,160 +439,24 @@ class HostingService {
     const search = String(options.search || '').trim().slice(0, 200).toLowerCase();
     const account = await this.vault.getAccount(repo.provider);
     if (!account?.accessToken) throw new Error(`Connect ${repo.provider} first`);
-    let result;
-    if (repo.provider === 'github') {
-      const state = filter === 'all' ? 'all' : 'open';
-      result = await this.api(
-        repo,
-        `/repos/${encodeURIComponent(repo.ownerPath)}/${encodeURIComponent(repo.repository)}/pulls?state=${state}&per_page=50&page=${page}`
-      );
-      let items = result.data.map(item => this.normalizeGitHubSummary(item, account.user));
-      if (filter === 'authored') {
-        items = items.filter(item => item.author?.login === account.user?.login);
-      } else if (filter === 'review-requested') {
-        items = items.filter(item => item.reviewStatus === 'requested');
-      }
-      if (search) {
-        items = items.filter(item => (
-          String(item.title || '').toLowerCase().includes(search)
-          || String(item.source || '').toLowerCase().includes(search)
-          || String(item.number) === search
-        ));
-      }
-      return {
-        items,
-        page,
-        hasMore: /rel="next"/.test(result.headers.get('link') || '')
-      };
-    }
-
-    if (repo.provider === 'azure') {
-      const skip = (page - 1) * 50;
-      const status = filter === 'all' ? 'all' : 'active';
-      result = await this.api(
-        repo,
-        `/pullrequests?searchCriteria.status=${status}&$top=50&$skip=${skip}`
-      );
-      if (!result.data || !Array.isArray(result.data.value)) {
-        throw new Error('Failed to load pull requests');
-      }
-      let items = result.data.value.map(item => this.normalizeAzureSummary(item, account.user));
-      if (filter === 'authored') {
-        items = items.filter(item => this.azureIdentityMatches(account.user, item.author));
-      } else if (filter === 'review-requested') {
-        items = items.filter(item => item.reviewStatus === 'requested');
-      }
-      if (search) {
-        items = items.filter(item => (
-          String(item.title || '').toLowerCase().includes(search)
-          || String(item.source || '').toLowerCase().includes(search)
-          || String(item.number) === search
-        ));
-      }
-      return {
-        items,
-        page,
-        hasMore: result.data.value.length >= 50
-      };
-    }
-
-    const project = encodeURIComponent(`${repo.ownerPath}/${repo.repository}`);
-    const query = new URLSearchParams({
-      state: filter === 'all' ? 'all' : 'opened',
-      scope: 'all',
-      per_page: '50',
-      page: String(page),
-      ...(search ? { search } : {}),
-      ...(filter === 'authored' && account.user?.login
-        ? { author_username: account.user.login }
-        : {}),
-      ...(filter === 'review-requested' && account.user?.login
-        ? { reviewer_username: account.user.login }
-        : {})
-    });
-    result = await this.api(repo, `/projects/${project}/merge_requests?${query}`);
-    return {
-      items: result.data.map(item => this.normalizeGitLabSummary(item, account.user)),
+    return this.providerAdapter(repo.provider).listPullRequests(repo, {
       page,
-      hasMore: Boolean(result.headers.get('x-next-page'))
-    };
+      filter,
+      search,
+      account
+    });
   }
 
   normalizeGitHubSummary(item, user) {
-    return {
-      provider: 'github',
-      id: item.id,
-      number: item.number,
-      title: item.title,
-      author: {
-        login: item.user?.login || '',
-        avatarUrl: item.user?.avatar_url || ''
-      },
-      source: item.head?.ref || '',
-      target: item.base?.ref || '',
-      headSha: item.head?.sha || '',
-      state: item.merged_at || item.merged ? 'merged' : item.state,
-      draft: Boolean(item.draft),
-      reviewStatus: (item.requested_reviewers || []).some(
-        reviewer => reviewer.login === user?.login
-      ) ? 'requested' : 'none',
-      ciStatus: 'unknown'
-    };
+    return this.providerAdapter('github').normalizeSummary(item, user);
   }
 
   normalizeGitLabSummary(item, user) {
-    return {
-      provider: 'gitlab',
-      id: item.id,
-      number: item.iid,
-      title: item.title,
-      author: {
-        login: item.author?.username || '',
-        avatarUrl: item.author?.avatar_url || ''
-      },
-      source: item.source_branch || '',
-      target: item.target_branch || '',
-      headSha: item.sha || item.diff_refs?.head_sha || '',
-      state: item.state,
-      draft: Boolean(item.draft || /^draft:/i.test(item.title || '')),
-      reviewStatus: (item.reviewers || []).some(
-        reviewer => reviewer.username === user?.login
-      ) ? 'requested' : 'none',
-      ciStatus: item.head_pipeline?.status || 'unknown'
-    };
+    return this.providerAdapter('gitlab').normalizeSummary(item, user);
   }
 
   normalizeAzureSummary(item, user) {
-    const author = item.createdBy || {};
-    return {
-      provider: 'azure',
-      id: item.pullRequestId,
-      number: item.pullRequestId,
-      title: item.title || '',
-      author: {
-        login: author.uniqueName || author.displayName || '',
-        id: author.id || '',
-        avatarUrl: author._links?.avatar?.href || ''
-      },
-      source: (item.sourceRefName || '').replace('refs/heads/', ''),
-      target: (item.targetRefName || '').replace('refs/heads/', ''),
-      headSha: item.lastMergeSourceCommit?.commitId
-        || item.lastMergeCommit?.commitId
-        || '',
-      state: item.status === 'active' || item.status === 'open'
-        ? 'open'
-        : item.status === 'completed'
-          ? 'merged'
-          : item.status === 'abandoned'
-            ? 'abandoned'
-            : item.status,
-      draft: Boolean(item.isDraft),
-      reviewStatus: (item.reviewers || []).some(
-        reviewer => reviewer.vote === 0 && this.azureIdentityMatches(user, reviewer)
-      ) ? 'requested' : 'none',
-      ciStatus: item.mergeStatus === 'succeeded' ? 'success' : item.mergeStatus === 'conflicts' ? 'failure' : 'unknown',
-      reviewers: item.reviewers || []
-    };
+    return this.providerAdapter('azure').normalizeSummary(item, user);
   }
 
   async pullRequestDetail(repository, id) {
