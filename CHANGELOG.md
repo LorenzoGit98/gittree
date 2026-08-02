@@ -1,3 +1,14 @@
+## [0.8.3](https://github.com/lorenzogit98/gittree-minimal/compare/v0.8.2...v0.8.3) (2026-08-02)
+
+
+### Performance Improvements
+
+* **renderer:** accelerate distant history jumps ([5aff6eb](https://github.com/lorenzogit98/gittree-minimal/commit/5aff6eb55017eefc6e98534ab3efc6b11a05dd44))
+* **renderer:** deduplicate repository activation reads ([09ddd83](https://github.com/lorenzogit98/gittree-minimal/commit/09ddd8345f8a6de4295a92c7321f85b52520c347))
+* **renderer:** keep remote operations visually continuous ([0b4f443](https://github.com/lorenzogit98/gittree-minimal/commit/0b4f4437efb90bb8d00ffa7cbdc5963fe1d43e6e))
+* **renderer:** make repository switches interactive sooner ([ab65131](https://github.com/lorenzogit98/gittree-minimal/commit/ab65131a761c1513ee03a5dcd72614f5cadd35f4))
+* **renderer:** reuse visible rows and profile process memory ([6c11f9c](https://github.com/lorenzogit98/gittree-minimal/commit/6c11f9c9735d8850b808167eeaf732ccb241114d))
+
 ## [0.8.2](https://github.com/lorenzogit98/gittree-minimal/compare/v0.8.1...v0.8.2) (2026-08-02)
 
 
