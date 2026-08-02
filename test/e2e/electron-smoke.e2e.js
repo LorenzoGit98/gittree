@@ -8,13 +8,13 @@ const { createElectronFixture } = require('../helpers/electron-fixture');
 
 const projectRoot = path.resolve(__dirname, '..', '..');
 
-async function capturePanelMotion(page, buttonId, panelId) {
+async function capturePanelMotion(page, buttonId, panelId, expectedAnimationName) {
   await page.locator(buttonId).click();
-  return page.evaluate(id => {
+  return page.evaluate(({ id, expectedName }) => {
     const panel = document.getElementById(id);
     const workspace = document.getElementById('workspace-body');
     const animation = panel.getAnimations().find(candidate => (
-      candidate instanceof CSSAnimation && candidate.animationName.startsWith('motion-panel-')
+      candidate instanceof CSSAnimation && candidate.animationName === expectedName
     ));
     const keyframeProperties = animation
       ? [...new Set(animation.effect.getKeyframes().flatMap(keyframe => (
@@ -31,7 +31,7 @@ async function capturePanelMotion(page, buttonId, panelId) {
       keyframeProperties,
       workspaceTransitionProperty: getComputedStyle(workspace).transitionProperty
     };
-  }, panelId);
+  }, { id: panelId, expectedName: expectedAnimationName });
 }
 
 test('Electron opens a deep-linked repository and renders its deterministic history', async t => {
@@ -78,7 +78,7 @@ test('Electron opens a deep-linked repository and renders its deterministic hist
       ['#btn-toggle-inspector', 'detail-panel', 'motion-panel-enter-right']
     ];
     for (const [buttonId, panelId, expectedName] of panelMotions) {
-      const motion = await capturePanelMotion(page, buttonId, panelId);
+      const motion = await capturePanelMotion(page, buttonId, panelId, expectedName);
       assert.equal(motion.animationName, expectedName);
       assert.deepEqual(motion.keyframeProperties.sort(), ['opacity', 'transform']);
       assert.equal(motion.workspaceTransitionProperty, 'none');
