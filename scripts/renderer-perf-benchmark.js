@@ -55,7 +55,7 @@ async function measureRenderer(page) {
     };
     const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
     const profileDistantJumps = (graph, graphView, maxScroll) => {
-      const methodNames = ['createRow', 'createGraphSvg', 'fmtDate'];
+      const methodNames = ['createRow', 'updateRow', 'createGraphSvg', 'fmtDate'];
       const originals = Object.fromEntries(methodNames.map(name => [name, graphView[name]]));
       const timings = Object.fromEntries(methodNames.map(name => [name, { calls: 0, totalMs: 0 }]));
       for (const name of methodNames) {
@@ -80,7 +80,9 @@ async function measureRenderer(page) {
         for (const name of methodNames) graphView[name] = originals[name];
       }
       const totalMs = performance.now() - startedAt;
-      const createRowMs = timings.createRow.totalMs;
+      const rowWorkMs = timings.updateRow.calls
+        ? timings.updateRow.totalMs
+        : timings.createRow.totalMs;
       const graphSvgMs = timings.createGraphSvg.totalMs;
       const dateFormattingMs = timings.fmtDate.totalMs;
       return {
@@ -91,9 +93,9 @@ async function measureRenderer(page) {
           graphSvg: graphSvgMs / 100,
           remainingRowAssembly: Math.max(
             0,
-            createRowMs - graphSvgMs - dateFormattingMs
+            rowWorkMs - graphSvgMs - dateFormattingMs
           ) / 100,
-          domCommitAndLayout: Math.max(0, totalMs - createRowMs) / 100
+          domCommitAndLayout: Math.max(0, totalMs - rowWorkMs) / 100
         },
         methods: Object.fromEntries(methodNames.map(name => [name, {
           ...timings[name],
@@ -197,6 +199,27 @@ async function measureRenderer(page) {
       const progressiveScrollReusesRows = overlappingRows.length > 0 && overlappingRows.every(row =>
         rowsBeforeProgressiveScroll.get(row.dataset.hash) === row
       );
+      graph.scrollTop = 0;
+      graphView.renderViewport(true);
+      const shellsBeforeDistantJump = new Set(
+        graphView.layer.querySelectorAll('.graph-row')
+      );
+      const hashesBeforeDistantJump = new Set(
+        [...shellsBeforeDistantJump].map(row => row.dataset.hash)
+      );
+      graph.scrollTop = maxScroll;
+      graphView.renderViewport();
+      const rowsAfterDistantJump = [...graphView.layer.querySelectorAll('.graph-row')];
+      const distantJumpReusesRowShells = rowsAfterDistantJump.some(row => (
+        shellsBeforeDistantJump.has(row) && !hashesBeforeDistantJump.has(row.dataset.hash)
+      ));
+      const distantJumpUpdatesRowContent = rowsAfterDistantJump.every(row => {
+        const source = graphView.visibleRows.find(item => item.commit.hash === row.dataset.hash);
+        return source
+          && row.querySelector('.graph-commit-message .truncate')?.textContent === source.commit.subject
+          && row.querySelector('.graph-commit-author')?.textContent === source.commit.authorName
+          && row.querySelector('.graph-commit-hash')?.textContent === source.commit.hash.slice(0, 7);
+      });
       graph.scrollTop = 0;
       graphView.renderViewport(true);
       const smoothViewportRender = measureMutations(200, index => {
@@ -327,6 +350,8 @@ async function measureRenderer(page) {
         contracts: {
           virtualizesHistory: renderedRows.length < 100,
           progressiveScrollReusesRows,
+          distantJumpReusesRowShells,
+          distantJumpUpdatesRowContent,
           selectionPreservesRows: selectionPreservedRows && selectionMutations === 0,
           resizeAvoidsLiveLayout: widthDuringMove === widthBeforeMove,
           resizePreviewsWithTransform: previewTransform !== 'none',
@@ -394,28 +419,53 @@ async function runBenchmark() {
     await page.locator('.repo-tab.active').waitFor();
     await page.locator('.graph-row').first().waitFor();
     const repositoryReadyMs = performance.now() - startedAt;
+    const runtimeBefore = await readProcessMemory(application);
     const renderer = await measureRenderer(page);
-    const runtime = await application.evaluate(({ app }) => {
-      const processes = app.getAppMetrics();
-      return {
-        electron: process.versions.electron,
-        chrome: process.versions.chrome,
-        totalWorkingSetMb: processes.reduce(
-          (total, metric) => total + (metric.memory?.workingSetSize || 0),
-          0
-        ) / 1024,
-        processCount: processes.length
-      };
-    });
+    const runtimeAfter = await readProcessMemory(application);
+    const runtime = await application.evaluate(() => ({
+      electron: process.versions.electron,
+      chrome: process.versions.chrome
+    }));
     return {
       startup: { launchedMs, firstWindowMs, repositoryReadyMs },
-      runtime,
+      runtime: {
+        ...runtime,
+        before: runtimeBefore,
+        after: runtimeAfter,
+        totalWorkingSetMb: runtimeAfter.totalWorkingSetMb,
+        processCount: runtimeAfter.processes.length
+      },
       renderer
     };
   } finally {
     if (application) await application.close().catch(() => {});
     fixture.cleanup();
   }
+}
+
+async function readProcessMemory(application) {
+  return application.evaluate(({ app }) => {
+    const processes = app.getAppMetrics().map(metric => ({
+      type: metric.type,
+      name: metric.name || null,
+      serviceName: metric.serviceName || null,
+      workingSetMb: (metric.memory?.workingSetSize || 0) / 1024,
+      privateMb: Number.isFinite(metric.memory?.privateBytes)
+        ? metric.memory.privateBytes / 1024
+        : null
+    }));
+    const privateValues = processes.map(metric => metric.privateMb).filter(Number.isFinite);
+    return {
+      processes,
+      totalPrivateMb: privateValues.length
+        ? privateValues.reduce((total, value) => total + value, 0)
+        : null,
+      totalWorkingSetMb: processes.reduce(
+        (total, metric) => total + metric.workingSetMb,
+        0
+      )
+    };
+  });
 }
 
 async function main() {
@@ -442,6 +492,21 @@ async function main() {
     summary: {
       repositoryReadyMs: summarize(results.map(result => result.startup.repositoryReadyMs)),
       workingSetMb: summarize(results.map(result => result.runtime.totalWorkingSetMb)),
+      rendererWorkingSetDeltaMb: summarize(results.map(result => {
+        const before = result.runtime.before.processes.find(metric => metric.type === 'Tab');
+        const after = result.runtime.after.processes.find(metric => metric.type === 'Tab');
+        return after?.workingSetMb - before?.workingSetMb;
+      })),
+      rendererPrivateDeltaMb: summarize(results.map(result => {
+        const before = result.runtime.before.processes.find(metric => metric.type === 'Tab');
+        const after = result.runtime.after.processes.find(metric => metric.type === 'Tab');
+        return after?.privateMb - before?.privateMb;
+      })),
+      gpuWorkingSetDeltaMb: summarize(results.map(result => {
+        const before = result.runtime.before.processes.find(metric => metric.type === 'GPU');
+        const after = result.runtime.after.processes.find(metric => metric.type === 'GPU');
+        return after?.workingSetMb - before?.workingSetMb;
+      })),
       initialRenderMs: summarize(results.map(result => result.renderer.initialRenderMs)),
       jumpViewportRenderP95Ms: summarize(
         results.map(result => result.renderer.jumpViewportRender.p95Ms)

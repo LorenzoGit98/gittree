@@ -30,7 +30,7 @@ node scripts/renderer-perf-benchmark.js --runs=5 --output=performance-results/re
 node scripts/workspace-perf-benchmark.js --runs=3 --output=performance-results/workspace.json
 ```
 
-The workspace benchmark uses two real isolated Git repositories to measure repeated tab switching at three milestones: graph data ready, primary workspace interactive, and all supporting panels settled. It also records individual loader duration and process memory before and after ten switches. Memory is reported separately for Electron browser, renderer, GPU, and utility processes.
+The workspace benchmark uses two real isolated Git repositories to measure repeated tab switching at three milestones: graph data ready, primary workspace interactive, and all supporting panels settled. Its memory protocol records a stable welcome baseline, one settled repository, two settled repositories, ten switches, and post-switch idle. It reports working set, Windows private bytes, JavaScript heaps, DOM counters, and Electron browser, renderer, GPU, and utility processes separately. `--diagnostic-gc=true` is an opt-in investigation aid and is never used by the application.
 
 Timing values are observations, not functional assertions. The command fails only when a deterministic renderer contract is broken. Approved nightly baselines compare the same machine, operating system, build mode, fixture, and run count.
 

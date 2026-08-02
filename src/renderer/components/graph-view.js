@@ -206,23 +206,33 @@ class GraphView {
     this.renderedRange = [start, end];
 
     const reusableRows = new Map();
+    const spareRows = [];
     if (!force) {
       for (const element of this.layer.children) {
         if (element.classList.contains('graph-row') && element.dataset.hash) {
           reusableRows.set(element.dataset.hash, element);
         }
       }
+      const visibleHashes = new Set(
+        this.visibleRows.slice(start, end).map(row => row.commit.hash)
+      );
+      for (const [hash, element] of reusableRows) {
+        if (!visibleHashes.has(hash)) spareRows.push(element);
+      }
     }
     const fragment = document.createDocumentFragment();
     for (let index = start; index < end; index += 1) {
       const layoutRow = this.visibleRows[index];
       const hash = layoutRow.commit.hash;
-      const row = reusableRows.get(hash) || this.createRow(layoutRow, index);
-      if (reusableRows.has(hash)) {
+      const reusable = reusableRows.get(hash);
+      const row = reusable || spareRows.pop() || this.createRow(layoutRow, index);
+      if (reusable) {
         const selected = this.selectedHashes.has(hash);
         row.style.transform = `translateY(${index * this.rowHeight}px)`;
         row.classList.toggle('selected', selected);
         row.setAttribute('aria-selected', String(selected));
+      } else if (row.dataset.hash !== hash) {
+        this.updateRow(row, layoutRow, index);
       }
       fragment.appendChild(row);
     }
@@ -230,47 +240,57 @@ class GraphView {
   }
 
   createRow(layoutRow, index) {
-    const commit = layoutRow.commit;
     const row = document.createElement('div');
-    row.className = `graph-row${this.selectedHashes.has(commit.hash) ? ' selected' : ''}`;
-    row.dataset.hash = commit.hash;
-    row.style.transform = `translateY(${index * this.rowHeight}px)`;
+    row.className = 'graph-row';
 
     const graph = document.createElement('div');
     graph.className = 'graph-cell';
-    graph.appendChild(
-      this.sortMode === 'topology'
-        ? this.createGraphSvg(layoutRow)
-        : this.createSortMarker()
-    );
 
     const message = document.createElement('div');
     message.className = 'graph-commit-message';
     const refs = document.createElement('div');
     refs.className = 'graph-refs';
-    for (const ref of this.refsByHash.get(commit.hash) || []) {
-      const badge = document.createElement('span');
-      badge.className = `badge badge-${ref.type}`;
-      badge.textContent = ref.shortName;
-      refs.appendChild(badge);
-    }
     const subject = document.createElement('span');
     subject.className = 'truncate';
-    subject.textContent = commit.subject;
     message.append(refs, subject);
 
     const author = document.createElement('div');
     author.className = 'graph-commit-author';
-    author.textContent = commit.authorName;
     const date = document.createElement('div');
     date.className = 'graph-commit-date';
-    date.textContent = this.fmtDate(commit.date);
-    date.title = date.textContent;
     const hash = document.createElement('div');
     hash.className = 'graph-commit-hash';
-    hash.textContent = commit.hash.slice(0, 7);
     row.append(graph, message, author, date, hash);
+    this.updateRow(row, layoutRow, index);
     return row;
+  }
+
+  updateRow(row, layoutRow, index) {
+    const commit = layoutRow.commit;
+    const selected = this.selectedHashes.has(commit.hash);
+    row.className = `graph-row${selected ? ' selected' : ''}`;
+    row.dataset.hash = commit.hash;
+    row.style.transform = `translateY(${index * this.rowHeight}px)`;
+    row.setAttribute('aria-selected', String(selected));
+
+    const [graph, message, author, date, hash] = row.children;
+    graph.replaceChildren(
+      this.sortMode === 'topology'
+        ? this.createGraphSvg(layoutRow)
+        : this.createSortMarker()
+    );
+    const [refs, subject] = message.children;
+    refs.replaceChildren(...(this.refsByHash.get(commit.hash) || []).map(ref => {
+      const badge = document.createElement('span');
+      badge.className = `badge badge-${ref.type}`;
+      badge.textContent = ref.shortName;
+      return badge;
+    }));
+    subject.textContent = commit.subject;
+    author.textContent = commit.authorName;
+    date.textContent = this.fmtDate(commit.date);
+    date.title = date.textContent;
+    hash.textContent = commit.hash.slice(0, 7);
   }
 
   createSortMarker() {
