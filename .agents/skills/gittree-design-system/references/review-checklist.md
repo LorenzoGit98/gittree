@@ -16,7 +16,9 @@
 
 ## Responsive and workspace behavior
 
-- Verify both resize handles and persisted widths.
+- Verify both resize handles follow the pointer in realtime, coalesce movement to one grid write per frame, and persist once on release.
+- Verify visible workspace content remains fully opaque and mounted during resize; reject fades, dimming layers, overlays, and view refreshes.
+- Verify handle hover/drag feedback uses `transform` only and the handle remains in its grid track.
 - Verify the inspector hides before the branch navigator at narrow widths.
 - Verify the commit history keeps a usable minimum width.
 - Verify merge, search, and conflict workflows remain fully opaque.

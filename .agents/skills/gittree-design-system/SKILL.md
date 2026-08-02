@@ -9,7 +9,7 @@ Apply the repository design system to every renderer UI change.
 
 ## Workflow
 
-1. Read `DESIGN.md` at the repository root before changing UI code.
+1. Read `DESIGN.md` at the repository root before changing UI code. For motion or resize work, also read `MOTION.md` and ADR-0003.
 2. Inspect the existing semantic tokens in `src/renderer/styles/variables.css`.
 3. Reuse an existing component contract before creating a new local pattern.
 4. Keep functional surfaces opaque. Apply `--canvas-gradient` only to the outer canvas.
@@ -27,7 +27,7 @@ Apply the repository design system to every renderer UI change.
 - Keep bento panels resizable without reducing the center workspace below its usable minimum.
 - Preserve the frameless window contract: repository tabs first, no native menu/title bar, and draggable empty space around the integrated window controls.
 - Preserve balanced developer density: 34–40px data rows and 34px minimum controls.
-- Preserve the performance contracts in `DESIGN.md`: offscreen row containment, transform-only resize previews, one layout commit on release, and in-place selection updates.
+- Preserve the performance contracts in `DESIGN.md` and `MOTION.md`: offscreen row containment, realtime workspace resize with one grid write per animation frame, fully opaque mounted content, one persistence write on release, and in-place selection updates.
 - Use `data-i18n` for static markup and `t()` for runtime content.
 - Keep English as i18next fallback.
 - Use complete Phosphor classes such as `ph ph-git-branch`; never substitute emoji or Unicode pictograms.

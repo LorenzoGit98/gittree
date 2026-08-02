@@ -56,16 +56,17 @@ Semantic status colors are always paired with text or an icon. Never rely on col
 ### Motion
 
 - Use 140ms for control feedback and 220ms for panel/state changes.
-- Animate only `transform` and `opacity`.
+- CSS animations and transitions may animate only `transform` and `opacity`.
 - Keep motion functional and honor `prefers-reduced-motion`.
 - Do not animate backgrounds on dense scroll rows. Immediate hover feedback avoids repeated paint work while scrolling.
+- Follow `MOTION.md` for panel transitions, direct manipulation, lifecycle, and measurement contracts.
 
 ### Performance
 
 - Treat renderer performance as a product requirement; preserve all features while reducing layout and paint work.
 - Dense lists must isolate offscreen rows with `content-visibility` and layout/paint containment.
 - Do not attach shadows to every bento panel or graph node. Use borders and solid tonal separation on scroll-heavy surfaces.
-- Resizable panels must use a transform-only separator preview during pointer movement and commit the actual grid width once on release.
+- Resizable workspace panels must follow the pointer in realtime by coalescing movement to at most one grid CSS-variable write per `requestAnimationFrame`. Visible content remains fully opaque and mounted throughout the drag; persist the final width exactly once on release.
 - Selection changes must update the affected rows in place; never rebuild the full commit list for a single selection.
 - Run the deterministic renderer benchmark after changes to layout, scrolling, lists, diff rendering, or panel resizing.
 
