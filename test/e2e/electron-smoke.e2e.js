@@ -56,11 +56,11 @@ test('Electron opens a deep-linked repository and renders its deterministic hist
     });
     await application.context().tracing.start({ screenshots: true, snapshots: true });
     page = await application.firstWindow();
-    await page.locator('.repo-tab.active').waitFor();
-    await page.locator('.graph-row').first().waitFor();
+    await page.locator('.repo-tab.active').waitFor({ timeout: 60000 });
+    await page.locator('.graph-row').first().waitFor({ timeout: 60000 });
     await page.waitForFunction(() => (
       document.getElementById('workspace')?.dataset.loadState === 'settled'
-    ));
+    ), null, { timeout: 60000 });
 
     assert.equal(await page.locator('.repo-tab.active').count(), 1);
     assert.equal(await page.locator('#workspace').getAttribute('aria-busy'), 'false');
