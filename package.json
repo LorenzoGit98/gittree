@@ -1,7 +1,7 @@
 {
   "name": "gittree-minimal",
   "version": "0.8.0",
-  "description": "A fast, visual and privacy-first Git desktop client with a SourceTree-style graph.",
+  "description": "A fast, open-source Git desktop client for visual history and local-first repository management.",
   "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",
@@ -42,7 +42,7 @@
     "desktop",
     "electron",
     "git-client",
-    "source-tree",
+    "local-first",
     "developer-tools"
   ],
   "author": {

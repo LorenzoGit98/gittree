@@ -5,8 +5,9 @@
 <h1 align="center">GitTree</h1>
 
 <p align="center">
-  <strong>A fast, visual, privacy-first Git desktop client.</strong><br>
-  SourceTree-style graph. Explicit operations. Local-first. No accounts.
+  <strong>See your repository clearly.</strong><br>
+  A fast, open-source Git desktop client for visual history, explicit workflows,<br>
+  and local-first repository management. No required account.
 </p>
 
 <p align="center">
@@ -27,16 +28,16 @@
 
 ## Why GitTree
 
-Git is powerful, but text is not always the fastest way to understand a busy repository. GitTree answers the questions you ask every day — which branch am I on, where did this commit come from, what will this merge change — without hiding Git behind a proprietary model.
+Busy repositories should not feel opaque. GitTree keeps history, branches, working changes, and repository state readable in one fluid desktop workspace. It answers the questions you ask every day — which branch am I on, where did this commit come from, what will this merge change — without hiding Git behind a proprietary model.
 
-It works on the **local repository**, runs **explicit Git operations**, and presents the result in a high-performance visual workspace.
+It works directly with the **local repository**, runs **explicit Git operations**, and remains compatible with the Git workflows and tools you already use.
 
-No mandatory accounts. No telemetry. No proprietary sync.
+Open source. No mandatory accounts. No telemetry. No proprietary sync.
 
 ## Features
 
 - **Multi-repo workspace** — tabs, recursive folder import, worktree-aware discovery, restored layout, `gittree://` deep links
-- **Branch navigator** — local/remote folders, instant search, ahead/behind, SourceTree-style context menu
+- **Branch navigator** — local/remote folders, instant search, ahead/behind, and contextual branch actions
 - **Multi-lane commit graph** — real parents, octopus merges, virtualized history, progressive paging, word-level diff highlighting
 - **Working tree** — stage/unstage per file and hunk, **discard changes**, commit, amend, sign-off, GPG/SSH signing, identity setup, hooks always on
 - **Merge / rebase / cherry-pick** — previews, conflict editor (Incoming / Current / Result), Continue / Skip / Abort, smart merge when pending changes do not overlap
