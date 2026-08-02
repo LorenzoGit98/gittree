@@ -1,3 +1,10 @@
+# [0.9.0](https://github.com/lorenzogit98/gittree-minimal/compare/v0.8.3...v0.9.0) (2026-08-02)
+
+
+### Features
+
+* **renderer:** workspace panel motion with motion-preserving reload ([29aafb9](https://github.com/lorenzogit98/gittree-minimal/commit/29aafb9ab7f150f00fe1cac66948f06a70ba09d9))
+
 ## [0.8.3](https://github.com/lorenzogit98/gittree-minimal/compare/v0.8.2...v0.8.3) (2026-08-02)
 
 
