@@ -48,6 +48,7 @@ test('Electron opens a deep-linked repository and renders its deterministic hist
     application = await electron.launch({
       args: [
         projectRoot,
+        '--force-device-scale-factor=0.75',
         `--user-data-dir=${fixture.userData}`,
         fixture.deepLink
       ],
@@ -60,6 +61,7 @@ test('Electron opens a deep-linked repository and renders its deterministic hist
     await page.waitForFunction(() => (
       document.getElementById('workspace')?.dataset.loadState === 'settled'
     ), null, { timeout: 60000 });
+    assert.ok(await page.evaluate(() => window.innerWidth > 1120));
 
     assert.equal(await page.locator('.repo-tab.active').count(), 1);
     assert.equal(await page.locator('#workspace').getAttribute('aria-busy'), 'false');
