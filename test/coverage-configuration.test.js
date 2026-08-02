@@ -22,5 +22,6 @@ test('coverage scopes keep explicit production denominators and target ratchets'
 
 test('domains already at their target cannot regress', () => {
   assert.deepEqual(SCOPES.git.gate, SCOPES.git.target);
+  assert.deepEqual(SCOPES.runtime.gate, SCOPES.runtime.target);
   assert.deepEqual(SCOPES.renderer.gate, SCOPES.renderer.target);
 });

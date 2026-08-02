@@ -25,7 +25,7 @@ const SCOPES = {
       'src/main/repository-scanner.js',
       'src/main/update-service.js'
     ],
-    gate: { lines: 60, branches: 60, functions: 75 },
+    gate: { lines: 75, branches: 60, functions: 75 },
     target: { lines: 75, branches: 60, functions: 75 }
   },
   hosting: {

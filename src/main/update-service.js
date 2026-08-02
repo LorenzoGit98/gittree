@@ -1,14 +1,21 @@
-const { app } = require('electron');
-const { autoUpdater } = require('electron-updater');
+const electron = require('electron');
+const electronUpdater = require('electron-updater');
 
 class UpdateService {
-  constructor(window) {
+  constructor(window, dependencies = {}) {
     this.window = window;
+    this.app = dependencies.app || electron.app;
+    this.autoUpdater = dependencies.autoUpdater || electronUpdater.autoUpdater;
+    this.timers = {
+      setTimeout: dependencies.setTimeout || setTimeout,
+      setInterval: dependencies.setInterval || setInterval,
+      setImmediate: dependencies.setImmediate || setImmediate
+    };
     this.initialized = false;
     this.timer = null;
     this.state = {
-      status: app.isPackaged ? 'idle' : 'disabled',
-      currentVersion: app.getVersion(),
+      status: this.app.isPackaged ? 'idle' : 'disabled',
+      currentVersion: this.app.getVersion(),
       availableVersion: null,
       progress: 0,
       error: null
@@ -26,50 +33,50 @@ class UpdateService {
       return;
     }
     this.initialized = true;
-    if (!app.isPackaged) {
+    if (!this.app.isPackaged) {
       this.broadcast();
       return;
     }
 
-    autoUpdater.autoDownload = false;
-    autoUpdater.autoInstallOnAppQuit = true;
-    autoUpdater.allowDowngrade = false;
-    autoUpdater.allowPrerelease = app.getVersion().includes('-');
+    this.autoUpdater.autoDownload = false;
+    this.autoUpdater.autoInstallOnAppQuit = true;
+    this.autoUpdater.allowDowngrade = false;
+    this.autoUpdater.allowPrerelease = this.app.getVersion().includes('-');
 
-    autoUpdater.on('checking-for-update', () => this.setState({
+    this.autoUpdater.on('checking-for-update', () => this.setState({
       status: 'checking',
       error: null
     }));
-    autoUpdater.on('update-available', info => this.setState({
+    this.autoUpdater.on('update-available', info => this.setState({
       status: 'available',
       availableVersion: info.version,
       progress: 0,
       error: null
     }));
-    autoUpdater.on('update-not-available', () => this.setState({
+    this.autoUpdater.on('update-not-available', () => this.setState({
       status: 'idle',
       availableVersion: null,
       progress: 0,
       error: null
     }));
-    autoUpdater.on('download-progress', progress => this.setState({
+    this.autoUpdater.on('download-progress', progress => this.setState({
       status: 'downloading',
       progress: Math.max(0, Math.min(100, Math.round(progress.percent || 0))),
       error: null
     }));
-    autoUpdater.on('update-downloaded', info => this.setState({
+    this.autoUpdater.on('update-downloaded', info => this.setState({
       status: 'downloaded',
       availableVersion: info.version,
       progress: 100,
       error: null
     }));
-    autoUpdater.on('error', error => this.setState({
+    this.autoUpdater.on('error', error => this.setState({
       status: 'error',
       error: error?.message || String(error)
     }));
 
-    setTimeout(() => this.check(false), 15000).unref?.();
-    this.timer = setInterval(() => this.check(false), 6 * 60 * 60 * 1000);
+    this.timers.setTimeout(() => this.check(false), 15000).unref?.();
+    this.timer = this.timers.setInterval(() => this.check(false), 6 * 60 * 60 * 1000);
     this.timer.unref?.();
     this.broadcast();
   }
@@ -79,14 +86,14 @@ class UpdateService {
   }
 
   async check(manual = true) {
-    if (!app.isPackaged) {
+    if (!this.app.isPackaged) {
       return { success: false, skipped: true, state: this.getState() };
     }
     if (['downloading', 'downloaded'].includes(this.state.status)) {
       return { success: false, skipped: true, state: this.getState() };
     }
     try {
-      await autoUpdater.checkForUpdates();
+      await this.autoUpdater.checkForUpdates();
       return { success: true, state: this.getState() };
     } catch (error) {
       this.setState({
@@ -102,7 +109,7 @@ class UpdateService {
       return { success: false, error: 'No update is ready to download', state: this.getState() };
     }
     try {
-      await autoUpdater.downloadUpdate();
+      await this.autoUpdater.downloadUpdate();
       return { success: true, state: this.getState() };
     } catch (error) {
       this.setState({ status: 'error', error: error.message });
@@ -114,7 +121,7 @@ class UpdateService {
     if (this.state.status !== 'downloaded') {
       return { success: false, error: 'No downloaded update is ready to install' };
     }
-    setImmediate(() => autoUpdater.quitAndInstall(false, true));
+    this.timers.setImmediate(() => this.autoUpdater.quitAndInstall(false, true));
     return { success: true };
   }
 
