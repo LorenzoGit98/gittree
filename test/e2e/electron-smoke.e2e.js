@@ -1,3 +1,4 @@
+/* global window */
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -52,6 +53,21 @@ test('Electron opens a deep-linked repository and renders its deterministic hist
     await diagnosticsButton.waitFor();
     assert.equal(await diagnosticsButton.isEnabled(), true);
     await page.getByText(/privacy-redacted ZIP|ZIP anonimizzato/).waitFor();
+
+    await page.locator('[data-settings-close]').click();
+    await page.evaluate(() => {
+      window.__dialogResult = 'pending';
+      window.app.dialogs.confirm({
+        title: 'Accessibility contract',
+        message: 'Keyboard cancellation must restore the workspace.',
+        cancelLabel: 'Cancel',
+        actionLabel: 'Continue'
+      }).then(value => { window.__dialogResult = value; });
+    });
+    await page.getByRole('dialog', { name: 'Accessibility contract' }).waitFor();
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => window.__dialogResult === false);
+    assert.equal(await page.getByRole('dialog').count(), 0);
   } catch (error) {
     failed = true;
     const artifactDirectory = path.join(projectRoot, 'test-results', 'electron-smoke');

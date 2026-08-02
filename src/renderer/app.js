@@ -9,6 +9,7 @@ class GitTreeApp {
     this.remoteActionBusy = false;
     this.remoteActionRepo = null;
     this._events = {};
+    this.dialogs = new DialogService();
   }
 
   pathKey(value) {
@@ -438,22 +439,12 @@ class GitTreeApp {
   }
 
   confirmDialog(title, message, actionLabel, danger = false) {
-    const overlay = document.getElementById('modal-overlay');
-    const dialog = document.getElementById('modal-dialog');
-    return new Promise(resolve => {
-      dialog.innerHTML = `<h3>${this.esc(title)}</h3><p>${this.esc(message)}</p>
-        <div class="confirm-actions">
-          <button class="btn" data-cancel>${this.esc(t('common.cancel'))}</button>
-          <button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" data-confirm>${this.esc(actionLabel)}</button>
-        </div>`;
-      overlay.classList.remove('is-hidden');
-      const finish = value => {
-        overlay.classList.add('is-hidden');
-        dialog.innerHTML = '';
-        resolve(value);
-      };
-      dialog.querySelector('[data-cancel]').onclick = () => finish(false);
-      dialog.querySelector('[data-confirm]').onclick = () => finish(true);
+    return this.dialogs.confirm({
+      title,
+      message,
+      cancelLabel: t('common.cancel'),
+      actionLabel,
+      danger
     });
   }
 

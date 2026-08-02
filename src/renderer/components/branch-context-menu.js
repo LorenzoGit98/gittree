@@ -397,48 +397,22 @@ class BranchContextMenu {
   }
 
   formDialog(title, fields, extract) {
-    const overlay = document.getElementById('modal-overlay');
-    const dialog = document.getElementById('modal-dialog');
-    return new Promise(resolve => {
-      dialog.innerHTML = `<form class="branch-dialog-form">
-        <h3>${this.esc(title)}</h3>${fields}
-        <div class="confirm-actions">
-          <button class="btn" type="button" data-cancel>${this.esc(t('common.cancel'))}</button>
-          <button class="btn btn-primary" type="submit">${this.esc(t('common.continue'))}</button>
-        </div>
-      </form>`;
-      overlay.classList.remove('is-hidden');
-      const finish = value => {
-        overlay.classList.add('is-hidden');
-        dialog.innerHTML = '';
-        resolve(value);
-      };
-      dialog.querySelector('[data-cancel]').onclick = () => finish(null);
-      dialog.querySelector('form').onsubmit = event => {
-        event.preventDefault();
-        finish(extract(event.currentTarget));
-      };
-      dialog.querySelector('input,select')?.focus();
+    return this.app.dialogs.form({
+      title,
+      fields,
+      extract,
+      cancelLabel: t('common.cancel'),
+      actionLabel: t('common.continue')
     });
   }
 
   confirm(title, message, actionLabel, danger = false) {
-    const overlay = document.getElementById('modal-overlay');
-    const dialog = document.getElementById('modal-dialog');
-    return new Promise(resolve => {
-      dialog.innerHTML = `<h3>${this.esc(title)}</h3><p>${this.esc(message)}</p>
-        <div class="confirm-actions">
-          <button class="btn" data-cancel>${this.esc(t('common.cancel'))}</button>
-          <button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" data-confirm>${this.esc(actionLabel)}</button>
-        </div>`;
-      overlay.classList.remove('is-hidden');
-      const finish = value => {
-        overlay.classList.add('is-hidden');
-        dialog.innerHTML = '';
-        resolve(value);
-      };
-      dialog.querySelector('[data-cancel]').onclick = () => finish(false);
-      dialog.querySelector('[data-confirm]').onclick = () => finish(true);
+    return this.app.dialogs.confirm({
+      title,
+      message,
+      cancelLabel: t('common.cancel'),
+      actionLabel,
+      danger
     });
   }
 

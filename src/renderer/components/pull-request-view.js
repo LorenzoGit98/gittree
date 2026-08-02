@@ -803,52 +803,25 @@ class PullRequestView {
   }
 
   commentDialog(filePath, line) {
-    const overlay = document.getElementById('modal-overlay');
-    const dialog = document.getElementById('modal-dialog');
-    return new Promise(resolve => {
-      dialog.innerHTML = `
-        <form class="branch-dialog-form">
-          <h3>${this.esc(t('pullRequests.inlineTitle'))}</h3>
-          <p>${this.esc(`${filePath}:${line}`)}</p>
-          <label>${this.esc(t('pullRequests.comment'))}<textarea name="body" class="pr-inline-comment" maxlength="65536" required></textarea></label>
-          <div class="confirm-actions">
-            <button class="btn" type="button" data-cancel>${this.esc(t('common.cancel'))}</button>
-            <button class="btn btn-primary" type="submit">${this.esc(t('pullRequests.saveDraft'))}</button>
-          </div>
-        </form>`;
-      overlay.classList.remove('is-hidden');
-      const form = dialog.querySelector('form');
-      const finish = value => {
-        overlay.classList.add('is-hidden');
-        dialog.innerHTML = '';
-        resolve(value);
-      };
-      form.querySelector('[data-cancel]').onclick = () => finish('');
-      form.onsubmit = event => {
-        event.preventDefault();
-        finish(form.elements.body.value.trim());
-      };
-      form.elements.body.focus();
-    });
+    return this.app.dialogs.form({
+      title: t('pullRequests.inlineTitle'),
+      fields: `<p>${this.esc(`${filePath}:${line}`)}</p>
+        <label>${this.esc(t('pullRequests.comment'))}
+          <textarea name="body" class="pr-inline-comment" maxlength="65536" required autofocus></textarea>
+        </label>`,
+      extract: form => form.elements.body.value.trim(),
+      cancelLabel: t('common.cancel'),
+      actionLabel: t('pullRequests.saveDraft')
+    }).then(value => value ?? '');
   }
 
   confirm(title, message) {
-    const overlay = document.getElementById('modal-overlay');
-    const dialog = document.getElementById('modal-dialog');
-    return new Promise(resolve => {
-      dialog.innerHTML = `<h3>${this.esc(title)}</h3><p>${this.esc(message)}</p>
-        <div class="confirm-actions">
-          <button class="btn" data-cancel>${this.esc(t('common.cancel'))}</button>
-          <button class="btn btn-danger" data-confirm>${this.esc(t('common.continue'))}</button>
-        </div>`;
-      overlay.classList.remove('is-hidden');
-      const finish = value => {
-        overlay.classList.add('is-hidden');
-        dialog.innerHTML = '';
-        resolve(value);
-      };
-      dialog.querySelector('[data-cancel]').onclick = () => finish(false);
-      dialog.querySelector('[data-confirm]').onclick = () => finish(true);
+    return this.app.dialogs.confirm({
+      title,
+      message,
+      cancelLabel: t('common.cancel'),
+      actionLabel: t('common.continue'),
+      danger: true
     });
   }
 
@@ -863,27 +836,15 @@ class PullRequestView {
   }
 
   async promptPat() {
-    const overlay = document.getElementById('modal-overlay');
-    const dialog = document.getElementById('modal-dialog');
-    return new Promise(resolve => {
-      dialog.innerHTML = `<h3>${this.esc(t('pullRequests.azurePatPrompt') || 'Azure DevOps PAT')}</h3>
-        <p>${this.esc(t('pullRequests.azurePatHint') || 'Create a PAT at https://dev.azure.com with Code (Read & Write) scope.')}</p>
-        <input id="pat-input" class="commit-input pat-input" type="password" maxlength="200" placeholder="PAT">
-        <div class="confirm-actions">
-          <button class="btn" data-cancel>${this.esc(t('common.cancel'))}</button>
-          <button class="btn btn-primary" data-confirm>${this.esc(t('pullRequests.connect'))}</button>
-        </div>`;
-      overlay.classList.remove('is-hidden');
-      const input = dialog.querySelector('#pat-input');
-      input.focus();
-      const finish = value => {
-        overlay.classList.add('is-hidden');
-        dialog.innerHTML = '';
-        resolve(value);
-      };
-      dialog.querySelector('[data-cancel]').onclick = () => finish(null);
-      dialog.querySelector('[data-confirm]').onclick = () => finish(input.value.trim() || null);
-      input.addEventListener('keydown', e => { if (e.key === 'Enter') finish(input.value.trim() || null); });
+    return this.app.dialogs.form({
+      title: t('pullRequests.azurePatPrompt') || 'Azure DevOps PAT',
+      fields: `<p>${this.esc(t('pullRequests.azurePatHint') || 'Create a PAT at https://dev.azure.com with Code (Read & Write) scope.')}</p>
+        <label>PAT
+          <input name="pat" class="commit-input pat-input" type="password" maxlength="200" required autofocus autocomplete="off">
+        </label>`,
+      extract: form => form.elements.pat.value.trim() || null,
+      cancelLabel: t('common.cancel'),
+      actionLabel: t('pullRequests.connect')
     });
   }
 

@@ -298,24 +298,12 @@ class ChangesView {
   }
 
   confirmDiscard(count) {
-    const overlay = document.getElementById('modal-overlay');
-    const dialog = document.getElementById('modal-dialog');
-    return new Promise(resolve => {
-      dialog.innerHTML = `
-        <h3>${this.esc(t('changes.discardTitle'))}</h3>
-        <p>${this.esc(t('changes.discardConfirm', { count }))}</p>
-        <div class="confirm-actions">
-          <button class="btn" data-cancel>${this.esc(t('common.cancel'))}</button>
-          <button class="btn btn-danger" data-confirm>${this.esc(t('changes.discardAction'))}</button>
-        </div>`;
-      overlay.classList.remove('is-hidden');
-      const finish = value => {
-        overlay.classList.add('is-hidden');
-        dialog.innerHTML = '';
-        resolve(value);
-      };
-      dialog.querySelector('[data-cancel]').onclick = () => finish(false);
-      dialog.querySelector('[data-confirm]').onclick = () => finish(true);
+    return this.app.dialogs.confirm({
+      title: t('changes.discardTitle'),
+      message: t('changes.discardConfirm', { count }),
+      cancelLabel: t('common.cancel'),
+      actionLabel: t('changes.discardAction'),
+      danger: true
     });
   }
 
@@ -543,46 +531,29 @@ class ChangesView {
   }
 
   identityDialog() {
-    const overlay = document.getElementById('modal-overlay');
-    const dialog = document.getElementById('modal-dialog');
-    return new Promise(resolve => {
-      dialog.innerHTML = `
-        <form class="branch-dialog-form">
-          <h3 data-i18n="changes.identityTitle">Git identity</h3>
-          <p data-i18n="changes.identityHelp">Used as the author of new commits.</p>
-          <label><span data-i18n="changes.authorName">Author name</span><input name="name" maxlength="200" required></label>
-          <label><span data-i18n="changes.authorEmail">Author email</span><input name="email" maxlength="254" type="email" required></label>
-          <label><span data-i18n="changes.identityScope">Save identity</span>
-            <select name="scope">
-              <option value="local" data-i18n="changes.scopeLocal">Only this repository</option>
-              <option value="global" data-i18n="changes.scopeGlobal">All repositories</option>
-            </select>
-          </label>
-          <div class="confirm-actions">
-            <button class="btn" type="button" data-cancel data-i18n="common.cancel">Cancel</button>
-            <button class="btn btn-primary" type="submit" data-i18n="common.continue">Continue</button>
-          </div>
-        </form>`;
-      I18n.translateDOM(dialog);
-      const form = dialog.querySelector('form');
-      form.elements.name.value = this.identity?.name || '';
-      form.elements.email.value = this.identity?.email || '';
-      overlay.classList.remove('is-hidden');
-      const finish = value => {
-        overlay.classList.add('is-hidden');
-        dialog.innerHTML = '';
-        resolve(value);
-      };
-      form.querySelector('[data-cancel]').onclick = () => finish(null);
-      form.onsubmit = event => {
-        event.preventDefault();
-        finish({
-          name: form.elements.name.value.trim(),
-          email: form.elements.email.value.trim(),
-          scope: form.elements.scope.value
-        });
-      };
-      form.elements.name.focus();
+    return this.app.dialogs.form({
+      title: t('changes.identityTitle'),
+      fields: `
+        <p>${this.esc(t('changes.identityHelp'))}</p>
+        <label><span>${this.esc(t('changes.authorName'))}</span>
+          <input name="name" maxlength="200" required autofocus value="${this.esc(this.identity?.name || '')}">
+        </label>
+        <label><span>${this.esc(t('changes.authorEmail'))}</span>
+          <input name="email" maxlength="254" type="email" required value="${this.esc(this.identity?.email || '')}">
+        </label>
+        <label><span>${this.esc(t('changes.identityScope'))}</span>
+          <select name="scope">
+            <option value="local">${this.esc(t('changes.scopeLocal'))}</option>
+            <option value="global">${this.esc(t('changes.scopeGlobal'))}</option>
+          </select>
+        </label>`,
+      extract: form => ({
+        name: form.elements.name.value.trim(),
+        email: form.elements.email.value.trim(),
+        scope: form.elements.scope.value
+      }),
+      cancelLabel: t('common.cancel'),
+      actionLabel: t('common.continue')
     });
   }
 
