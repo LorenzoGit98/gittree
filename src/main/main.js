@@ -2,7 +2,6 @@ const {
   app, BrowserWindow, ipcMain, dialog, Menu, nativeTheme, safeStorage, session, shell
 } = require('electron');
 const path = require('path');
-const fs = require('fs');
 const { pathToFileURL } = require('url');
 const GitService = require('./git-service');
 const RepoManager = require('./repo-manager');
@@ -23,6 +22,7 @@ const { registerWindowApplicationHandlers } = require('./ipc/window-application-
 const { createInspectorWindowController } = require('./inspector-window-controller');
 const { createApplicationRuntime } = require('./application-runtime');
 const { DiagnosticsExporter } = require('./diagnostics-exporter');
+const { isWorkingTreeRepository } = require('./working-tree-repository');
 let mainWindow;
 let repoManager;
 let updateService;
@@ -81,26 +81,6 @@ async function getHostingRepository(repoPath, provider) {
     repository.host = 'dev.azure.com';
   }
   return repository;
-}
-
-async function isWorkingTreeRepository(repoPath) {
-  if (typeof repoPath !== 'string' || !path.isAbsolute(repoPath)) return false;
-  try {
-    const git = new GitService(repoPath);
-    await git.git.checkIsRepo();
-    const topLevel = (await git.git.revparse(['--show-toplevel'])).trim();
-    if (!topLevel) return false;
-    const canonicalKey = value => {
-      try {
-        return fs.realpathSync(value).toLowerCase();
-      } catch {
-        return normalizeRepoPath(value);
-      }
-    };
-    return canonicalKey(topLevel) === canonicalKey(repoPath);
-  } catch {
-    return false;
-  }
 }
 
 function createWindow() {

@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { createRepository, git } = require('./git-repository');
+const { createRepository, git, toWindowsShortPath } = require('./git-repository');
 
 function createElectronFixture({ withRemote = false } = {}) {
   const repo = createRepository();
@@ -21,12 +21,13 @@ function createElectronFixture({ withRemote = false } = {}) {
     repo.git('push', '--set-upstream', 'origin', 'main');
   }
   repo.write('dirty.txt', 'known working tree change\n');
+  const deepLinkRepository = toWindowsShortPath(repo.repository);
 
   return {
     repository: repo.repository,
     remote,
     userData,
-    deepLink: `gittree://open?path=${encodeURIComponent(repo.repository)}`,
+    deepLink: `gittree://open?path=${encodeURIComponent(deepLinkRepository)}`,
     cleanup() {
       repo.cleanup();
       fs.rmSync(userData, { recursive: true, force: true });

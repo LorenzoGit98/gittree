@@ -18,6 +18,18 @@ function git(cwd, ...args) {
   }).trim();
 }
 
+function toWindowsShortPath(targetPath) {
+  if (process.platform !== 'win32') return targetPath;
+  const escapedPath = targetPath.replaceAll('%', '%%').replaceAll('"', '""');
+  const shortPath = execFileSync('cmd.exe', [
+    '/d',
+    '/s',
+    '/c',
+    `for %I in ("${escapedPath}") do @echo %~sI`
+  ], { encoding: 'utf8', windowsVerbatimArguments: true }).trim();
+  return shortPath || targetPath;
+}
+
 function createRepository() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gittree-test-'));
   const repository = path.join(root, 'repo');
@@ -43,5 +55,6 @@ function createRepository() {
 
 module.exports = {
   createRepository,
-  git
+  git,
+  toWindowsShortPath
 };
