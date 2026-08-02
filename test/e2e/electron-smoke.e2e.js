@@ -9,29 +9,39 @@ const { createElectronFixture } = require('../helpers/electron-fixture');
 const projectRoot = path.resolve(__dirname, '..', '..');
 
 async function capturePanelMotion(page, buttonId, panelId, expectedAnimationName) {
-  await page.locator(buttonId).click();
-  return page.evaluate(({ id, expectedName }) => {
+  await page.evaluate(({ id, expectedName }) => {
     const panel = document.getElementById(id);
     const workspace = document.getElementById('workspace-body');
-    const animation = panel.getAnimations().find(candidate => (
-      candidate instanceof CSSAnimation && candidate.animationName === expectedName
-    ));
-    const keyframeProperties = animation
-      ? [...new Set(animation.effect.getKeyframes().flatMap(keyframe => (
-          Object.keys(keyframe).filter(key => ![
-            'offset',
-            'computedOffset',
-            'easing',
-            'composite'
-          ].includes(key))
-        )))]
-      : [];
-    return {
-      animationName: animation?.animationName || '',
-      keyframeProperties,
-      workspaceTransitionProperty: getComputedStyle(workspace).transitionProperty
+    window.__panelMotionCapture = null;
+    const capture = event => {
+      if (event.target !== panel || event.animationName !== expectedName) return;
+      const animation = panel.getAnimations().find(candidate => (
+        candidate instanceof CSSAnimation && candidate.animationName === expectedName
+      ));
+      const keyframeProperties = animation
+        ? [...new Set(animation.effect.getKeyframes().flatMap(keyframe => (
+            Object.keys(keyframe).filter(key => ![
+              'offset',
+              'computedOffset',
+              'easing',
+              'composite'
+            ].includes(key))
+          )))]
+        : [];
+      window.__panelMotionCapture = {
+        animationName: event.animationName,
+        keyframeProperties,
+        workspaceTransitionProperty: getComputedStyle(workspace).transitionProperty
+      };
+      panel.removeEventListener('animationstart', capture);
     };
+    panel.addEventListener('animationstart', capture);
   }, { id: panelId, expectedName: expectedAnimationName });
+  await page.locator(buttonId).click();
+  await page.waitForFunction(expectedName => (
+    window.__panelMotionCapture?.animationName === expectedName
+  ), expectedAnimationName, { timeout: 5000 });
+  return page.evaluate(() => window.__panelMotionCapture);
 }
 
 test('Electron opens a deep-linked repository and renders its deterministic history', async t => {
