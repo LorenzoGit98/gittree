@@ -26,11 +26,12 @@ function longPath(value) {
   if (process.platform !== 'win32') return path.resolve(value);
   try {
     const { execFileSync } = require('node:child_process');
+    const cleaned = String(value).replace(/[\\/]+$/, '');
     return execFileSync(
       'cmd.exe',
-      ['/d', '/c', 'for', '%I', 'in', `("${value}")`, 'do', '@echo', '%~fI'],
+      ['/d', '/c', 'for', '%I', 'in', `("${cleaned}")`, 'do', '@echo', '%~fI'],
       { encoding: 'utf8' }
-    ).trim();
+    ).trim().replace(/[\\/]+$/, '');
   } catch {
     return path.resolve(value);
   }
