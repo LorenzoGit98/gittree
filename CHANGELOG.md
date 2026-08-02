@@ -1,3 +1,10 @@
+## [0.9.3](https://github.com/lorenzogit98/gittree-minimal/compare/v0.9.2...v0.9.3) (2026-08-02)
+
+
+### Bug Fixes
+
+* accept Windows short paths for repository deep links ([3b421e3](https://github.com/lorenzogit98/gittree-minimal/commit/3b421e37f19b2ad8cc0f1282bbc1f311cd0471ce))
+
 ## [0.9.2](https://github.com/lorenzogit98/gittree-minimal/compare/v0.9.1...v0.9.2) (2026-08-02)
 
 
