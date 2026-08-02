@@ -108,7 +108,7 @@ src/
 └── renderer/    Workspace, components, themes, i18n
 ```
 
-Release guide: [docs/RELEASING.md](docs/RELEASING.md) · OAuth: [docs/OAUTH.md](docs/OAUTH.md) · Updates: [docs/UPDATES.md](docs/UPDATES.md) · Design: [DESIGN.md](DESIGN.md) · Architecture decisions: [docs/adr/](docs/adr/)
+Release guide: [docs/RELEASING.md](docs/RELEASING.md) · OAuth: [docs/OAUTH.md](docs/OAUTH.md) · Updates: [docs/UPDATES.md](docs/UPDATES.md) · Performance: [docs/PERFORMANCE.md](docs/PERFORMANCE.md) · Design: [DESIGN.md](DESIGN.md) · Architecture decisions: [docs/adr/](docs/adr/)
 
 ## Brand
 

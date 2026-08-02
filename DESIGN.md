@@ -154,4 +154,4 @@ The desktop window is frameless. The repository tabs are the first visible row o
 - Buttons, fields, tabs, dialogs, lists, empty states, and error states use shared contracts.
 - Keyboard focus, overflow, narrow layouts, and long repository/branch names are tested.
 - `npm run audit:design` passes.
-- `npm run perf:renderer` passes against a local Electron instance launched with `npx electron . --remote-debugging-port=9222`.
+- `npm run perf:renderer` launches an isolated Playwright Electron fixture and passes its deterministic renderer contracts.
