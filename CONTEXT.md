@@ -17,6 +17,9 @@ Privacy-first: no accounts, no telemetry, no repository upload.
 - **Repository history** — the read-only Git capability for log, graph, refs,
   commit comparisons and commit diff/detail queries within one Repository
   session.
+- **Repository working tree** — the Git capability that observes status,
+  creates Working tree snapshots and owns safe file/hunk stage, unstage and
+  discard operations.
 - **Working tree snapshot** — a content-addressed fingerprint (sha256 of branch,
   per-file status, sizes, mtimes and index state) that guards stage/unstage/
   discard operations against concurrent changes.
@@ -38,9 +41,9 @@ Privacy-first: no accounts, no telemetry, no repository upload.
   in `src/main/ipc/`. `GitService` and `HostingService` are stable Interfaces
   over deeper internal Modules and provider Adapters.
 - **Git implementation** — `git-service.js` exposes the public capability while
-  `src/main/git/` owns Repository sessions, Repository history and cohesive
-  Implementations. Git commands use `simple-git` or `execFile` argv arrays,
-  never a shell string.
+  `src/main/git/` owns Repository sessions, Repository history, Repository
+  working tree and cohesive Implementations. Git commands use `simple-git` or
+  `execFile` argv arrays, never a shell string.
 - **Hosting implementation** — `hosting-service.js` orchestrates credentials,
   authentication, retries and normalized errors. `src/main/hosting/providers/`
   owns provider-specific pull-request behavior.

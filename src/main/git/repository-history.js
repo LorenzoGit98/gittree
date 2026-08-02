@@ -1,16 +1,16 @@
+const { parseWorkingDiff } = require('./patch-parser');
+
 class RepositoryHistory {
   constructor({
     git,
     assertSafeRef,
     assertCommitish,
-    validateRepositoryPath,
-    parseFileDiff
+    validateRepositoryPath
   }) {
     this.git = git;
     this.assertSafeRef = assertSafeRef;
     this.assertCommitish = assertCommitish;
     this.validateRepositoryPath = validateRepositoryPath;
-    this.parseFileDiff = parseFileDiff;
   }
 
   async getLog(maxCount = 100, branch = null) {
@@ -216,7 +216,7 @@ class RepositoryHistory {
       const patch = await this.git.raw([
         'diff', '--no-ext-diff', '--unified=3', `${hashA}..${hashB}`, '--', relativePath
       ]);
-      return this.parseFileDiff(relativePath, false, patch);
+      return parseWorkingDiff(relativePath, false, patch);
     } catch (error) {
       throw new Error(`Failed to get commit file diff: ${error.message}`, { cause: error });
     }
