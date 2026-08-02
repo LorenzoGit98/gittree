@@ -108,7 +108,7 @@ src/
 └── renderer/    Workspace, components, themes, i18n
 ```
 
-Release guide: [docs/RELEASING.md](docs/RELEASING.md) · OAuth: [docs/OAUTH.md](docs/OAUTH.md) · Updates: [docs/UPDATES.md](docs/UPDATES.md) · Performance: [docs/PERFORMANCE.md](docs/PERFORMANCE.md) · Design: [DESIGN.md](DESIGN.md) · Architecture decisions: [docs/adr/](docs/adr/)
+Release guide: [docs/RELEASING.md](docs/RELEASING.md) · OAuth: [docs/OAUTH.md](docs/OAUTH.md) · Updates: [docs/UPDATES.md](docs/UPDATES.md) · Performance: [docs/PERFORMANCE.md](docs/PERFORMANCE.md) · Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · Design: [DESIGN.md](DESIGN.md) · Architecture decisions: [docs/adr/](docs/adr/)
 
 ## Brand
 
@@ -122,7 +122,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Before opening a PR:
 2. Never expose tokens or credentials to the renderer
 3. Add English and Italian strings together
 4. Follow the [design system](DESIGN.md)
-5. Run `npm run validate`
+5. Run `npm run quality`
 
 ## License
 
