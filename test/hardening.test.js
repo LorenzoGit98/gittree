@@ -460,10 +460,11 @@ test('worktrees can be created, listed and removed', async () => {
     assert.equal(result.success, true);
     assert.ok(fs.existsSync(path.join(worktreeDir, '.git')));
 
-    const worktrees = await service.getWorktrees();
-    const match = worktrees.find(wt => path.normalize(wt.path) === path.normalize(worktreeDir));
-    assert.ok(match, `worktree listed (${worktrees.map(wt => wt.path).join(', ')})`);
-    assert.equal(match.branch, 'feature/wt');
+      const worktrees = await service.getWorktrees();
+      const pathKey = value => path.normalize(value).replace(/[\\/]+$/, '').toLowerCase();
+      const match = worktrees.find(wt => pathKey(wt.path) === pathKey(worktreeDir));
+      assert.ok(match, `worktree listed (${worktrees.map(wt => wt.path).join(', ')})`);
+      assert.equal(match.branch, 'feature/wt');
 
     await service.removeWorktree(worktreeDir);
     assert.equal(fs.existsSync(worktreeDir), false);

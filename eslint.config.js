@@ -8,6 +8,7 @@ const appGlobals = {
   DialogService: 'readonly',
   RepositoryLoadSession: 'readonly',
   RemoteOperationController: 'readonly',
+  WorkspacePanelMotion: 'readonly',
   LocalizedDateFormatter: 'readonly',
   DiffParser: 'readonly',
   ConflictHighlight: 'readonly',

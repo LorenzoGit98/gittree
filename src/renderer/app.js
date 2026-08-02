@@ -66,6 +66,25 @@ class GitTreeApp {
         syncCurrent: repoPath => this.syncCurrentRepositoryState(repoPath)
       }
     });
+    this.panelMotion = new WorkspacePanelMotion({
+      workspace: document.getElementById('workspace-body'),
+      document,
+      panels: {
+        sidebar: {
+          panel: document.getElementById('sidebar'),
+          toggle: document.getElementById('btn-toggle-sidebar'),
+          openingAnimation: 'motion-panel-enter-left',
+          closingAnimation: 'motion-panel-exit-left'
+        },
+        inspector: {
+          panel: document.getElementById('detail-panel'),
+          toggle: document.getElementById('btn-toggle-inspector'),
+          openingAnimation: 'motion-panel-enter-right',
+          closingAnimation: 'motion-panel-exit-right'
+        }
+      },
+      prefersReducedMotion: () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    });
 
     this.bindEvents();
     await this.setupUpdates();
@@ -834,9 +853,16 @@ class GitTreeApp {
   setSidebarCollapsed(collapsed, persist = true) {
     const workspace = document.getElementById('workspace-body');
     const toggleButton = document.getElementById('btn-toggle-sidebar');
-    workspace.classList.toggle('sidebar-collapsed', collapsed);
-    toggleButton.classList.toggle('active', !collapsed);
-    toggleButton.setAttribute('aria-pressed', String(!collapsed));
+    const changed = workspace.classList.contains('sidebar-collapsed') !== collapsed;
+    this.panelMotion.transition('sidebar', {
+      opening: !collapsed,
+      animate: persist && changed,
+      applyState: () => {
+        workspace.classList.toggle('sidebar-collapsed', collapsed);
+        toggleButton.classList.toggle('active', !collapsed);
+        toggleButton.setAttribute('aria-pressed', String(!collapsed));
+      }
+    });
     if (persist) localStorage.setItem('gittree.sidebar.collapsed', String(collapsed));
   }
 
@@ -877,18 +903,23 @@ class GitTreeApp {
     const safeState = ['open', 'closed', 'maximized'].includes(state) ? state : 'open';
     const previousState = this.inspectorState;
     const workspace = document.getElementById('workspace-body');
-    const panel = document.getElementById('detail-panel');
     const toggleButton = document.getElementById('btn-toggle-inspector');
     const maximizeButton = document.getElementById('btn-maximize-inspector');
     const isOpen = safeState !== 'closed';
     const isMaximized = safeState === 'maximized';
+    const changedVisibility = (previousState === 'closed') !== (safeState === 'closed');
 
-    this.inspectorState = safeState;
-    workspace.classList.toggle('inspector-closed', safeState === 'closed');
-    workspace.classList.toggle('inspector-maximized', isMaximized);
-    panel.setAttribute('aria-hidden', String(!isOpen));
-    toggleButton.classList.toggle('active', isOpen);
-    toggleButton.setAttribute('aria-pressed', String(isOpen));
+    this.panelMotion.transition('inspector', {
+      opening: isOpen,
+      animate: persist && changedVisibility,
+      applyState: () => {
+        this.inspectorState = safeState;
+        workspace.classList.toggle('inspector-closed', safeState === 'closed');
+        workspace.classList.toggle('inspector-maximized', isMaximized);
+        toggleButton.classList.toggle('active', isOpen);
+        toggleButton.setAttribute('aria-pressed', String(isOpen));
+      }
+    });
 
     const maximizeIcon = maximizeButton.querySelector('i');
     maximizeIcon.className = isMaximized ? 'ph ph-arrows-in-simple' : 'ph ph-arrows-out-simple';
