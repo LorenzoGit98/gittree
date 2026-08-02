@@ -1,3 +1,10 @@
+## [0.9.1](https://github.com/lorenzogit98/gittree-minimal/compare/v0.9.0...v0.9.1) (2026-08-02)
+
+
+### Performance Improvements
+
+* **renderer:** benchmark panel motion without grid animation assumption ([6619d11](https://github.com/lorenzogit98/gittree-minimal/commit/6619d1149450c0af4e95da87b786ac00246ed23d))
+
 # [0.9.0](https://github.com/lorenzogit98/gittree-minimal/compare/v0.8.3...v0.9.0) (2026-08-02)
 
 
