@@ -7,8 +7,8 @@ const c8Bin = require.resolve('c8/bin/c8.js');
 const SCOPES = {
   git: {
     include: ['src/main/git-service.js', 'src/main/git/**/*.js'],
-    gate: { lines: 80, branches: 65, functions: 85 },
-    target: { lines: 80, branches: 65, functions: 85 }
+    gate: { lines: 82, branches: 70, functions: 90 },
+    target: { lines: 82, branches: 70, functions: 90 }
   },
   runtime: {
     include: [

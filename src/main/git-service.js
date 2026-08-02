@@ -4,6 +4,7 @@ const { execFile, spawn } = require('child_process');
 const { promisify } = require('util');
 const crypto = require('crypto');
 const RepositorySession = require('./git/repository-session');
+const RepositoryHistory = require('./git/repository-history');
 const { parseRemoteUrl } = require('./provider-links');
 const {
   MAX_CONFLICT_RESULT_BYTES,
@@ -19,6 +20,15 @@ class GitService {
     this.session = new RepositorySession(repoPath);
     this.git = this.session.git;
     this.repoPath = this.session.path;
+    this.history = new RepositoryHistory({
+      git: this.git,
+      assertSafeRef: ref => this.assertSafeRef(ref),
+      assertCommitish: ref => this.assertCommitish(ref),
+      validateRepositoryPath: filePath => this.validateRepositoryPath(filePath),
+      parseFileDiff: (filePath, staged, patch) => (
+        this.parseWorkingDiff(filePath, staged, patch)
+      )
+    });
   }
 
   runExclusive(fn) {
@@ -26,222 +36,47 @@ class GitService {
   }
 
   async getLog(maxCount = 100, branch = null) {
-    const safeMaxCount = Math.min(1000, Math.max(1, Number(maxCount) || 100));
-    if (branch) this.assertSafeRef(branch);
-    try {
-      const options = { maxCount: safeMaxCount, '--date': 'iso' };
-      if (branch) options[branch] = null;
-      const log = await this.git.log(options);
-      return log;
-    } catch (err) {
-      throw new Error(`Failed to get log: ${err.message}`, { cause: err });
-    }
+    return this.history.getLog(maxCount, branch);
   }
 
   async getGraphPage(offset = 0, limit = 500) {
-    const safeOffset = Math.max(0, Number.isFinite(Number(offset)) ? Number(offset) : 0);
-    const safeLimit = Math.min(1000, Math.max(1, Number.isFinite(Number(limit)) ? Number(limit) : 500));
-    try {
-      const raw = await this.git.raw([
-        'log',
-        '--all',
-        '--topo-order',
-        '--date-order',
-        '--parents',
-        '-z',
-        `--skip=${safeOffset}`,
-        `--max-count=${safeLimit + 1}`,
-        '--format=%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%s'
-      ]);
-      const parsed = raw
-        .split('\0')
-        .map(record => record.replace(/^[\r\n]+|[\r\n]+$/g, ''))
-        .filter(Boolean)
-        .map(record => {
-          const [hash, parentText = '', authorName = '', authorEmail = '', date = '', ...subjectParts] =
-            record.split('\x1f');
-          return {
-            hash,
-            parents: parentText ? parentText.split(/\s+/).filter(Boolean) : [],
-            subject: subjectParts.join('\x1f'),
-            authorName,
-            authorEmail,
-            date
-          };
-        });
-      const hasMore = parsed.length > safeLimit;
-      const commits = parsed.slice(0, safeLimit);
-      return {
-        commits,
-        refs: await this.getGraphRefs(),
-        nextOffset: safeOffset + commits.length,
-        hasMore
-      };
-    } catch (err) {
-      if (/does not have any commits|your current branch .* does not have any commits/i.test(err.message)) {
-        return { commits: [], refs: [], nextOffset: safeOffset, hasMore: false };
-      }
-      throw new Error(`Failed to get graph page: ${err.message}`, { cause: err });
-    }
+    return this.history.getGraphPage(offset, limit);
   }
 
   async getGraphRefs() {
-    const raw = await this.git.raw([
-      'for-each-ref',
-      '--format=%(refname)\t%(refname:short)\t%(objectname)\t%(upstream:short)',
-      'refs/heads',
-      'refs/remotes',
-      'refs/tags'
-    ]);
-    const refs = raw
-      .split(/\r?\n/)
-      .filter(Boolean)
-      .map(line => {
-        const [fullName, shortName, commit, upstream = ''] = line.split('\t');
-        let type = 'branch';
-        if (fullName.startsWith('refs/remotes/')) type = 'remote';
-        else if (fullName.startsWith('refs/tags/')) type = 'tag';
-        return { fullName, shortName, type, commit, upstream };
-      })
-      .filter(ref => !ref.fullName.endsWith('/HEAD'));
-
-    try {
-      const headCommit = (await this.git.revparse(['HEAD'])).trim();
-      refs.push({
-        fullName: 'HEAD',
-        shortName: 'HEAD',
-        type: 'head',
-        commit: headCommit,
-        upstream: ''
-      });
-    } catch { /* HEAD may be unborn */ }
-    return refs;
+    return this.history.getGraphRefs();
   }
 
   async getDiff(commitHash = null, file = null) {
-    if (!commitHash) {
-      const relativeFile = file ? this.validateRepositoryPath(file) : null;
-      try {
-        const options = ['--no-ext-diff'];
-        if (relativeFile) options.push('--', relativeFile);
-        return await this.git.diff(options);
-      } catch (err) {
-        throw new Error(`Failed to get diff: ${err.message}`, { cause: err });
-      }
-    }
-    return this.getCommitDiff(commitHash, file);
+    return this.history.getDiff(commitHash, file);
   }
 
   async getCommitDiff(hash, file = null) {
-    this.assertSafeRef(hash);
-    const relativeFile = file ? this.validateRepositoryPath(file) : null;
-    const emptyTree = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
-    try {
-      const options = ['--no-ext-diff'];
-      if (await this.hasParent(hash)) options.push(`${hash}^..${hash}`);
-      else options.push(`${emptyTree}..${hash}`);
-      if (relativeFile) options.push('--', relativeFile);
-      return await this.git.diff(options);
-    } catch (err) {
-      throw new Error(`Failed to get diff: ${err.message}`, { cause: err });
-    }
+    return this.history.getCommitDiff(hash, file);
   }
 
   async hasParent(commitHash) {
-    try {
-      const parents = await this.git.raw(['rev-list', '--parents', '-n', '1', commitHash]);
-      return parents.split(/\s+/).filter(Boolean).length > 1;
-    } catch {
-      return true;
-    }
+    return this.history.hasParent(commitHash);
   }
 
   async getBranchComparison(baseBranch, compareBranch, maxCount = 100) {
-    this.assertSafeRef(baseBranch);
-    this.assertSafeRef(compareBranch);
-    try {
-      const [diff, log] = await Promise.all([
-        this.git.diff(['--no-ext-diff', `${baseBranch}...${compareBranch}`]),
-        this.getLog(maxCount, `${baseBranch}..${compareBranch}`)
-      ]);
-      return {
-        base: baseBranch,
-        compare: compareBranch,
-        diff,
-        commits: log.all || []
-      };
-    } catch (err) {
-      throw new Error(`Failed to compare branches: ${err.message}`, { cause: err });
-    }
+    return this.history.getBranchComparison(baseBranch, compareBranch, maxCount);
   }
 
   async compareCommits(hashA, hashB) {
-    await this.assertCommitish(hashA);
-    await this.assertCommitish(hashB);
-    try {
-      const nameStatus = await this.git.raw([
-        'diff', '--no-ext-diff', '--name-status', '-z', `${hashA}..${hashB}`
-      ]);
-      const files = this.parseNameStatus(nameStatus);
-      const diff = await this.git.diff(['--no-ext-diff', `${hashA}..${hashB}`]);
-      return { base: hashA, compare: hashB, files, diff };
-    } catch (err) {
-      throw new Error(`Failed to compare commits: ${err.message}`, { cause: err });
-    }
+    return this.history.compareCommits(hashA, hashB);
   }
 
   parseNameStatus(raw) {
-    const parts = raw.split('\0').filter(Boolean);
-    const files = [];
-    let index = 0;
-    while (index < parts.length) {
-      const status = parts[index];
-      if (status.startsWith('R') || status.startsWith('C')) {
-        const oldPath = parts[index + 1] || '';
-        const newPath = parts[index + 2] || '';
-        files.push({ path: newPath, oldPath, status: status[0] });
-        index += 3;
-      } else {
-        files.push({ path: parts[index + 1] || '', oldPath: null, status: status[0] });
-        index += 2;
-      }
-    }
-    return files;
+    return this.history.parseNameStatus(raw);
   }
 
   async getCommitFileDiff(hashA, hashB, filePath) {
-    await this.assertCommitish(hashA);
-    await this.assertCommitish(hashB);
-    const relativePath = this.validateRepositoryPath(filePath);
-    try {
-      const patch = await this.git.raw([
-        'diff', '--no-ext-diff', '--unified=3', `${hashA}..${hashB}`, '--', relativePath
-      ]);
-      return this.parseWorkingDiff(relativePath, false, patch);
-    } catch (err) {
-      throw new Error(`Failed to get commit file diff: ${err.message}`, { cause: err });
-    }
+    return this.history.getCommitFileDiff(hashA, hashB, filePath);
   }
 
   async getCommitDetail(hash) {
-    this.assertSafeRef(hash);
-    try {
-      const log = await this.git.log({ maxCount: 1, '--date': 'iso', [hash]: null });
-      if (!log.latest) return null;
-      const diff = await this.getCommitDiff(hash);
-      const show = await this.git.show([hash, '--stat', '--format=']);
-      return {
-        hash: log.latest.hash,
-        message: log.latest.message,
-        author_name: log.latest.author_name,
-        author_email: log.latest.author_email,
-        date: log.latest.date,
-        diff: diff,
-        files: show.trim().split('\n').filter(Boolean)
-      };
-    } catch (err) {
-      throw new Error(`Failed to get commit detail: ${err.message}`, { cause: err });
-    }
+    return this.history.getCommitDetail(hash);
   }
 
   async getBranches() {

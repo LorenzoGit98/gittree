@@ -33,6 +33,7 @@ globals or renderer state.
 | Electron lifecycle, windows and deep links | `src/main/application-runtime.js`, composed by `src/main/main.js` | `test/application-runtime.test.js` and Electron E2E |
 | IPC registration and error envelopes | `src/main/ipc/` plus `src/preload.js` | IPC handler, parity and preload contract tests |
 | Git public operations | `src/main/git-service.js` | `test/git-service*.test.js` with deterministic real repositories |
+| Repository history, graph, refs and commit diff | `src/main/git/repository-history.js` behind `GitService` | `test/git-history-repository-contracts.test.js` and graph integration tests |
 | Repository path, Git Adapter and serialization | `src/main/git/repository-session.js` | `test/repository-session.test.js` |
 | Hosting credentials, auth, retry and error policy | `src/main/hosting-service.js` and the credential vault | hosting service and IPC contract tests |
 | Provider list, detail and diff behavior | `src/main/hosting/providers/` | `test/hosting-provider-adapters.test.js` and `test/hosting-provider-read-contracts.test.js` |
@@ -93,8 +94,9 @@ Before extracting a Module, answer these questions:
   list, detail, diff, thread resolution, review submission and creation.
   `HostingService` retains validation, authenticated transport, vault ownership
   and the retry journal without exposing credentials to an Adapter.
-- `GitService` remains intentionally stable while cohesive internals migrate
-  behind repository sessions.
+- `GitService` remains intentionally stable. Repository history has moved into
+  a cohesive internal Module while all calls continue through the existing
+  Repository session and per-repository queue.
 - `GitTreeApp` is still a large renderer coordinator. New work should deepen
   existing controller Modules instead of adding more responsibilities to it.
 
