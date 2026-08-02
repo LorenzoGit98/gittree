@@ -30,8 +30,8 @@ const SCOPES = {
   },
   hosting: {
     include: ['src/main/hosting-service.js', 'src/main/hosting/providers/**/*.js'],
-    gate: { lines: 70, branches: 60, functions: 75 },
-    target: { lines: 70, branches: 60, functions: 75 }
+    gate: { lines: 80, branches: 65, functions: 85 },
+    target: { lines: 80, branches: 65, functions: 85 }
   },
   renderer: {
     include: [

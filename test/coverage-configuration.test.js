@@ -5,7 +5,7 @@ const { SCOPES, buildC8Arguments } = require('../scripts/check-coverage-scopes')
 test('coverage scopes keep explicit production denominators and target ratchets', () => {
   assert.deepEqual(SCOPES.git.target, { lines: 80, branches: 65, functions: 85 });
   assert.deepEqual(SCOPES.runtime.target, { lines: 75, branches: 60, functions: 75 });
-  assert.deepEqual(SCOPES.hosting.target, { lines: 70, branches: 60, functions: 75 });
+  assert.deepEqual(SCOPES.hosting.target, { lines: 80, branches: 65, functions: 85 });
   assert.deepEqual(SCOPES.renderer.target, { lines: 70, branches: 60, functions: 70 });
 
   for (const [name, scope] of Object.entries(SCOPES)) {
