@@ -2,6 +2,7 @@ const {
   app, BrowserWindow, ipcMain, dialog, Menu, nativeTheme, safeStorage, session, shell
 } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { pathToFileURL } = require('url');
 const GitService = require('./git-service');
 const RepoManager = require('./repo-manager');

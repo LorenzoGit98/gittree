@@ -152,12 +152,34 @@ test('Electron opens a deep-linked repository and renders its deterministic hist
     failed = true;
     const artifactDirectory = path.join(projectRoot, 'test-results', 'electron-smoke');
     fs.mkdirSync(artifactDirectory, { recursive: true });
+    const diagnostics = [];
     if (page) {
       await page.screenshot({
         path: path.join(artifactDirectory, 'failure.png'),
         fullPage: true
       }).catch(() => {});
+      diagnostics.push(await page.evaluate(() => ({
+        repo: window.app?.state?.repo?.path || null,
+        tabs: window.app?.components?.repoTabs?.repos?.map(repo => repo.path) || [],
+        activeIndex: window.app?.state?.activeRepoIndex ?? null,
+        loadState: document.getElementById('workspace')?.dataset.loadState || null,
+        busy: document.getElementById('workspace')?.getAttribute('aria-busy') || null,
+        bodyText: document.body.innerText.slice(0, 500)
+      })).catch(diagError => ({ evaluateFailed: String(diagError) }));
     }
+    if (application && application.process()) {
+      const stderr = application.process().stderr;
+      const chunks = [];
+      stderr?.on('data', chunk => chunks.push(String(chunk)));
+      await new Promise(resolve => setTimeout(resolve, 200));
+      if (chunks.length) {
+        fs.writeFileSync(
+          path.join(artifactDirectory, 'stderr.log'),
+          chunks.join('')
+        );
+      }
+    }
+    console.error('E2E diagnostics:', JSON.stringify(diagnostics, null, 2));
     if (application) {
       await application.context().tracing.stop({
         path: path.join(artifactDirectory, 'trace.zip')
