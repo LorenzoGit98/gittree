@@ -307,37 +307,55 @@ async function measureRenderer(page) {
         graphView.layer.querySelectorAll('.graph-row')[index] === row
       );
 
-      const resizePreview = measureMutations(500, index => {
-        leftHandle.style.transform = `translate3d(${160 * (index / 499)}px, 0, 0)`;
-      }, () => leftHandle.getBoundingClientRect().left);
-      leftHandle.style.removeProperty('transform');
-
       const historyResizePreview = measureMutations(500, index => {
         historyHandle.style.transform = `translate3d(${160 * (index / 499)}px, 0, 0)`;
       }, () => historyHandle.getBoundingClientRect().left);
       historyHandle.style.removeProperty('transform');
 
       workspace.style.setProperty('--left-panel', '260px');
+      localStorage.setItem('gittree.panel.left', '260');
       await nextFrame();
       const contractStart = leftHandle.getBoundingClientRect();
       const contractDelta = 48;
       const pointerX = contractStart.left + (contractStart.width / 2);
       const startWidth = document.getElementById('sidebar').getBoundingClientRect().width;
       const expectedWidth = Math.min(380, Math.max(220, startWidth + contractDelta));
-      const widthBeforeMove = workspace.style.getPropertyValue('--left-panel');
+      const storedWidthBeforeMove = localStorage.getItem('gittree.panel.left');
+      const resizeRowsBefore = [...graphView.layer.querySelectorAll('.graph-row')];
+      const resizeFrameSamples = [];
+      const resizeOpacitySamples = [];
       leftHandle.dispatchEvent(new PointerEvent('pointerdown', {
         bubbles: true,
         clientX: pointerX,
         clientY: contractStart.top + 10
       }));
-      document.dispatchEvent(new PointerEvent('pointermove', {
-        bubbles: true,
-        clientX: pointerX + contractDelta,
-        clientY: contractStart.top + 10
-      }));
-      await nextFrame();
+      const resizeHandleTransitionProperty = getComputedStyle(
+        leftHandle,
+        '::after'
+      ).transitionProperty;
+      const resizeDraggingStateObserved = leftHandle.classList.contains('is-dragging') &&
+        workspace.classList.contains('is-resizing');
+      for (let index = 1; index <= 24; index += 1) {
+        const startedAt = performance.now();
+        document.dispatchEvent(new PointerEvent('pointermove', {
+          bubbles: true,
+          clientX: pointerX + (contractDelta * (index / 24)),
+          clientY: contractStart.top + 10
+        }));
+        await nextFrame();
+        resizeFrameSamples.push(performance.now() - startedAt);
+        resizeOpacitySamples.push([
+          document.getElementById('sidebar'),
+          document.querySelector('.main'),
+          document.getElementById('detail-panel')
+        ].filter(panel => getComputedStyle(panel).display !== 'none').every(panel => (
+          getComputedStyle(panel).opacity === '1'
+        )));
+      }
       const widthDuringMove = workspace.style.getPropertyValue('--left-panel');
-      const previewTransform = getComputedStyle(leftHandle).transform;
+      const storedWidthDuringMove = localStorage.getItem('gittree.panel.left');
+      const resizeHandleTransform = getComputedStyle(leftHandle).transform;
+      const resizeRowsDuring = [...graphView.layer.querySelectorAll('.graph-row')];
       document.dispatchEvent(new PointerEvent('pointerup', {
         bubbles: true,
         clientX: pointerX + contractDelta,
@@ -423,7 +441,7 @@ async function measureRenderer(page) {
         smoothScrollFrame: summarize(smoothScrollFrames),
         distantJumpProfile,
         selection,
-        resizePreview,
+        resizeLiveFrame: summarize(resizeFrameSamples),
         historyResizePreview,
         panelMotion,
         jsHeapUsedMb: performance.memory
@@ -435,11 +453,19 @@ async function measureRenderer(page) {
           distantJumpReusesRowShells,
           distantJumpUpdatesRowContent,
           selectionPreservesRows: selectionPreservedRows && selectionMutations === 0,
-          resizeAvoidsLiveLayout: widthDuringMove === widthBeforeMove,
-          resizePreviewsWithTransform: previewTransform !== 'none',
-          resizeCommitsOnRelease:
+          resizeUpdatesRealtime: widthDuringMove === `${Math.round(expectedWidth)}px`,
+          resizePersistsOnlyOnRelease:
+            storedWidthDuringMove === storedWidthBeforeMove &&
             widthAfterRelease === `${Math.round(expectedWidth)}px` &&
             storedWidth === Math.round(expectedWidth),
+          resizeKeepsContentOpaque: resizeOpacitySamples.every(Boolean),
+          resizePreservesGraphRows:
+            resizeRowsBefore.length === resizeRowsDuring.length &&
+            resizeRowsBefore.every((row, index) => resizeRowsDuring[index] === row),
+          resizeHandleUsesTransformFeedback:
+            resizeDraggingStateObserved &&
+            resizeHandleTransitionProperty.includes('transform') &&
+            resizeHandleTransform === 'none',
           historyResizeAvoidsLiveLayout: historyWidthDuring === historyWidthBefore,
           historyResizePreviewsWithTransform: historyTransform !== 'none',
           historyResizeCommitsOnRelease: historyWidthAfter === historyWidthBefore + contractDelta,
@@ -622,6 +648,9 @@ async function main() {
         results.map(result => result.renderer.smoothScrollFrame.p95Ms)
       ),
       selectionP95Ms: summarize(results.map(result => result.renderer.selection.p95Ms)),
+      resizeLiveFrameP95Ms: summarize(
+        results.map(result => result.renderer.resizeLiveFrame.p95Ms)
+      ),
       panelMotionTriggerMs: summarize(results.flatMap(result => (
         result.renderer.panelMotion.transitions.map(transition => transition.triggerMs)
       ))),

@@ -347,6 +347,7 @@
 
 .workspace-body.is-resizing .bento-panel {
   pointer-events: none;
+  opacity: 1;
 }
 
 .workspace-body.is-resizing {
@@ -369,14 +370,18 @@
   height: 48px;
   border-radius: var(--radius-pill);
   background: var(--border-default);
-  transform: translate(-50%, -50%) scaleY(1);
-  transition: background var(--duration-fast) var(--ease-smooth), transform var(--duration-fast) var(--ease-smooth);
+  transform: translate(-50%, -50%) scale(1, 0.72);
+  transition: transform var(--duration-fast) var(--ease-smooth);
 }
 
-.resize-handle-v:hover::after,
+.resize-handle-v:hover::after {
+  background: var(--primary);
+  transform: translate(-50%, -50%) scale(1, 1);
+}
+
 .resize-handle-v.is-dragging::after {
   background: var(--primary);
-  transform: translate(-50%, -50%) scaleY(1.5);
+  transform: translate(-50%, -50%) scale(1.35, 1.45);
 }
 
 .main {

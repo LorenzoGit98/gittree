@@ -739,72 +739,34 @@ class GitTreeApp {
 
   setupResize() {
     const workspace = document.getElementById('workspace-body');
-    const leftHandle = document.getElementById('resize-handle-left');
-    const rightHandle = document.getElementById('resize-handle-right');
-    const savedLeft = Number(localStorage.getItem('gittree.panel.left'));
-    const savedRight = Number(localStorage.getItem('gittree.panel.right'));
-
-    if (Number.isFinite(savedLeft) && savedLeft > 0) {
-      workspace.style.setProperty('--left-panel', `${savedLeft}px`);
-    }
-    if (Number.isFinite(savedRight) && savedRight > 0) {
-      workspace.style.setProperty('--right-panel', `${savedRight}px`);
-    }
-
-    const bindHandle = (handle, side, min, max) => {
-      handle.addEventListener('pointerdown', event => {
-        event.preventDefault();
-        const startX = event.clientX;
-        const panel = side === 'left'
-          ? document.getElementById('sidebar')
-          : document.getElementById('detail-panel');
-        const startWidth = panel.getBoundingClientRect().width;
-        let latestX = startX;
-        let animationFrame = 0;
-
-        const calculateWidth = clientX => {
-          const delta = clientX - startX;
-          return Math.min(max, Math.max(min, startWidth + (side === 'left' ? delta : -delta)));
-        };
-
-        const paintPreview = () => {
-          animationFrame = 0;
-          handle.style.transform = `translate3d(${Math.round(latestX - startX)}px, 0, 0)`;
-        };
-
-        handle.classList.add('is-dragging');
-        workspace.classList.add('is-resizing');
-        document.body.style.cursor = 'col-resize';
-        if (event.isTrusted) handle.setPointerCapture?.(event.pointerId);
-
-        const onMove = moveEvent => {
-          latestX = moveEvent.clientX;
-          if (!animationFrame) animationFrame = requestAnimationFrame(paintPreview);
-        };
-
-        const onUp = upEvent => {
-          latestX = upEvent.clientX;
-          if (animationFrame) cancelAnimationFrame(animationFrame);
-          const width = Math.round(calculateWidth(latestX));
-          handle.style.removeProperty('transform');
-          workspace.style.setProperty(`--${side}-panel`, `${width}px`);
-          localStorage.setItem(`gittree.panel.${side}`, String(width));
-          handle.classList.remove('is-dragging');
-          workspace.classList.remove('is-resizing');
-          document.body.style.cursor = '';
-          document.removeEventListener('pointermove', onMove);
-          document.removeEventListener('pointerup', onUp);
-          document.removeEventListener('pointercancel', onUp);
-        };
-
-        document.addEventListener('pointermove', onMove);
-        document.addEventListener('pointerup', onUp);
-        document.addEventListener('pointercancel', onUp);
-      });
-    };
-
-    bindHandle(leftHandle, 'left', 220, 380);
-    bindHandle(rightHandle, 'right', 300, 620);
+    this.workspaceResize = new WorkspaceResizeController({
+      workspace,
+      document,
+      storage: localStorage,
+      requestFrame: callback => requestAnimationFrame(callback),
+      cancelFrame: frame => cancelAnimationFrame(frame),
+      panels: {
+        left: {
+          handle: document.getElementById('resize-handle-left'),
+          panel: document.getElementById('sidebar'),
+          min: 220,
+          max: 380,
+          cssVariable: '--left-panel',
+          storageKey: 'gittree.panel.left',
+          direction: 1
+        },
+        right: {
+          handle: document.getElementById('resize-handle-right'),
+          panel: document.getElementById('detail-panel'),
+          min: 300,
+          max: 620,
+          cssVariable: '--right-panel',
+          storageKey: 'gittree.panel.right',
+          direction: -1
+        }
+      }
+    });
+    this.workspaceResize.mount();
   }
 
   setupWorkspaceState() {
