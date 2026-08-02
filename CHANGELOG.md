@@ -1,3 +1,10 @@
+## [0.9.2](https://github.com/lorenzogit98/gittree-minimal/compare/v0.9.1...v0.9.2) (2026-08-02)
+
+
+### Bug Fixes
+
+* canonicalize repository paths before top-level comparison ([b4916d8](https://github.com/lorenzogit98/gittree-minimal/commit/b4916d8f1ab921d2356328a1fd96bca0d990c8c8))
+
 ## [0.9.1](https://github.com/lorenzogit98/gittree-minimal/compare/v0.9.0...v0.9.1) (2026-08-02)
 
 
