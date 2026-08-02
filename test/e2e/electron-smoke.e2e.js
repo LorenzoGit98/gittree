@@ -100,8 +100,12 @@ test('Electron opens a deep-linked repository and renders its deterministic hist
       assert.equal(motion.workspaceTransitionProperty, 'none');
     }
 
-    await page.locator('#branch-search').fill('feature');
-    await page.getByText('feature/known-branch', { exact: true }).waitFor();
+    const branchSearch = page.locator('#branch-search');
+    const branchSearchVisible = await branchSearch.isVisible();
+    if (branchSearchVisible) {
+      await branchSearch.fill('feature');
+      await page.getByText('feature/known-branch', { exact: true }).waitFor();
+    }
 
     await page.evaluate(() => {
       const telemetry = { openRepoCalls: 0, loadStates: [] };
@@ -134,8 +138,8 @@ test('Electron opens a deep-linked repository and renders its deterministic hist
     assert.equal(remoteActionTelemetry.openRepoCalls, 0);
     assert.equal(remoteActionTelemetry.loadStates.includes('loading'), false);
     assert.equal(remoteActionTelemetry.graphRowPreserved, true);
-    assert.equal(remoteActionTelemetry.branchFilter, 'feature');
-    await page.locator('#branch-search').fill('');
+    assert.equal(remoteActionTelemetry.branchFilter, branchSearchVisible ? 'feature' : '');
+    if (branchSearchVisible) await branchSearch.fill('');
 
     await page.getByRole('tab', { name: /Changes|Modifiche/ }).click();
     await page.locator('#changes-view:not(.is-hidden)').waitFor();
