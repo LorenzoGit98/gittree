@@ -54,6 +54,55 @@ async function measureRenderer(page) {
       };
     };
     const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
+    const profileDistantJumps = (graph, graphView, maxScroll) => {
+      const methodNames = ['createRow', 'createGraphSvg', 'fmtDate'];
+      const originals = Object.fromEntries(methodNames.map(name => [name, graphView[name]]));
+      const timings = Object.fromEntries(methodNames.map(name => [name, { calls: 0, totalMs: 0 }]));
+      for (const name of methodNames) {
+        graphView[name] = function profileGraphMethod(...args) {
+          const startedAt = performance.now();
+          try {
+            return originals[name].apply(this, args);
+          } finally {
+            timings[name].calls += 1;
+            timings[name].totalMs += performance.now() - startedAt;
+          }
+        };
+      }
+      const startedAt = performance.now();
+      try {
+        for (let index = 0; index < 100; index += 1) {
+          graph.scrollTop = maxScroll * (index / 99);
+          graphView.renderViewport();
+          graphView.layer.getBoundingClientRect();
+        }
+      } finally {
+        for (const name of methodNames) graphView[name] = originals[name];
+      }
+      const totalMs = performance.now() - startedAt;
+      const createRowMs = timings.createRow.totalMs;
+      const graphSvgMs = timings.createGraphSvg.totalMs;
+      const dateFormattingMs = timings.fmtDate.totalMs;
+      return {
+        totalMs,
+        averageJumpMs: totalMs / 100,
+        attributionPerJumpMs: {
+          dateFormatting: dateFormattingMs / 100,
+          graphSvg: graphSvgMs / 100,
+          remainingRowAssembly: Math.max(
+            0,
+            createRowMs - graphSvgMs - dateFormattingMs
+          ) / 100,
+          domCommitAndLayout: Math.max(0, totalMs - createRowMs) / 100
+        },
+        methods: Object.fromEntries(methodNames.map(name => [name, {
+          ...timings[name],
+          averageCallMs: timings[name].calls
+            ? timings[name].totalMs / timings[name].calls
+            : 0
+        }]))
+      };
+    };
     const measureMutations = (iterations, mutate, forceLayout) => {
       const samples = [];
       for (let index = 0; index < iterations; index += 1) {
@@ -175,6 +224,8 @@ async function measureRenderer(page) {
         smoothScrollFrames.push(performance.now() - startedAt);
       }
 
+      const distantJumpProfile = profileDistantJumps(graph, graphView, maxScroll);
+
       graph.scrollTop = 0;
       graphView.renderViewport(true);
       const selectionRows = [...graphView.layer.querySelectorAll('.graph-row')];
@@ -266,6 +317,7 @@ async function measureRenderer(page) {
         smoothViewportRender,
         jumpScrollFrame: summarize(jumpScrollFrames),
         smoothScrollFrame: summarize(smoothScrollFrames),
+        distantJumpProfile,
         selection,
         resizePreview,
         historyResizePreview,

@@ -40,6 +40,7 @@ class GraphView {
     this.hasPersistedColumnWidths = restoredColumns.persisted;
     this.columnResize = null;
     this.columnResizeRaf = 0;
+    this.formatLocalizedDate = LocalizedDateFormatter.create();
 
     this.layer = document.createElement('div');
     this.layer.className = 'graph-virtual-layer';
@@ -671,11 +672,6 @@ class GraphView {
   }
 
   fmtDate(value) {
-    if (!value) return '';
-    const date = new Date(value);
-    return date.toLocaleString(i18next.language, {
-      dateStyle: 'short',
-      timeStyle: 'short'
-    });
+    return this.formatLocalizedDate(value, i18next.language);
   }
 }
