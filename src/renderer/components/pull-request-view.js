@@ -75,9 +75,11 @@ class PullRequestView {
     });
   }
 
-  async load(repoPath) {
+  async load(repoPath, loadSession = null) {
     this.repoPath = repoPath;
-    const metadata = await window.gitTree.getBranchMetadata(repoPath);
+    const metadata = await (
+      loadSession?.branchMetadata() || window.gitTree.getBranchMetadata(repoPath)
+    );
     this.availableProviders = new Set(
       (metadata?.remotes || [])
         .map(remote => remote.provider)

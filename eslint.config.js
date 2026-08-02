@@ -6,6 +6,7 @@ const appGlobals = {
   Theme: 'readonly',
   HtmlEncoder: 'readonly',
   DialogService: 'readonly',
+  RepositoryLoadSession: 'readonly',
   DiffParser: 'readonly',
   ConflictHighlight: 'readonly',
   WelcomeScreen: 'readonly',

@@ -20,14 +20,17 @@ The benchmark records:
 Run a quick local sample:
 
 ```powershell
-npm run perf:renderer
+npm run test:performance
 ```
 
 Record five runs for a baseline or comparison:
 
 ```powershell
 node scripts/renderer-perf-benchmark.js --runs=5 --output=performance-results/renderer.json
+node scripts/workspace-perf-benchmark.js --runs=3 --output=performance-results/workspace.json
 ```
+
+The workspace benchmark uses two real isolated Git repositories to measure repeated tab switching, individual loader duration, and process memory before and after ten switches. Memory is reported separately for Electron browser, renderer, GPU, and utility processes.
 
 Timing values are observations, not functional assertions. The command fails only when a deterministic renderer contract is broken. Approved nightly baselines compare the same machine, operating system, build mode, fixture, and run count.
 

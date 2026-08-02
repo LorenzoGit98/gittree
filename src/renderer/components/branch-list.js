@@ -68,15 +68,15 @@ class BranchListView {
     });
   }
 
-  async load(repoPath) {
+  async load(repoPath, loadSession = null) {
     this.setLoading(true);
     try {
       this.app.components.branchContextMenu?.close();
       const [result, metadata, status, operationState] = await Promise.all([
         window.gitTree.getBranches(repoPath),
-        window.gitTree.getBranchMetadata(repoPath),
-        window.gitTree.getStatus(repoPath),
-        window.gitTree.getOperationState(repoPath)
+        loadSession?.branchMetadata() || window.gitTree.getBranchMetadata(repoPath),
+        loadSession?.status() || window.gitTree.getStatus(repoPath),
+        loadSession?.operationState() || window.gitTree.getOperationState(repoPath)
       ]);
       if (!this.app.isCurrentRepo(repoPath)) return;
       if (result?.error) {

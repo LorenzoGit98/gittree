@@ -296,6 +296,7 @@ class GitTreeApp {
 
   async openRepo(repo, options = {}) {
     const loadToken = ++this.repoLoadToken;
+    const loadSession = new RepositoryLoadSession(window.gitTree, repo.path);
     this.state.repo = repo;
     this.components.welcome.hide();
     this.syncRemoteBusyUI();
@@ -306,12 +307,12 @@ class GitTreeApp {
     try {
       await Promise.all([
         this.components.graphView.load(repo.path),
-        this.components.branchList.load(repo.path),
+        this.components.branchList.load(repo.path, loadSession),
         this.components.changes.load(repo.path),
-        this.components.pullRequests.load(repo.path),
+        this.components.pullRequests.load(repo.path, loadSession),
         this.loadStashes(repo.path),
         this.loadTags(repo.path),
-        this.updateStatus(repo.path)
+        this.updateStatus(repo.path, loadSession)
       ]);
 
       if (loadToken !== this.repoLoadToken) return;
@@ -337,7 +338,7 @@ class GitTreeApp {
       this.components.statusBar.setRepo(repo.name);
       this.components.statusBar.setBranch(branchName || '');
     this.components.welcome?.markStep?.('open');
-      const operationState = await window.gitTree.getOperationState(repo.path);
+      const operationState = await loadSession.operationState();
       if (loadToken === this.repoLoadToken && operationState?.type) {
         await this.components.conflict.open(operationState);
       }
@@ -473,9 +474,9 @@ class GitTreeApp {
     </div>`;
   }
 
-  async updateStatus(repoPath) {
+  async updateStatus(repoPath, loadSession = null) {
     try {
-      const status = await window.gitTree.getStatus(repoPath);
+      const status = await (loadSession?.status() || window.gitTree.getStatus(repoPath));
       if (!status || status.error) return;
       if (!this.isCurrentRepo(repoPath)) return;
       this.state.currentBranch = status.current;
