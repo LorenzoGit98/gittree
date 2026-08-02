@@ -127,3 +127,14 @@ test('automatic versioning explicitly dispatches the atomic release workflow', (
   assert.match(versioning, /git tag --points-at "\$release_commit"/);
   assert.match(versioning, /gh workflow run release\.yml --ref "\$tag"/);
 });
+
+test('manual SignPath workflow validates secrets at runtime and uses the configured policy', () => {
+  const workflow = fs.readFileSync(
+    path.join(root, '.github', 'workflows', 'signpath.yml'),
+    'utf8'
+  );
+
+  assert.doesNotMatch(workflow, /if:\s*\$\{\{\s*secrets\./);
+  assert.match(workflow, /name:\s*Validate SignPath configuration/);
+  assert.match(workflow, /SigningPolicyId=\$SIGNPATH_SIGNING_POLICY_ID/);
+});

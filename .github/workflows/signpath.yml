@@ -16,7 +16,6 @@ jobs:
     name: Sign NSIS installer with SignPath
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    if: ${{ secrets.SIGNPATH_API_TOKEN != '' }}
 
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -26,6 +25,21 @@ jobs:
       SIGNPATH_SIGNING_POLICY_ID: ${{ secrets.SIGNPATH_SIGNING_POLICY_ID }}
 
     steps:
+      - name: Validate SignPath configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=()
+          for name in SIGNPATH_API_TOKEN SIGNPATH_ORG_ID SIGNPATH_SIGNING_POLICY_ID; do
+            if [[ -z "${!name}" ]]; then
+              missing+=("$name")
+            fi
+          done
+          if (( ${#missing[@]} )); then
+            echo "Missing SignPath configuration: ${missing[*]}" >&2
+            exit 1
+          fi
+
       - name: Download Windows installer
         run: |
           set -euo pipefail
@@ -44,7 +58,7 @@ jobs:
           response=$(curl -sS -X POST \
             "https://app.signpath.io/api/v1/$SIGNPATH_ORG_ID/SigningRequests" \
             -H "Authorization: Bearer $SIGNPATH_API_TOKEN" \
-            -F "SigningPolicySlug=release-signing" \
+            -F "SigningPolicyId=$SIGNPATH_SIGNING_POLICY_ID" \
             -F "ProjectSlug=$SIGNPATH_PROJECT_SLUG" \
             -F "Artifact=@$installer" \
             -F "Description=GitTree ${{ github.event.inputs.tag }}")
