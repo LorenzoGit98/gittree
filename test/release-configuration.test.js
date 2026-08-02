@@ -110,3 +110,20 @@ test('release workflow publishes one atomic draft after every native build succe
   assert.match(workflow, /GITTREE_GITHUB_CLIENT_ID/);
   assert.match(workflow, /GITTREE_GITLAB_CLIENT_ID/);
 });
+
+test('automatic versioning explicitly dispatches the atomic release workflow', () => {
+  const versioning = fs.readFileSync(
+    path.join(root, '.github', 'workflows', 'versioning.yml'),
+    'utf8'
+  );
+  const release = fs.readFileSync(
+    path.join(root, '.github', 'workflows', 'release.yml'),
+    'utf8'
+  );
+
+  assert.match(release, /workflow_dispatch:/);
+  assert.match(versioning, /actions:\s*write/);
+  assert.match(versioning, /git fetch origin master --tags/);
+  assert.match(versioning, /git tag --points-at "\$release_commit"/);
+  assert.match(versioning, /gh workflow run release\.yml --ref "\$tag"/);
+});

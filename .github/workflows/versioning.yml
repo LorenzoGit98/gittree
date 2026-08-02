@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: versioning-${{ github.ref }}
@@ -35,3 +36,22 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx semantic-release
+
+      - name: Dispatch atomic native release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git fetch origin master --tags
+          release_commit="$(git rev-parse origin/master)"
+          if [[ "$release_commit" == "$GITHUB_SHA" ]]; then
+            echo "No release commit was created."
+            exit 0
+          fi
+          tag="$(git tag --points-at "$release_commit" --list 'v*.*.*' --sort=-version:refname | head -n 1)"
+          if [[ -z "$tag" ]]; then
+            echo "The release commit has no semantic version tag." >&2
+            exit 1
+          fi
+          gh workflow run release.yml --ref "$tag"
