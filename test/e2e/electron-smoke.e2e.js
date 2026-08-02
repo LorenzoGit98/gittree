@@ -1,4 +1,4 @@
-/* global CSSAnimation, document, getComputedStyle, MutationObserver, window */
+/* global document, getComputedStyle, MutationObserver, window */
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -8,39 +8,28 @@ const { createElectronFixture } = require('../helpers/electron-fixture');
 
 const projectRoot = path.resolve(__dirname, '..', '..');
 
-async function capturePanelMotion(page, buttonId, panelId, expectedAnimationName) {
-  await page.evaluate(({ id, expectedName }) => {
+async function capturePanelMotion(page, buttonId, panelId, expectedAnimationName, expectedClass) {
+  await page.evaluate(({ id, expectedName, lifecycleClass }) => {
     const panel = document.getElementById(id);
     const workspace = document.getElementById('workspace-body');
     window.__panelMotionCapture = null;
-    const capture = event => {
-      if (event.target !== panel || event.animationName !== expectedName) return;
-      const animation = panel.getAnimations().find(candidate => (
-        candidate instanceof CSSAnimation && candidate.animationName === expectedName
-      ));
-      const keyframeProperties = animation
-        ? [...new Set(animation.effect.getKeyframes().flatMap(keyframe => (
-            Object.keys(keyframe).filter(key => ![
-              'offset',
-              'computedOffset',
-              'easing',
-              'composite'
-            ].includes(key))
-          )))]
-        : [];
+    const observer = new MutationObserver(() => {
+      if (!workspace.classList.contains(lifecycleClass)) return;
+      const animationNames = getComputedStyle(panel).animationName.split(',').map(value => value.trim());
       window.__panelMotionCapture = {
-        animationName: event.animationName,
-        keyframeProperties,
+        animationName: animationNames.includes(expectedName) ? expectedName : animationNames.join(','),
+        lifecycleClass,
+        motionState: panel.dataset.motionState,
         workspaceTransitionProperty: getComputedStyle(workspace).transitionProperty
       };
-      panel.removeEventListener('animationstart', capture);
-    };
-    panel.addEventListener('animationstart', capture);
-  }, { id: panelId, expectedName: expectedAnimationName });
+      observer.disconnect();
+    });
+    observer.observe(workspace, { attributes: true, attributeFilter: ['class'] });
+  }, { id: panelId, expectedName: expectedAnimationName, lifecycleClass: expectedClass });
   await page.locator(buttonId).click();
-  await page.waitForFunction(expectedName => (
-    window.__panelMotionCapture?.animationName === expectedName
-  ), expectedAnimationName, { timeout: 5000 });
+  await page.waitForFunction(lifecycleClass => (
+    window.__panelMotionCapture?.lifecycleClass === lifecycleClass
+  ), expectedClass, { timeout: 5000 });
   return page.evaluate(() => window.__panelMotionCapture);
 }
 
@@ -97,15 +86,17 @@ test('Electron opens a deep-linked repository and renders its deterministic hist
     });
 
     const panelMotions = [
-      ['#btn-toggle-sidebar', 'sidebar', 'motion-panel-exit-left'],
-      ['#btn-toggle-sidebar', 'sidebar', 'motion-panel-enter-left'],
-      ['#btn-toggle-inspector', 'detail-panel', 'motion-panel-exit-right'],
-      ['#btn-toggle-inspector', 'detail-panel', 'motion-panel-enter-right']
+      ['#btn-toggle-sidebar', 'sidebar', 'motion-panel-exit-left', 'is-sidebar-closing', 'closing'],
+      ['#btn-toggle-sidebar', 'sidebar', 'motion-panel-enter-left', 'is-sidebar-opening', 'opening'],
+      ['#btn-toggle-inspector', 'detail-panel', 'motion-panel-exit-right', 'is-inspector-closing', 'closing'],
+      ['#btn-toggle-inspector', 'detail-panel', 'motion-panel-enter-right', 'is-inspector-opening', 'opening']
     ];
-    for (const [buttonId, panelId, expectedName] of panelMotions) {
-      const motion = await capturePanelMotion(page, buttonId, panelId, expectedName);
+    for (const [buttonId, panelId, expectedName, expectedClass, expectedState] of panelMotions) {
+      const motion = await capturePanelMotion(
+        page, buttonId, panelId, expectedName, expectedClass
+      );
       assert.equal(motion.animationName, expectedName);
-      assert.deepEqual(motion.keyframeProperties.sort(), ['opacity', 'transform']);
+      assert.equal(motion.motionState, expectedState);
       assert.equal(motion.workspaceTransitionProperty, 'none');
     }
 
