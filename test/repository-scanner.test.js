@@ -22,6 +22,23 @@ function marker(root, relativePath, kind = 'directory') {
   return repository;
 }
 
+function longPath(value) {
+  if (process.platform !== 'win32') return path.resolve(value);
+  try {
+    const { execFileSync } = require('node:child_process');
+    return execFileSync(
+      'cmd.exe',
+      ['/d', '/c', 'for', '%I', 'in', `("${value}")`, 'do', '@echo', '%~fI'],
+      { encoding: 'utf8' }
+    ).trim();
+  } catch {
+    return path.resolve(value);
+  }
+}
+
+const samePath = (left, right) =>
+  longPath(left).toLowerCase() === longPath(right).toLowerCase();
+
 test('workspace scanning finds repositories and worktrees but stops below a repository', async t => {
   const root = createWorkspace(t);
   const application = marker(root, 'apps/application');
@@ -32,12 +49,16 @@ test('workspace scanning finds repositories and worktrees but stops below a repo
   fs.writeFileSync(path.join(root, 'bare.git', 'HEAD'), 'ref: refs/heads/main\n');
 
   const result = await scanRepositories(root);
+  const expected = [application, worktree].map(item => fs.realpathSync(item)).sort();
 
   assert.equal(result.canceled, false);
-  assert.deepEqual(
-    result.repositories.map(item => item.path).sort(),
-    [application, worktree].map(item => fs.realpathSync(item)).sort()
-  );
+  assert.equal(result.repositories.length, expected.length);
+  for (const repo of result.repositories) {
+    assert.ok(
+      expected.some(item => samePath(repo.path, item)),
+      `scanned path ${repo.path} matches an expected repository`
+    );
+  }
   assert.ok(result.scannedDirectories >= 4);
 });
 

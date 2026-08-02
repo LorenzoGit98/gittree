@@ -115,6 +115,43 @@ async function measureRenderer(page) {
       }
       return summarize(samples);
     };
+    const measurePanelTransition = async ({ run, panel, animationName, graphLayer }) => {
+      const rowsBefore = [...graphLayer.querySelectorAll('.graph-row')];
+      const startedAt = performance.now();
+      run();
+      const triggerMs = performance.now() - startedAt;
+      const animation = panel.getAnimations().find(candidate => (
+        candidate.animationName === animationName
+      ));
+      const keyframeProperties = animation
+        ? [...new Set(animation.effect.getKeyframes().flatMap(keyframe => (
+            Object.keys(keyframe).filter(key => ![
+              'offset',
+              'computedOffset',
+              'easing',
+              'composite'
+            ].includes(key))
+          )))]
+        : [];
+      const frameIntervals = [];
+      let previousFrame = performance.now();
+      for (let index = 0; index < 40 && panel.dataset.motionState !== 'idle'; index += 1) {
+        await nextFrame();
+        const currentFrame = performance.now();
+        frameIntervals.push(currentFrame - previousFrame);
+        previousFrame = currentFrame;
+      }
+      const rowsAfter = [...graphLayer.querySelectorAll('.graph-row')];
+      return {
+        animationName: animation?.animationName || '',
+        triggerMs,
+        frames: summarize(frameIntervals.length ? frameIntervals : [0]),
+        keyframeProperties,
+        finishesIdle: panel.dataset.motionState === 'idle',
+        preservesGraphRows: rowsBefore.length === rowsAfter.length &&
+          rowsBefore.every((row, index) => rowsAfter[index] === row)
+      };
+    };
 
     const graph = document.querySelector('.graph-view');
     const graphView = window.app?.components?.graphView;
@@ -139,7 +176,11 @@ async function measureRenderer(page) {
       storedLeftPanel: localStorage.getItem('gittree.panel.left'),
       columnWidths: { ...graphView.columnWidths },
       hasPersistedColumnWidths: graphView.hasPersistedColumnWidths,
-      storedColumnWidths: localStorage.getItem('gittree.history.columns')
+      storedColumnWidths: localStorage.getItem('gittree.history.columns'),
+      sidebarCollapsed: workspace.classList.contains('sidebar-collapsed'),
+      inspectorState: window.app.inspectorState,
+      storedSidebarCollapsed: localStorage.getItem('gittree.sidebar.collapsed'),
+      storedInspectorState: localStorage.getItem('gittree.workspace.inspector')
     };
 
     let metrics;
@@ -331,6 +372,46 @@ async function measureRenderer(page) {
         localStorage.getItem('gittree.history.columns')
       ).message;
 
+      window.app.setSidebarCollapsed(false, false);
+      window.app.setInspectorState('open', false);
+      await nextFrame();
+      const panelMotion = {
+        workspaceTransitionProperty: getComputedStyle(workspace).transitionProperty,
+        transitions: []
+      };
+      const panelTransitions = [
+        {
+          run: () => window.app.setSidebarCollapsed(true),
+          panel: document.getElementById('sidebar'),
+          animationName: 'motion-panel-exit-left'
+        },
+        {
+          run: () => window.app.setSidebarCollapsed(false),
+          panel: document.getElementById('sidebar'),
+          animationName: 'motion-panel-enter-left'
+        },
+        {
+          run: () => window.app.setInspectorState('closed'),
+          panel: document.getElementById('detail-panel'),
+          animationName: 'motion-panel-exit-right'
+        },
+        {
+          run: () => window.app.setInspectorState('open'),
+          panel: document.getElementById('detail-panel'),
+          animationName: 'motion-panel-enter-right'
+        }
+      ];
+      for (const transition of panelTransitions) {
+        panelMotion.transitions.push(await measurePanelTransition({
+          ...transition,
+          graphLayer: graphView.layer
+        }));
+      }
+      const panelMotionUsesCompositorOnly = panelMotion.transitions.every(transition => (
+        transition.animationName &&
+        transition.keyframeProperties.sort().join(',') === 'opacity,transform'
+      ));
+
       metrics = {
         syntheticCommits: syntheticRows.length,
         initialRenderMs,
@@ -344,6 +425,7 @@ async function measureRenderer(page) {
         selection,
         resizePreview,
         historyResizePreview,
+        panelMotion,
         jsHeapUsedMb: performance.memory
           ? performance.memory.usedJSHeapSize / (1024 * 1024)
           : null,
@@ -361,7 +443,13 @@ async function measureRenderer(page) {
           historyResizeAvoidsLiveLayout: historyWidthDuring === historyWidthBefore,
           historyResizePreviewsWithTransform: historyTransform !== 'none',
           historyResizeCommitsOnRelease: historyWidthAfter === historyWidthBefore + contractDelta,
-          historyResizePersistsOnRelease: persistedHistoryWidth === historyWidthAfter
+          historyResizePersistsOnRelease: persistedHistoryWidth === historyWidthAfter,
+          panelMotionUsesCompositorOnly,
+          panelMotionAvoidsGridAnimation: panelMotion.workspaceTransitionProperty === 'none',
+          panelMotionPreservesGraphRows:
+            panelMotion.transitions.every(transition => transition.preservesGraphRows),
+          panelMotionCompletes:
+            panelMotion.transitions.every(transition => transition.finishesIdle)
         }
       };
     } finally {
@@ -391,6 +479,18 @@ async function measureRenderer(page) {
         localStorage.removeItem('gittree.panel.left');
       } else {
         localStorage.setItem('gittree.panel.left', original.storedLeftPanel);
+      }
+      window.app.setSidebarCollapsed(original.sidebarCollapsed, false);
+      window.app.setInspectorState(original.inspectorState, false);
+      if (original.storedSidebarCollapsed == null) {
+        localStorage.removeItem('gittree.sidebar.collapsed');
+      } else {
+        localStorage.setItem('gittree.sidebar.collapsed', original.storedSidebarCollapsed);
+      }
+      if (original.storedInspectorState == null) {
+        localStorage.removeItem('gittree.workspace.inspector');
+      } else {
+        localStorage.setItem('gittree.workspace.inspector', original.storedInspectorState);
       }
       graph.scrollTop = original.scrollTop;
       graphView.applyFilter();
@@ -520,7 +620,13 @@ async function main() {
       smoothScrollFrameP95Ms: summarize(
         results.map(result => result.renderer.smoothScrollFrame.p95Ms)
       ),
-      selectionP95Ms: summarize(results.map(result => result.renderer.selection.p95Ms))
+      selectionP95Ms: summarize(results.map(result => result.renderer.selection.p95Ms)),
+      panelMotionTriggerMs: summarize(results.flatMap(result => (
+        result.renderer.panelMotion.transitions.map(transition => transition.triggerMs)
+      ))),
+      panelMotionFrameP95Ms: summarize(results.flatMap(result => (
+        result.renderer.panelMotion.transitions.map(transition => transition.frames.p95Ms)
+      )))
     },
     runs: results
   };

@@ -81,7 +81,7 @@ test('Electron opens a deep-linked repository and renders its deterministic hist
       const motion = await capturePanelMotion(page, buttonId, panelId);
       assert.equal(motion.animationName, expectedName);
       assert.deepEqual(motion.keyframeProperties.sort(), ['opacity', 'transform']);
-      assert.equal(motion.workspaceTransitionProperty.includes('grid-template-columns'), false);
+      assert.equal(motion.workspaceTransitionProperty, 'none');
     }
 
     await page.locator('#branch-search').fill('feature');

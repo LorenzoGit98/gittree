@@ -16,6 +16,7 @@ The benchmark records:
 - in-place commit selection cost and DOM preservation;
 - workspace and history-column resize preview cost;
 - resize contracts: transform-only preview and one persisted commit on release.
+- Branches and Inspector open/close trigger cost and animation-frame cadence on the 10,000-commit graph.
 
 Run a quick local sample:
 
@@ -53,4 +54,5 @@ Investigate a nightly regression above 20% against the approved median. Do not h
 - Preview panel and history-column resize with `transform` only.
 - Commit and persist a resized width once, on pointer release.
 - Animate only `transform` and `opacity`, using the design-system durations.
+- Open and close Branches and Inspector with compositor-only motion; never animate workspace grid columns.
 - Preserve all loading, empty, error, disabled, focus, keyboard, theme, and language states.

@@ -112,6 +112,7 @@
   min-height: 0;
   gap: 0;
   padding: var(--space-3);
+  transition-property: none;
 }
 
 .workspace-body.inspector-closed {
