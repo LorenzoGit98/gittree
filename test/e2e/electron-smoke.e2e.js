@@ -81,6 +81,10 @@ test('Electron opens a deep-linked repository and renders its deterministic hist
     assert.ok(await page.locator('.graph-row').count() < 100);
     assert.match(await page.locator('.graph-row').first().innerText(), /Initial fixture commit/);
 
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    assert.equal(await page.evaluate(() => (
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    )), false);
     const inspector = page.locator('#detail-panel');
     if (await inspector.evaluate(element => getComputedStyle(element).display === 'none')) {
       await page.locator('#btn-toggle-inspector').click();
