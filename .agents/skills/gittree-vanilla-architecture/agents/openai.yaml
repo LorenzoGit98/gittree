@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitTree Vanilla Architecture"
+  short_description: "Vanilla Electron architecture and components"
+  default_prompt: "Use $gittree-vanilla-architecture to refactor this GitTree module into testable vanilla JavaScript components without changing behavior."

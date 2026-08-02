@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitTree Test Engineering"
+  short_description: "Deterministic GitTree tests and fixtures"
+  default_prompt: "Use $gittree-test-engineering to add deterministic tests for this GitTree behavior at the correct test layer."

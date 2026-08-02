@@ -11,17 +11,20 @@ Thanks for your interest in GitTree. Everyone is welcome to contribute.
 ## Development
 
 - **Architecture**: Electron main process (`src/main/`) + preload bridge (`src/preload.js`) + vanilla JS renderer (`src/renderer/`)
-- **Git operations**: Add methods to `src/main/git-service.js`, expose via `src/main/main.js` IPC handlers, bridge in `src/preload.js`, consume in renderer components
+- **Engineering rules**: Read `AGENTS.md` before changing code; it preserves the vanilla stack and defines module and component boundaries
+- **Git operations**: Keep the public `GitService` facade stable, register IPC in the matching `src/main/ipc/` domain module, bridge explicitly in `src/preload.js`, and consume it through injected renderer dependencies
 - **UI components**: Each feature is a class in `src/renderer/components/`, loaded in `src/renderer/index.html`
 - **Styling**: CSS custom properties in `src/renderer/styles/variables.css`, component styles in `src/renderer/styles/`
 - **i18n**: Add translations in `src/renderer/i18n.js` under the appropriate locale
 
+Project-local skills under `.agents/skills/` provide the detailed architecture, testing, design-system and release workflows. Use the relevant skill instead of introducing a new local convention.
+
 ## Running tests
 
 ```bash
-npm test           # unit tests
-npm run audit:design  # design system audit
-npm run test:renderer-ui  # UI regression tests (requires running app)
+npm test              # unit and integration tests
+npm run test:e2e      # Electron end-to-end tests
+npm run quality       # complete local quality gate
 ```
 
 ## Pull requests
