@@ -445,7 +445,8 @@ async function measureRenderer(page) {
           historyResizeCommitsOnRelease: historyWidthAfter === historyWidthBefore + contractDelta,
           historyResizePersistsOnRelease: persistedHistoryWidth === historyWidthAfter,
           panelMotionUsesCompositorOnly,
-          panelMotionAvoidsGridAnimation: panelMotion.workspaceTransitionProperty === 'none',
+          panelMotionAvoidsGridAnimation:
+            !panelMotion.workspaceTransitionProperty.includes('grid-template-columns'),
           panelMotionPreservesGraphRows:
             panelMotion.transitions.every(transition => transition.preservesGraphRows),
           panelMotionCompletes:
