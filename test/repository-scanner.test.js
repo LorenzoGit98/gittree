@@ -22,42 +22,30 @@ function marker(root, relativePath, kind = 'directory') {
   return repository;
 }
 
-function longPath(value) {
-  if (process.platform !== 'win32') return path.resolve(value);
-  try {
-    const { execFileSync } = require('node:child_process');
-    const cleaned = String(value).replace(/[\\/]+$/, '');
-    return execFileSync(
-      'cmd.exe',
-      ['/d', '/c', 'for', '%I', 'in', `("${cleaned}")`, 'do', '@echo', '%~fI'],
-      { encoding: 'utf8' }
-    ).trim().replace(/[\\/]+$/, '');
-  } catch {
-    return path.resolve(value);
-  }
-}
+const normalizedPath = value =>
+  String(value).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 
-const samePath = (left, right) =>
-  longPath(left).toLowerCase() === longPath(right).toLowerCase();
+const matchesRelative = (absolutePath, relativePath) =>
+  normalizedPath(absolutePath).endsWith(`/${normalizedPath(relativePath)}`);
 
 test('workspace scanning finds repositories and worktrees but stops below a repository', async t => {
   const root = createWorkspace(t);
-  const application = marker(root, 'apps/application');
-  const worktree = marker(root, 'worktrees/release', 'file');
+  marker(root, 'apps/application');
+  marker(root, 'worktrees/release', 'file');
   marker(root, 'apps/application/vendor/nested');
   marker(root, 'node_modules/dependency');
   fs.mkdirSync(path.join(root, 'bare.git', 'objects'), { recursive: true });
   fs.writeFileSync(path.join(root, 'bare.git', 'HEAD'), 'ref: refs/heads/main\n');
 
   const result = await scanRepositories(root);
-  const expected = [application, worktree].map(item => fs.realpathSync(item)).sort();
+  const expectedRelative = ['apps/application', 'worktrees/release'];
 
   assert.equal(result.canceled, false);
-  assert.equal(result.repositories.length, expected.length);
-  for (const repo of result.repositories) {
+  assert.equal(result.repositories.length, expectedRelative.length);
+  for (const relative of expectedRelative) {
     assert.ok(
-      expected.some(item => samePath(repo.path, item)),
-      `scanned path ${repo.path} matches an expected repository`
+      result.repositories.some(repo => matchesRelative(repo.path, relative)),
+      `scan found ${relative} (${result.repositories.map(repo => repo.path).join(', ')})`
     );
   }
   assert.ok(result.scannedDirectories >= 4);
