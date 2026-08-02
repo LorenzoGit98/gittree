@@ -6,8 +6,6 @@ class GitTreeApp {
     this.workspaceMode = 'history';
     this.updateState = null;
     this.repoLoadToken = 0;
-    this.remoteActionBusy = false;
-    this.remoteActionRepo = null;
     this._events = {};
     this.dialogs = new DialogService();
   }
@@ -49,6 +47,25 @@ class GitTreeApp {
     this.components.conflict = new ConflictResolver(this);
     this.components.gitflow = new GitFlow(this);
     this.components.statusBar = new StatusBar();
+    this.remoteOperations = new RemoteOperationController({
+      bridge: window.gitTree,
+      document,
+      translate: t,
+      notify: (message, type) => this.showToast(message, type),
+      getCurrentRepository: () => this.state.repo,
+      isCurrentRepository: repoPath => this.isCurrentRepo(repoPath),
+      repoTabs: this.components.repoTabs,
+      createLoadSession: repoPath => new RepositoryLoadSession(window.gitTree, repoPath),
+      views: {
+        refreshGraph: (repoPath, options) => this.components.graphView.load(repoPath, options),
+        refreshBranches: (repoPath, session, options) => (
+          this.components.branchList.load(repoPath, session, options)
+        ),
+        refreshChanges: repoPath => this.components.changes.load(repoPath),
+        refreshStatus: (repoPath, session) => this.updateStatus(repoPath, session),
+        syncCurrent: repoPath => this.syncCurrentRepositoryState(repoPath)
+      }
+    });
 
     this.bindEvents();
     await this.setupUpdates();
@@ -327,26 +344,11 @@ class GitTreeApp {
 
       await supportingLoad;
       if (loadToken !== this.repoLoadToken) return;
-      const branchName = this.components.branchList.current;
-      const currentBranchMetadata = (this.components.branchList.metadata?.branches || [])
-        .find(branch => branch.kind === 'local' && branch.current);
-      this.components.repoTabs.updateSync(repo.path, currentBranchMetadata
-        ? {
-            branch: currentBranchMetadata.name,
-            upstream: currentBranchMetadata.upstream,
-            ahead: currentBranchMetadata.ahead,
-            behind: currentBranchMetadata.behind
-          }
-        : null);
-      this.updatePushPullCounts(
-        currentBranchMetadata?.ahead || 0,
-        currentBranchMetadata?.behind || 0
-      );
+      const branchName = this.syncCurrentRepositoryState(repo.path);
       document.getElementById('status-branch').textContent = branchName ? t('statusBar.onBranch', { branch: branchName }) : '';
       document.getElementById('status-repo').textContent = repo.name;
       this.components.statusBar.setRepo(repo.name);
-      this.components.statusBar.setBranch(branchName || '');
-    this.components.welcome?.markStep?.('open');
+      this.components.welcome?.markStep?.('open');
       const operationState = await loadSession.operationState();
       if (loadToken === this.repoLoadToken && operationState?.type) {
         await this.components.conflict.open(operationState);
@@ -531,6 +533,27 @@ class GitTreeApp {
     }
   }
 
+  syncCurrentRepositoryState(repoPath) {
+    if (!this.isCurrentRepo(repoPath)) return '';
+    const branchName = this.components.branchList.current || '';
+    const currentBranchMetadata = (this.components.branchList.metadata?.branches || [])
+      .find(branch => branch.kind === 'local' && branch.current);
+    this.components.repoTabs.updateSync(repoPath, currentBranchMetadata
+      ? {
+          branch: currentBranchMetadata.name,
+          upstream: currentBranchMetadata.upstream,
+          ahead: currentBranchMetadata.ahead,
+          behind: currentBranchMetadata.behind
+        }
+      : null);
+    this.updatePushPullCounts(
+      currentBranchMetadata?.ahead || 0,
+      currentBranchMetadata?.behind || 0
+    );
+    this.components.statusBar.setBranch(branchName);
+    return branchName;
+  }
+
   animateContentRefresh(element) {
     if (!element) return;
     element.classList.remove('content-refresh');
@@ -600,37 +623,11 @@ class GitTreeApp {
   }
 
   async doFetch() {
-    if (!this.state.repo || this.remoteActionBusy) return;
-    const repoPath = this.state.repo.path;
-    this.setRemoteActionBusy('btn-fetch', true);
-    this.components.repoTabs.setSyncBusy(repoPath, true);
-    this.showToast(t('feedback.fetching'));
-    try {
-      const result = await window.gitTree.fetch(repoPath);
-      if (result.error) { this.showToast(result.error, 'error'); return; }
-      this.showToast(t('feedback.fetchComplete'), 'success');
-      if (this.isCurrentRepo(repoPath)) await this.refresh();
-    } finally {
-      this.components.repoTabs.setSyncBusy(repoPath, false);
-      this.setRemoteActionBusy('btn-fetch', false);
-    }
+    return this.remoteOperations.run('fetch');
   }
 
   async doPull() {
-    if (!this.state.repo || this.remoteActionBusy) return;
-    const repoPath = this.state.repo.path;
-    this.setRemoteActionBusy('btn-pull', true);
-    this.components.repoTabs.setSyncBusy(repoPath, true);
-    this.showToast(t('feedback.pulling'));
-    try {
-      const result = await window.gitTree.pull(repoPath);
-      if (result.error) { this.showToast(result.error, 'error'); return; }
-      this.showToast(t('feedback.pullComplete'), 'success');
-      if (this.isCurrentRepo(repoPath)) await this.refresh();
-    } finally {
-      this.components.repoTabs.setSyncBusy(repoPath, false);
-      this.setRemoteActionBusy('btn-pull', false);
-    }
+    return this.remoteOperations.run('pull');
   }
 
   async openTerminal() {
@@ -675,54 +672,15 @@ class GitTreeApp {
   }
 
   async doPush() {
-    if (!this.state.repo || this.remoteActionBusy) return;
-    const repoPath = this.state.repo.path;
-    this.setRemoteActionBusy('btn-push', true);
-    this.components.repoTabs.setSyncBusy(repoPath, true);
-    this.showToast(t('feedback.pushing'));
-    try {
-      const result = await window.gitTree.push(repoPath);
-      if (result.error) { this.showToast(result.error, 'error'); return; }
-      this.showToast(t('feedback.pushComplete'), 'success');
-      if (this.isCurrentRepo(repoPath)) await this.refresh();
-    } finally {
-      this.components.repoTabs.setSyncBusy(repoPath, false);
-      this.setRemoteActionBusy('btn-push', false);
-    }
+    return this.remoteOperations.run('push');
   }
 
   setRemoteActionBusy(activeId, busy) {
-    if (busy) {
-      this.remoteActionBusy = true;
-      this.remoteActionRepo = this.state.repo?.path || null;
-    } else {
-      this.remoteActionBusy = false;
-      this.remoteActionRepo = null;
-    }
-    this.syncRemoteBusyUI(activeId);
+    return this.remoteOperations.setExternalBusy(activeId, busy);
   }
 
-  syncRemoteBusyUI(activeId = null) {
-    const busyHere = this.remoteActionBusy &&
-      Boolean(this.remoteActionRepo) &&
-      this.isCurrentRepo(this.remoteActionRepo);
-    for (const id of ['btn-fetch', 'btn-pull', 'btn-push']) {
-      const button = document.getElementById(id);
-      if (!button) continue;
-      const icon = button.querySelector(':scope > i');
-      const isActive = busyHere && id === activeId;
-      button.disabled = busyHere;
-      button.classList.toggle('is-busy', isActive);
-      button.setAttribute('aria-busy', String(isActive));
-      if (!icon) continue;
-      if (isActive) {
-        if (!icon.dataset.originalIcon) icon.dataset.originalIcon = icon.className;
-        icon.className = 'ph ph-circle-notch';
-      } else if (icon.dataset.originalIcon) {
-        icon.className = icon.dataset.originalIcon;
-        delete icon.dataset.originalIcon;
-      }
-    }
+  syncRemoteBusyUI() {
+    this.remoteOperations.syncUI();
   }
 
   showWelcome() {

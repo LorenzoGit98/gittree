@@ -30,7 +30,7 @@ node scripts/renderer-perf-benchmark.js --runs=5 --output=performance-results/re
 node scripts/workspace-perf-benchmark.js --runs=3 --output=performance-results/workspace.json
 ```
 
-The workspace benchmark uses two real isolated Git repositories to measure repeated tab switching at three milestones: graph data ready, primary workspace interactive, and all supporting panels settled. Its memory protocol records a stable welcome baseline, one settled repository, two settled repositories, ten switches, and post-switch idle. It reports working set, Windows private bytes, JavaScript heaps, DOM counters, and Electron browser, renderer, GPU, and utility processes separately. `--diagnostic-gc=true` is an opt-in investigation aid and is never used by the application.
+The workspace benchmark uses two real isolated Git repositories and a local bare remote to measure repeated tab switching at three milestones: graph data ready, primary workspace interactive, and all supporting panels settled. It also measures a real Fetch and verifies that the operation does not trigger a global repository reload, enter the workspace-wide loading state, or replace an already visible graph row. Its memory protocol records a stable welcome baseline, one settled repository, two settled repositories, ten switches, and post-switch idle. It reports working set, Windows private bytes, JavaScript heaps, DOM counters, and Electron browser, renderer, GPU, and utility processes separately. `--diagnostic-gc=true` is an opt-in investigation aid and is never used by the application.
 
 Timing values are observations, not functional assertions. The command fails only when a deterministic renderer contract is broken. Approved nightly baselines compare the same machine, operating system, build mode, fixture, and run count.
 
@@ -49,6 +49,7 @@ Investigate a nightly regression above 20% against the approved median. Do not h
 
 - Keep fewer than 100 commit rows in the DOM for the 10,000-commit fixture.
 - Update selection in place; do not rebuild the commit list.
+- Refresh Fetch, Pull, and Push incrementally without blanking the workspace or losing viewport and filters.
 - Preview panel and history-column resize with `transform` only.
 - Commit and persist a resized width once, on pointer release.
 - Animate only `transform` and `opacity`, using the design-system durations.

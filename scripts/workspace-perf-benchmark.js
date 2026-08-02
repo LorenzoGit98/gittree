@@ -1,4 +1,4 @@
-/* global document, requestAnimationFrame, requestIdleCallback, window */
+/* global document, MutationObserver, requestAnimationFrame, requestIdleCallback, window */
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -224,8 +224,55 @@ async function switchRepository(page, target, switchId) {
   return { target: target.subject, graphReadyMs, interactiveMs, settledMs, loaders };
 }
 
+async function measureRemoteFetch(page, target) {
+  await page.evaluate(index => document.querySelectorAll('.repo-tab')[index].click(), target.index);
+  await page.waitForFunction(repoPath => (
+    window.app.state.repo?.path === repoPath
+    && document.getElementById('workspace')?.dataset.loadState === 'settled'
+  ), target.path);
+  await page.evaluate(() => {
+    const state = window.__workspacePerformance;
+    state.activeSwitch = 'remote-fetch';
+    state.remoteFetch = {
+      openRepoCalls: 0,
+      loadStates: [],
+      graphRow: document.querySelector('.graph-row')
+    };
+    const openRepo = window.app.openRepo.bind(window.app);
+    window.app.openRepo = (...args) => {
+      state.remoteFetch.openRepoCalls += 1;
+      return openRepo(...args);
+    };
+    new MutationObserver(() => {
+      state.remoteFetch.loadStates.push(
+        document.getElementById('workspace')?.dataset.loadState
+      );
+    }).observe(document.getElementById('workspace'), {
+      attributes: true,
+      attributeFilter: ['data-load-state']
+    });
+  });
+  const startedAt = nodePerformance.now();
+  await page.evaluate(() => window.app.doFetch());
+  const durationMs = nodePerformance.now() - startedAt;
+  return page.evaluate(duration => {
+    const state = window.__workspacePerformance;
+    const telemetry = state.remoteFetch;
+    state.activeSwitch = null;
+    return {
+      durationMs: duration,
+      loaders: state.records.filter(record => record.switchId === 'remote-fetch'),
+      contracts: {
+        avoidsGlobalRepositoryReload: telemetry.openRepoCalls === 0,
+        avoidsGlobalLoadingState: !telemetry.loadStates.includes('loading'),
+        preservesGraphRow: telemetry.graphRow === document.querySelector('.graph-row')
+      }
+    };
+  }, durationMs);
+}
+
 async function runBenchmark({ diagnosticGc = false } = {}) {
-  const primary = createElectronFixture();
+  const primary = createElectronFixture({ withRemote: true });
   const secondary = createRepository();
   prepareRepository(secondary, 'Secondary performance repository');
   let application;
@@ -285,6 +332,10 @@ async function runBenchmark({ diagnosticGc = false } = {}) {
         'after-diagnostic-garbage-collection'
       ));
     }
+    const remoteFetch = await measureRemoteFetch(page, {
+      index: 0,
+      path: primary.repository
+    });
 
     const loaderLabels = [...new Set(
       switches.flatMap(sample => sample.loaders.map(loader => loader.label))
@@ -300,6 +351,7 @@ async function runBenchmark({ diagnosticGc = false } = {}) {
           .map(loader => loader.durationMs)))
       ])),
       switches,
+      remoteFetch,
       memory,
       memoryDeltas: {
         oneRepositoryFromBase: memoryDelta(memory[1], memory[0]),
@@ -342,6 +394,7 @@ async function main() {
       graphReadyP95Ms: summarize(runs.map(run => run.graphReadySummary.p95Ms)),
       repositoryInteractiveP95Ms: summarize(runs.map(run => run.interactiveSummary.p95Ms)),
       repositorySettledP95Ms: summarize(runs.map(run => run.settledSummary.p95Ms)),
+      remoteFetchMs: summarize(runs.map(run => run.remoteFetch.durationMs)),
       workingSetAfterSwitchesMb: summarize(runs.map(run =>
         run.memory.find(sample => sample.label === 'after-ten-switches-idle')?.totalWorkingSetMb
       )),
@@ -364,6 +417,10 @@ async function main() {
     fs.writeFileSync(outputPath, `${JSON.stringify(report, null, 2)}\n`);
   }
   console.log(JSON.stringify(report, null, 2));
+  const contractsPass = runs.every(run => (
+    Object.values(run.remoteFetch.contracts).every(Boolean)
+  ));
+  if (!contractsPass) process.exitCode = 1;
 }
 
 main().catch(error => {

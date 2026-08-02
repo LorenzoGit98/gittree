@@ -62,13 +62,15 @@ class GraphView {
     });
   }
 
-  async load(repoPath) {
+  async load(repoPath, options = {}) {
     if (!this.body.contains(this.layer)) {
       this.body.replaceChildren(this.layer);
     }
     this.generation += 1;
     const generation = this.generation;
     const keepContent = this.repoPath === repoPath && this.rows.length > 0;
+    const preserveViewport = keepContent && options.preserveViewport === true;
+    const viewportState = preserveViewport ? this.captureViewportState() : null;
     this.repoPath = repoPath;
     this.restoreHistoryState();
     this.rows = [];
@@ -88,18 +90,21 @@ class GraphView {
       this.layer.replaceChildren(this.emptyState('ph-circle-notch', t('history.loading')));
     }
     this.body.style.height = '100%';
-    await this.loadNextPage(generation);
+    const loaded = await this.loadNextPage(generation, { render: !preserveViewport });
+    if (!loaded || generation !== this.generation || !preserveViewport) return;
+    this.restoreViewportState(viewportState);
+    this.renderViewport();
   }
 
-  async loadNextPage(generation = this.generation) {
-    if (!this.repoPath || !this.hasMore || this.loading) return;
+  async loadNextPage(generation = this.generation, options = {}) {
+    if (!this.repoPath || !this.hasMore || this.loading) return false;
     this.loading = true;
     try {
       const page = await window.gitTree.getGraphPage(this.repoPath, {
         offset: this.offset,
         limit: 500
       });
-      if (generation !== this.generation) return;
+      if (generation !== this.generation) return false;
       if (page?.error) throw new Error(page.error);
 
       for (const ref of page.refs || []) {
@@ -122,15 +127,54 @@ class GraphView {
       this.applyFilter();
       this.updateAuthorOptions();
       this.updateGraphWidth();
-      this.renderViewport(true);
+      if (options.render !== false) this.renderViewport(true);
+      return true;
     } catch (error) {
       if (generation === this.generation) {
         this.body.style.height = '100%';
         this.layer.replaceChildren(this.emptyState('ph-warning-circle', error.message));
       }
+      return false;
     } finally {
       if (generation === this.generation) this.loading = false;
     }
+  }
+
+  captureViewportState() {
+    const viewportTop = Math.max(0, this.container.scrollTop - 36);
+    const index = this.visibleRows.length
+      ? Math.min(
+        this.visibleRows.length - 1,
+        Math.max(0, Math.floor(viewportTop / this.rowHeight))
+      )
+      : 0;
+    return {
+      anchorHash: this.visibleRows[index]?.commit.hash || null,
+      anchorOffset: viewportTop - (index * this.rowHeight),
+      scrollTop: this.container.scrollTop,
+      selectedHash: this.selectedHash,
+      selectedHashes: [...this.selectedHashes],
+      selectionAnchor: this.selectionAnchor
+    };
+  }
+
+  restoreViewportState(state) {
+    if (!state) return;
+    this.selectedHashes = new Set(
+      state.selectedHashes.filter(hash => this.hashes.has(hash))
+    );
+    this.selectedHash = this.selectedHashes.has(state.selectedHash)
+      ? state.selectedHash
+      : null;
+    this.selectionAnchor = this.selectedHashes.has(state.selectionAnchor)
+      ? state.selectionAnchor
+      : null;
+    const anchorIndex = state.anchorHash
+      ? this.visibleRows.findIndex(row => row.commit.hash === state.anchorHash)
+      : -1;
+    this.container.scrollTop = anchorIndex >= 0
+      ? Math.max(0, 36 + (anchorIndex * this.rowHeight) + state.anchorOffset)
+      : state.scrollTop;
   }
 
   applyFilter() {

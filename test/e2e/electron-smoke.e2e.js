@@ -1,4 +1,4 @@
-/* global document, window */
+/* global document, MutationObserver, window */
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -9,7 +9,7 @@ const { createElectronFixture } = require('../helpers/electron-fixture');
 const projectRoot = path.resolve(__dirname, '..', '..');
 
 test('Electron opens a deep-linked repository and renders its deterministic history', async t => {
-  const fixture = createElectronFixture();
+  const fixture = createElectronFixture({ withRemote: true });
   let application;
   let page;
   let failed = false;
@@ -44,6 +44,43 @@ test('Electron opens a deep-linked repository and renders its deterministic hist
     );
     assert.ok(await page.locator('.graph-row').count() < 100);
     assert.match(await page.locator('.graph-row').first().innerText(), /Initial fixture commit/);
+
+    await page.locator('#branch-search').fill('feature');
+    await page.getByText('feature/known-branch', { exact: true }).waitFor();
+
+    await page.evaluate(() => {
+      const telemetry = { openRepoCalls: 0, loadStates: [] };
+      const implementation = window.app.openRepo.bind(window.app);
+      window.app.openRepo = (...args) => {
+        telemetry.openRepoCalls += 1;
+        return implementation(...args);
+      };
+      new MutationObserver(() => {
+        telemetry.loadStates.push(document.getElementById('workspace')?.dataset.loadState);
+      }).observe(document.getElementById('workspace'), {
+        attributes: true,
+        attributeFilter: ['data-load-state']
+      });
+      window.__remoteActionTelemetry = telemetry;
+      window.__remoteActionGraphRow = document.querySelector('.graph-row');
+    });
+    await page.locator('#btn-fetch').click();
+    await page.waitForFunction(() => (
+      document.getElementById('btn-fetch')?.getAttribute('aria-busy') === 'true'
+    ));
+    await page.waitForFunction(() => (
+      document.getElementById('btn-fetch')?.getAttribute('aria-busy') === 'false'
+    ));
+    const remoteActionTelemetry = await page.evaluate(() => ({
+      ...window.__remoteActionTelemetry,
+      graphRowPreserved: document.querySelector('.graph-row') === window.__remoteActionGraphRow,
+      branchFilter: document.getElementById('branch-search')?.value
+    }));
+    assert.equal(remoteActionTelemetry.openRepoCalls, 0);
+    assert.equal(remoteActionTelemetry.loadStates.includes('loading'), false);
+    assert.equal(remoteActionTelemetry.graphRowPreserved, true);
+    assert.equal(remoteActionTelemetry.branchFilter, 'feature');
+    await page.locator('#branch-search').fill('');
 
     await page.getByRole('tab', { name: /Changes|Modifiche/ }).click();
     await page.locator('#changes-view:not(.is-hidden)').waitFor();

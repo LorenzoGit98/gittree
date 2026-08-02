@@ -68,8 +68,9 @@ class BranchListView {
     });
   }
 
-  async load(repoPath, loadSession = null) {
-    this.setLoading(true);
+  async load(repoPath, loadSession = null, options = {}) {
+    const background = options.background === true;
+    this.setLoading(true, { preserveContent: background });
     try {
       this.app.components.branchContextMenu?.close();
       const [result, metadata, status, operationState] = await Promise.all([
@@ -98,13 +99,15 @@ class BranchListView {
       );
       this.status = status?.error ? null : status;
       this.operationState = operationState?.error ? null : operationState;
-      if (this.searchInput) this.searchInput.value = '';
-      this.filter = '';
-      this.selectedBranchKey = null;
-      this.selectedBranchElement = null;
-      this.selectedBranchKeys.clear();
-      this.selectionAnchorKey = null;
-      this.shouldReveal = true;
+      if (!background) {
+        if (this.searchInput) this.searchInput.value = '';
+        this.filter = '';
+        this.selectedBranchKey = null;
+        this.selectedBranchElement = null;
+        this.selectedBranchKeys.clear();
+        this.selectionAnchorKey = null;
+        this.shouldReveal = true;
+      }
       this.render();
     } catch {
       this.data = null;
@@ -117,10 +120,11 @@ class BranchListView {
     finally { this.setLoading(false); }
   }
 
-  setLoading(loading) {
+  setLoading(loading, { preserveContent = false } = {}) {
     this.loading = loading;
     this.container.classList.toggle('is-project-loading', loading);
-    if (loading) {
+    this.container.setAttribute('aria-busy', String(loading));
+    if (loading && !preserveContent) {
       this.container.innerHTML = `<div class="project-loading-inline" role="status" aria-live="polite">
         <i class="ph ph-circle-notch" aria-hidden="true"></i>
         <span>${t('common.loading')}</span>

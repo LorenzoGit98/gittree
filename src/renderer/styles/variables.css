@@ -559,6 +559,12 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes motion-remote-action-settle {
+  0% { opacity: 0.72; transform: scale(0.96); }
+  55% { opacity: 1; transform: scale(1.035); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
 @keyframes motion-scale-in {
   from { opacity: 0; transform: scale(0.92); }
   to { opacity: 1; transform: scale(1); }

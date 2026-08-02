@@ -1,9 +1,9 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { createRepository } = require('./git-repository');
+const { createRepository, git } = require('./git-repository');
 
-function createElectronFixture() {
+function createElectronFixture({ withRemote = false } = {}) {
   const repo = createRepository();
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'gittree-user-data-'));
 
@@ -12,10 +12,19 @@ function createElectronFixture() {
   repo.git('commit', '-m', 'Initial fixture commit');
   repo.git('branch', 'feature/known-branch');
   repo.git('tag', 'v0.1.0');
+  let remote = null;
+  if (withRemote) {
+    remote = path.join(repo.root, 'origin.git');
+    fs.mkdirSync(remote);
+    git(remote, 'init', '--bare');
+    repo.git('remote', 'add', 'origin', remote);
+    repo.git('push', '--set-upstream', 'origin', 'main');
+  }
   repo.write('dirty.txt', 'known working tree change\n');
 
   return {
     repository: repo.repository,
+    remote,
     userData,
     deepLink: `gittree://open?path=${encodeURIComponent(repo.repository)}`,
     cleanup() {
