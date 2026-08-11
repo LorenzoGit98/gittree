@@ -26,6 +26,18 @@
 
 ---
 
+## Preview
+
+Real GitTree builds captured from the deterministic Electron test fixture. No user repositories or personal data are used.
+
+<p align="center">
+  <img src="docs/screenshots/gittree-history-light.png" width="960" alt="GitTree commit history in the light theme">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/gittree-history-dark.png" width="960" alt="GitTree commit history in the dark theme">
+</p>
+
 ## Why GitTree
 
 Busy repositories should not feel opaque. GitTree keeps history, branches, working changes, and repository state readable in one fluid desktop workspace. It answers the questions you ask every day — which branch am I on, where did this commit come from, what will this merge change — without hiding Git behind a proprietary model.
@@ -98,6 +110,7 @@ Sensitive reports: [SECURITY.md](SECURITY.md).
 | `npm run test:coverage` | Tests with a coverage report |
 | `npm run validate` | Tests + design audit |
 | `npm run audit:design` | Design-system rules |
+| `npm run screenshots:readme` | Regenerate deterministic README screenshots |
 | `npm run perf:renderer` | Renderer benchmark |
 | `npm run dist:win` / `dist:mac` / `dist:linux` | Platform installers |
 
