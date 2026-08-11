@@ -11,8 +11,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/lorenzogit98/gittree-minimal/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/lorenzogit98/gittree-minimal/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://github.com/lorenzogit98/gittree-minimal/releases"><img alt="Release" src="https://img.shields.io/github/v/release/lorenzogit98/gittree-minimal?display_name=tag"></a>
+  <a href="https://github.com/lorenzogit98/gittree/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/lorenzogit98/gittree/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/lorenzogit98/gittree/releases"><img alt="Release" src="https://img.shields.io/github/v/release/lorenzogit98/gittree?display_name=tag"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-102A4C"></a>
   <img alt="Platforms" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-102A4C">
 </p>
@@ -21,7 +21,7 @@
   <a href="#installation">Install</a> ·
   <a href="docs/USER_GUIDE.md">User Guide</a> ·
   <a href="CONTRIBUTING.md">Contributing</a> ·
-  <a href="https://github.com/lorenzogit98/gittree-minimal/releases">Releases</a>
+  <a href="https://github.com/lorenzogit98/gittree/releases">Releases</a>
 </p>
 
 ---
@@ -56,7 +56,7 @@ Full workflow: [User Guide](docs/USER_GUIDE.md).
 
 ## Installation
 
-Download the installer from [GitHub Releases](https://github.com/lorenzogit98/gittree-minimal/releases):
+Download the installer from [GitHub Releases](https://github.com/lorenzogit98/gittree/releases):
 
 | Platform | Artifact |
 | --- | --- |
@@ -71,8 +71,8 @@ Until production certificates are enabled, the OS may warn about unsigned builds
 Requires **Node.js 22+**, **Git**, and **npm**.
 
 ```bash
-git clone https://github.com/lorenzogit98/gittree-minimal.git
-cd gittree-minimal
+git clone https://github.com/lorenzogit98/gittree.git
+cd gittree
 npm ci
 npm start
 ```

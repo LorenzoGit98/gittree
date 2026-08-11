@@ -31,7 +31,7 @@ artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 publish:
   provider: github
   owner: lorenzogit98
-  repo: gittree-minimal
+  repo: gittree
   releaseType: release
 
 win:

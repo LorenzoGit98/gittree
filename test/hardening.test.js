@@ -549,7 +549,7 @@ test('deep links parse only absolute repository paths', () => {
   assert.equal(parseDeepLink('gittree://open?path=' + encodeURIComponent('C:\\work\\repo')), 'C:\\work\\repo');
   assert.equal(parseDeepLink('gittree://open?path=' + encodeURIComponent('/home/user/repo')), '/home/user/repo');
   assert.equal(parseDeepLink('gittree://open?path=relative/path'), null);
-  assert.equal(parseDeepLink('https://github.com/lorenzogit98/gittree-minimal'), null);
+  assert.equal(parseDeepLink('https://github.com/lorenzogit98/gittree'), null);
   assert.equal(parseDeepLink('gittree://open?path=' + encodeURIComponent('a' + String.fromCharCode(0) + 'b')), null);
   assert.equal(parseDeepLink('gittree://other?path=/tmp/x'), null);
   assert.equal(parseDeepLink(null), null);

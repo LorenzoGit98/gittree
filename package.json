@@ -1,5 +1,5 @@
 {
-  "name": "gittree-minimal",
+  "name": "gittree",
   "version": "0.9.8",
   "description": "A fast, open-source Git desktop client for visual history and local-first repository management.",
   "main": "src/main/main.js",
@@ -32,11 +32,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lorenzogit98/gittree-minimal.git"
+    "url": "git+https://github.com/lorenzogit98/gittree.git"
   },
-  "homepage": "https://github.com/lorenzogit98/gittree-minimal#readme",
+  "homepage": "https://github.com/lorenzogit98/gittree#readme",
   "bugs": {
-    "url": "https://github.com/lorenzogit98/gittree-minimal/issues"
+    "url": "https://github.com/lorenzogit98/gittree/issues"
   },
   "keywords": [
     "git",

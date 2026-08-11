@@ -21,7 +21,7 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
       SIGNPATH_ORG_ID: ${{ secrets.SIGNPATH_ORG_ID }}
-      SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG || 'gittree-minimal' }}
+      SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
       SIGNPATH_SIGNING_POLICY_ID: ${{ secrets.SIGNPATH_SIGNING_POLICY_ID }}
 
     steps:
@@ -30,7 +30,7 @@ jobs:
         run: |
           set -euo pipefail
           missing=()
-          for name in SIGNPATH_API_TOKEN SIGNPATH_ORG_ID SIGNPATH_SIGNING_POLICY_ID; do
+          for name in SIGNPATH_API_TOKEN SIGNPATH_ORG_ID SIGNPATH_PROJECT_SLUG SIGNPATH_SIGNING_POLICY_ID; do
             if [[ -z "${!name}" ]]; then
               missing+=("$name")
             fi

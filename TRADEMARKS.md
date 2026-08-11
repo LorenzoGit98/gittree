@@ -10,11 +10,11 @@ The official GitTree project intends to keep its own builds free of charge. This
 
 ## GitTree name and logo
 
-The names “GitTree” and “GitTree Minimal”, the GitTree icon, logos and associated visual identity identify the official project. They are not licensed for use merely because the source code is available under the MIT license.
+The name “GitTree”, its former “GitTree Minimal” name, the GitTree icon, logos and associated visual identity identify the official project. They are not licensed for use merely because the source code is available under the MIT license.
 
 You may use the name “GitTree” to refer accurately to the unmodified upstream project, its source code or its official releases. You may not:
 
-- name a modified or redistributed product “GitTree” or “GitTree Minimal”;
+- name a modified or redistributed product “GitTree” or use its former “GitTree Minimal” name;
 - use the GitTree icon or logo as the primary brand of a fork or paid distribution;
 - imply that a fork, package, service or commercial distribution is official, sponsored or supported by GitTree;
 - use GitTree branding in a way that could confuse users about the source of a build.

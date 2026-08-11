@@ -214,7 +214,7 @@ class SettingsView {
             <p>${this.esc(t('settings.aboutDescription'))}</p>
             <p>${this.esc(t('settings.aboutCreatedBy'))} <strong>Lorenzo Giannoccaro</strong> &lt;lorenzo.giannoccaro998@gmail.com&gt;</p>
             <p class="settings-about-repo">
-              <a href="#" id="about-repo-link">github.com/LorenzoGit98/gittree-minimal</a>
+              <a href="#" id="about-repo-link">github.com/LorenzoGit98/gittree</a>
             </p>
             <div class="settings-update-row">
               <button class="btn btn-small" id="btn-check-update" type="button">
@@ -730,7 +730,7 @@ class SettingsView {
     if (repoLink) {
       repoLink.onclick = event => {
         event.preventDefault();
-        window.gitTree.openExternal('https://github.com/lorenzogit98/gittree-minimal');
+        window.gitTree.openExternal('https://github.com/lorenzogit98/gittree');
       };
     }
 

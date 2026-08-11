@@ -8,7 +8,7 @@ Questa guida descrive il percorso supportato per produrre installer locali o pub
 - npm e Git disponibili nel `PATH`.
 - Working tree pulito.
 - Versione SemVer coerente in `package.json`.
-- Per le release ufficiali: repository GitHub `lorenzogit98/gittree-minimal`.
+- Per le release ufficiali: repository GitHub `lorenzogit98/gittree`.
 - Client ID pubblici di GitHub App e GitLab OAuth Application.
 - Per macOS OTA: certificato Developer ID e credenziali Apple per la notarizzazione.
 - Per eliminare gli avvisi Windows: certificato Authenticode oppure adesione a un servizio gratuito per progetti open source come SignPath Foundation.
@@ -134,7 +134,8 @@ Windows e Linux possono utilizzare gli aggiornamenti GitHub senza un servizio a 
    - `SIGNPATH_API_TOKEN`;
    - `SIGNPATH_ORG_ID`;
    - `SIGNPATH_SIGNING_POLICY_ID`.
-   E la repository variable `SIGNPATH_PROJECT_SLUG` (default `gittree-minimal`).
+   E la repository variable obbligatoria `SIGNPATH_PROJECT_SLUG`, che identifica
+   il progetto configurato su SignPath indipendentemente dal nome GitHub.
 3. Dopo la pubblicazione di una release, eseguire manualmente il workflow
    `Sign Windows installer` indicando il tag: scarica l'installer NSIS dalla
    release, lo invia a SignPath, attende la firma e sostituisce l'asset nella

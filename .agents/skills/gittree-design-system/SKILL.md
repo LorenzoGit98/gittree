@@ -1,6 +1,6 @@
 ---
 name: gittree-design-system
-description: Implement and review GitTree renderer UI changes using the repository's opaque premium bento design system, light/dark themes, Phosphor icons, and i18next localization. Use for any task that adds or changes HTML, CSS, user-facing renderer JavaScript, layout, components, icons, themes, responsive behavior, or translated copy in GitTree Minimal.
+description: Implement and review GitTree renderer UI changes using the repository's opaque premium bento design system, light/dark themes, Phosphor icons, and i18next localization. Use for any task that adds or changes HTML, CSS, user-facing renderer JavaScript, layout, components, icons, themes, responsive behavior, or translated copy in GitTree.
 ---
 
 # GitTree Design System

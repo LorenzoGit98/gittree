@@ -7,6 +7,13 @@ const root = path.resolve(__dirname, '..');
 
 test('release dependencies are assigned to the correct package scopes', () => {
   const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  assert.equal(packageJson.name, 'gittree');
+  assert.equal(
+    packageJson.repository.url,
+    'git+https://github.com/lorenzogit98/gittree.git'
+  );
+  assert.equal(packageJson.homepage, 'https://github.com/lorenzogit98/gittree#readme');
+  assert.equal(packageJson.bugs.url, 'https://github.com/lorenzogit98/gittree/issues');
   assert.equal(packageJson.dependencies.electron, undefined);
   assert.match(packageJson.dependencies['electron-updater'], /^\^6\./);
   assert.match(packageJson.devDependencies.electron, /^\^43\./);
@@ -46,7 +53,7 @@ test('electron-builder emits installable and update-compatible artifacts', () =>
   const config = fs.readFileSync(path.join(root, 'electron-builder.yml'), 'utf8');
   assert.match(config, /provider:\s*github/);
   assert.match(config, /owner:\s*lorenzogit98/);
-  assert.match(config, /repo:\s*gittree-minimal/);
+  assert.match(config, /repo:\s*gittree(?:\r?\n|$)/);
   assert.match(config, /target:\s*nsis/);
   assert.match(config, /-\s*zip/);
   assert.match(config, /-\s*AppImage/);
@@ -135,6 +142,12 @@ test('manual SignPath workflow validates secrets at runtime and uses the configu
   );
 
   assert.doesNotMatch(workflow, /if:\s*\$\{\{\s*secrets\./);
+  assert.match(workflow, /SIGNPATH_PROJECT_SLUG:\s*\$\{\{\s*vars\.SIGNPATH_PROJECT_SLUG\s*\}\}/);
+  assert.doesNotMatch(workflow, /SIGNPATH_PROJECT_SLUG\s*\|\|/);
   assert.match(workflow, /name:\s*Validate SignPath configuration/);
+  assert.match(
+    workflow,
+    /SIGNPATH_API_TOKEN SIGNPATH_ORG_ID SIGNPATH_PROJECT_SLUG SIGNPATH_SIGNING_POLICY_ID/
+  );
   assert.match(workflow, /SigningPolicyId=\$SIGNPATH_SIGNING_POLICY_ID/);
 });
