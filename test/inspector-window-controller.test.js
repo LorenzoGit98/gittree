@@ -38,10 +38,13 @@ test('inspector controller creates one locked-down window and reuses it', () => 
 
   assert.deepEqual(controller.update({}), { success: false });
   assert.deepEqual(controller.open({
-    title: 'Commit', theme: 'dark', tone: 'blue', mode: 'split', html: '<b>x</b>', diffText: '+x'
+    title: 'Commit', meta: 'abc1234 · Ada · 1 file', theme: 'dark', tone: 'blue',
+    mode: 'split', html: '<b>x</b>', diffText: '+x'
   }), { success: true });
   assert.equal(created.length, 1);
   assert.equal(created[0].options.parent, parent);
+  assert.equal(created[0].options.width, 1040);
+  assert.equal(created[0].options.minWidth, 620);
   assert.equal(created[0].options.webPreferences.contextIsolation, true);
   assert.equal(created[0].options.webPreferences.sandbox, true);
   assert.equal(created[0].locked, true);
@@ -49,7 +52,9 @@ test('inspector controller creates one locked-down window and reuses it', () => 
 
   created[0].listeners.get('did-finish-load')();
   assert.deepEqual(created[0].sent.at(-1), ['inspector:render', {
-    title: 'Commit', theme: 'dark', tone: 'blue', mode: 'split', html: '<b>x</b>', diffText: '+x'
+    title: 'Commit', meta: 'abc1234 · Ada · 1 file', theme: 'dark', tone: 'blue', mode: 'split',
+    eyebrow: 'Inspector', modeLabel: 'Split', wordLevel: false,
+    html: '<b>x</b>', diffText: '+x'
   }]);
   controller.open({ title: 'Next' });
   assert.equal(created.length, 1);
@@ -95,6 +100,8 @@ test('inspector controller sanitizes oversized and invalid payload fields', () =
     diffText: 'x'.repeat(10_000_001)
   }), { success: true });
   assert.deepEqual(window.lastSend, ['inspector:render', {
-    title: 'Inspector', theme: 'light', tone: '', mode: 'unified', html: '', diffText: ''
+    title: 'Inspector', meta: '', theme: 'light', tone: '', mode: 'unified',
+    eyebrow: 'Inspector', modeLabel: 'Unified', wordLevel: false,
+    html: '', diffText: ''
   }]);
 });

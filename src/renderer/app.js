@@ -715,7 +715,20 @@ class GitTreeApp {
       const tone = document.documentElement.dataset.tone || '';
       const mode = this.components.diffViewer?.mode || 'unified';
       const html = body.innerHTML;
-      const payload = { title, theme, tone, mode };
+      const meta = [...document.querySelectorAll('#detail-meta > span')]
+        .map(element => element.textContent.trim())
+        .filter(Boolean)
+        .join(' · ');
+      const payload = {
+        title,
+        meta,
+        theme,
+        tone,
+        mode,
+        eyebrow: t('details.eyebrow'),
+        modeLabel: t(mode === 'split' ? 'details.split' : 'details.unified'),
+        wordLevel: Boolean(this.components.diffViewer?.wordLevel)
+      };
       if (html.length > 2_000_000 && this.components.diffViewer?.currentDiff) {
         payload.diffText = this.components.diffViewer.currentDiff;
       } else {

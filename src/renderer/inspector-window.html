@@ -12,11 +12,24 @@
   <link rel="stylesheet" href="styles/inspector-window.css">
 </head>
 <body>
-  <div id="inspector-body">
-    <div class="diff-placeholder">
-      <i class="ph ph-circle-notch"></i>
-      <span>Loading…</span>
-    </div>
+  <div class="inspector-window-shell">
+    <header class="inspector-window-header">
+      <div class="inspector-window-title">
+        <span id="inspector-eyebrow" class="eyebrow">Inspector</span>
+        <h1 id="inspector-title">Commit details</h1>
+        <p id="inspector-meta" class="inspector-window-meta is-hidden"></p>
+      </div>
+      <div class="inspector-window-badges">
+        <span id="inspector-mode" class="badge badge-remote">Unified</span>
+        <span id="inspector-word" class="badge badge-head is-hidden">Words</span>
+      </div>
+    </header>
+    <main id="inspector-body">
+      <div class="diff-placeholder">
+        <i class="ph ph-circle-notch"></i>
+        <span>Loading…</span>
+      </div>
+    </main>
   </div>
   <script src="inspector-window.js"></script>
 </body>

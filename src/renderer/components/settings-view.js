@@ -57,7 +57,7 @@ class SettingsView {
     this.dialog.className = 'confirm-dialog settings-dialog';
     this.dialog.innerHTML = `
       <div class="settings-header">
-        <div>
+        <div class="settings-header-copy">
           <span class="eyebrow">${this.esc(t('settings.eyebrow'))}</span>
           <h2>${this.esc(t('settings.title'))}</h2>
         </div>
@@ -66,7 +66,30 @@ class SettingsView {
           <i class="ph ph-x" aria-hidden="true"></i>
         </button>
       </div>
-      <div class="settings-scroll">
+      <div class="settings-layout">
+        <nav class="settings-nav" aria-label="${this.esc(t('settings.navigationLabel'))}">
+          <div class="settings-nav-group">
+            <span class="settings-nav-label">${this.esc(t('settings.personalizationGroup'))}</span>
+            ${this.renderNavigationItem('appearance', 'palette', t('settings.appearanceTitle'))}
+            ${this.renderNavigationItem('toolbar', 'toolbox', t('settings.toolbarTitle'))}
+            ${this.renderNavigationItem('shortcuts', 'keyboard', t('settings.shortcutsTitle'))}
+          </div>
+          <div class="settings-nav-group">
+            <span class="settings-nav-label">${this.esc(t('settings.repositoryGroup'))}</span>
+            ${this.renderNavigationItem('auto-fetch', 'arrows-clockwise', t('settings.autoFetchTitle'))}
+            ${this.renderNavigationItem('remotes', 'cloud', t('settings.remotesTitle'))}
+            ${this.renderNavigationItem('accounts', 'users-three', t('settings.accountsTitle'))}
+          </div>
+          <div class="settings-nav-group">
+            <span class="settings-nav-label">${this.esc(t('settings.automationGroup'))}</span>
+            ${this.renderNavigationItem('agents', 'robot', t('agents.settingsTitle'))}
+          </div>
+          <div class="settings-nav-group settings-nav-group-system">
+            <span class="settings-nav-label">${this.esc(t('settings.systemGroup'))}</span>
+            ${this.renderNavigationItem('about', 'info', t('settings.aboutTitle'))}
+          </div>
+        </nav>
+        <main class="settings-scroll">
         <section class="settings-section" data-settings-section="appearance">
           <div class="settings-section-heading">
             <i class="ph ph-palette" aria-hidden="true"></i>
@@ -110,16 +133,44 @@ class SettingsView {
           </div>
         </section>
 
-        <section class="settings-section settings-navigation-section"
-          data-settings-section="shortcuts">
-          <button class="settings-navigation-row" type="button" data-settings-shortcuts>
+        <section class="settings-section" data-settings-section="shortcuts">
+          <div class="settings-section-heading">
             <i class="ph ph-keyboard" aria-hidden="true"></i>
             <div>
-              <strong>${this.esc(t('settings.shortcutsTitle'))}</strong>
-              <span>${this.esc(t('settings.shortcutsHelp'))}</span>
+              <h3>${this.esc(t('settings.shortcutsTitle'))}</h3>
+              <p>${this.esc(t('settings.shortcutsHelp'))}</p>
             </div>
-            <i class="ph ph-caret-right settings-navigation-caret" aria-hidden="true"></i>
-          </button>
+          </div>
+          <div class="settings-shortcut-content">
+            <div class="settings-shortcut-intro">
+              <i class="ph ph-info" aria-hidden="true"></i>
+              <p>${this.esc(t('settings.shortcutsGuide'))}</p>
+            </div>
+            <div class="settings-shortcut-groups">
+              <div class="settings-shortcut-group">
+                <div class="settings-subsection-heading">
+                  <i class="ph ph-git-branch" aria-hidden="true"></i>
+                  <span>${this.esc(t('settings.repositoryShortcuts'))}</span>
+                </div>
+                <div class="settings-shortcut-list">
+                  ${this.renderShortcut(t('actions.fetch'), 'fetch', t('settings.fetchShortcutHelp'))}
+                  ${this.renderShortcut(t('actions.pull'), 'pull', t('settings.pullShortcutHelp'))}
+                  ${this.renderShortcut(t('actions.push'), 'push', t('settings.pushShortcutHelp'))}
+                  ${this.renderShortcut(t('sidebar.newBranch'), 'newBranch', t('settings.branchShortcutHelp'))}
+                </div>
+              </div>
+              <div class="settings-shortcut-group">
+                <div class="settings-subsection-heading">
+                  <i class="ph ph-navigation-arrow" aria-hidden="true"></i>
+                  <span>${this.esc(t('settings.navigationShortcuts'))}</span>
+                </div>
+                <div class="settings-shortcut-list">
+                  ${this.renderShortcut(t('welcome.open'), 'open', t('settings.openShortcutHelp'))}
+                  ${this.renderShortcut(t('search.trigger'), 'search', t('settings.searchShortcutHelp'))}
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section class="settings-section" data-settings-section="toolbar">
@@ -148,16 +199,20 @@ class SettingsView {
           <div class="settings-remotes-list" id="settings-remotes-list">
             ${remotes.map(remote => this.renderRemoteRow(remote)).join('') || `<div class="settings-empty">${this.esc(t('settings.noRemotes'))}</div>`}
           </div>
-          <form id="settings-remote-form" class="settings-remote-form">
-            <input name="name" maxlength="200" required
-              placeholder="${this.esc(t('settings.remoteName'))}">
-            <input name="url" maxlength="4096" required
-              placeholder="${this.esc(t('settings.remoteUrl'))}">
-            <button class="btn btn-primary" type="submit">
-              <i class="ph ph-plus" aria-hidden="true"></i>
-              ${this.esc(t('settings.addRemote'))}
-            </button>
-          </form>
+          <div class="settings-section-footer">
+            <form id="settings-remote-form" class="settings-remote-form">
+              <input name="name" maxlength="200" required
+                aria-label="${this.esc(t('settings.remoteName'))}"
+                placeholder="${this.esc(t('settings.remoteName'))}">
+              <input name="url" maxlength="4096" required
+                aria-label="${this.esc(t('settings.remoteUrl'))}"
+                placeholder="${this.esc(t('settings.remoteUrl'))}">
+              <button class="btn btn-primary" type="submit">
+                <i class="ph ph-plus" aria-hidden="true"></i>
+                ${this.esc(t('settings.addRemote'))}
+              </button>
+            </form>
+          </div>
         </section>
 
         <section class="settings-section" data-settings-section="agents">
@@ -215,22 +270,33 @@ class SettingsView {
                 Boolean(repo)
               )).join('') || `<div class="settings-empty">${this.esc(t('settings.noProfiles'))}</div>`}
           </div>
-          <form id="settings-account-form" class="settings-account-form">
-            <input name="label" maxlength="80" required
-              placeholder="${this.esc(t('settings.profileLabel'))}">
-            <input name="name" maxlength="200" required
-              placeholder="${this.esc(t('settings.gitName'))}">
-            <input name="email" type="email" maxlength="254" required
-              placeholder="${this.esc(t('settings.gitEmail'))}">
-            <button class="btn btn-primary" type="submit">
-              <i class="ph ph-plus" aria-hidden="true"></i>
-              ${this.esc(t('settings.addProfile'))}
-            </button>
-          </form>
-          <button class="btn btn-secondary btn-sm" id="settings-vault-reset" type="button">
-            <i class="ph ph-key" aria-hidden="true"></i>
-            ${this.esc(t('settings.resetVault'))}
-          </button>
+          <div class="settings-section-footer settings-profile-footer">
+            <form id="settings-account-form" class="settings-account-form">
+              <input name="label" maxlength="80" required
+                aria-label="${this.esc(t('settings.profileLabel'))}"
+                placeholder="${this.esc(t('settings.profileLabel'))}">
+              <input name="name" maxlength="200" required
+                aria-label="${this.esc(t('settings.gitName'))}"
+                placeholder="${this.esc(t('settings.gitName'))}">
+              <input name="email" type="email" maxlength="254" required
+                aria-label="${this.esc(t('settings.gitEmail'))}"
+                placeholder="${this.esc(t('settings.gitEmail'))}">
+              <button class="btn btn-primary" type="submit">
+                <i class="ph ph-plus" aria-hidden="true"></i>
+                ${this.esc(t('settings.addProfile'))}
+              </button>
+            </form>
+            <div class="settings-security-row">
+              <div>
+                <strong>${this.esc(t('settings.credentialsTitle'))}</strong>
+                <small>${this.esc(t('settings.credentialsHelp'))}</small>
+              </div>
+              <button class="btn btn-secondary btn-sm" id="settings-vault-reset" type="button">
+                <i class="ph ph-key" aria-hidden="true"></i>
+                ${this.esc(t('settings.resetVault'))}
+              </button>
+            </div>
+          </div>
         </section>
 
         <section class="settings-section" data-settings-section="about">
@@ -267,6 +333,7 @@ class SettingsView {
             </p>
           </div>
         </section>
+        </main>
       </div>
     `;
     this.overlay.classList.remove('is-hidden');
@@ -274,8 +341,15 @@ class SettingsView {
     this.applyScope(scope);
     this.syncAppearanceState();
     this.populateVersion();
-    if (section || scope === 'about') this.focusSection(section || 'about');
+    this.selectSection(scope === 'about' ? 'about' : (section || this.activeSection || 'appearance'));
     this.dialog.querySelector('[data-settings-close]')?.focus();
+  }
+
+  renderNavigationItem(section, icon, label) {
+    return `<button class="settings-nav-item" type="button" data-settings-nav="${this.esc(section)}">
+      <i class="ph ph-${this.esc(icon)}" aria-hidden="true"></i>
+      <span>${this.esc(label)}</span>
+    </button>`;
   }
 
   applyScope(scope) {
@@ -572,12 +646,30 @@ class SettingsView {
   }
 
   focusSection(section) {
+    this.selectSection(section);
     const target = this.dialog.querySelector(`[data-settings-section="${section}"]`);
-    if (!target) return;
-    this.dialog.querySelector('.settings-scroll')?.scrollTo({
-      top: target.offsetTop - 12,
-      behavior: 'smooth'
+    target?.focus({ preventScroll: true });
+  }
+
+  selectSection(section) {
+    const sections = [...this.dialog.querySelectorAll('[data-settings-section]')];
+    if (!sections.length) return;
+    const selected = sections.some(item => item.dataset.settingsSection === section)
+      ? section
+      : sections[0].dataset.settingsSection;
+    this.activeSection = selected;
+    sections.forEach(item => {
+      const active = item.dataset.settingsSection === selected;
+      item.classList.toggle('is-active', active);
+      item.toggleAttribute('hidden', !active);
+      item.setAttribute('tabindex', active ? '-1' : '0');
     });
+    this.dialog.querySelectorAll('[data-settings-nav]').forEach(button => {
+      const active = button.dataset.settingsNav === selected;
+      button.classList.toggle('is-active', active);
+      button.toggleAttribute('aria-current', active);
+    });
+    this.dialog.querySelector('.settings-scroll')?.scrollTo({ top: 0 });
   }
 
   renderProfile(profile, assignedProfile, hasRepository) {
@@ -604,68 +696,6 @@ class SettingsView {
         <i class="ph ph-trash" aria-hidden="true"></i>
       </button>
     </div>`;
-  }
-
-  openShortcuts() {
-    this.dialog.className = 'confirm-dialog settings-dialog';
-    this.dialog.innerHTML = `
-      <div class="settings-header">
-        <div class="settings-page-title">
-          <button class="btn-icon" type="button" data-shortcuts-back
-            title="${this.esc(t('settings.backToSettings'))}"
-            aria-label="${this.esc(t('settings.backToSettings'))}">
-            <i class="ph ph-arrow-left" aria-hidden="true"></i>
-          </button>
-          <div>
-            <span class="eyebrow">${this.esc(t('settings.eyebrow'))}</span>
-            <h2>${this.esc(t('settings.shortcutsTitle'))}</h2>
-          </div>
-        </div>
-        <button class="btn-icon" type="button" data-settings-close
-          title="${this.esc(t('common.close'))}" aria-label="${this.esc(t('common.close'))}">
-          <i class="ph ph-x" aria-hidden="true"></i>
-        </button>
-      </div>
-      <div class="settings-scroll">
-        <div class="settings-shortcut-intro">
-          <i class="ph ph-info" aria-hidden="true"></i>
-          <p>${this.esc(t('settings.shortcutsGuide'))}</p>
-        </div>
-        <section class="settings-section">
-          <div class="settings-section-heading">
-            <i class="ph ph-git-branch" aria-hidden="true"></i>
-            <div>
-              <h3>${this.esc(t('settings.repositoryShortcuts'))}</h3>
-              <p>${this.esc(t('settings.repositoryShortcutsHelp'))}</p>
-            </div>
-          </div>
-          <div class="settings-shortcut-list">
-            ${this.renderShortcut(t('actions.fetch'), 'fetch', t('settings.fetchShortcutHelp'))}
-            ${this.renderShortcut(t('actions.pull'), 'pull', t('settings.pullShortcutHelp'))}
-            ${this.renderShortcut(t('actions.push'), 'push', t('settings.pushShortcutHelp'))}
-            ${this.renderShortcut(t('sidebar.newBranch'), 'newBranch', t('settings.branchShortcutHelp'))}
-          </div>
-        </section>
-        <section class="settings-section">
-          <div class="settings-section-heading">
-            <i class="ph ph-navigation-arrow" aria-hidden="true"></i>
-            <div>
-              <h3>${this.esc(t('settings.navigationShortcuts'))}</h3>
-            </div>
-          </div>
-          <div class="settings-shortcut-list">
-            ${this.renderShortcut(t('welcome.open'), 'open', t('settings.openShortcutHelp'))}
-            ${this.renderShortcut(t('search.trigger'), 'search', t('settings.searchShortcutHelp'))}
-          </div>
-        </section>
-      </div>`;
-    this.overlay.classList.remove('is-hidden');
-    this.dialog.querySelector('[data-shortcuts-back]').onclick = () => this.open();
-    this.dialog.querySelector('[data-settings-close]').onclick = () => this.close();
-    this.overlay.onclick = event => {
-      if (event.target === this.overlay) this.close();
-    };
-    this.dialog.querySelector('[data-shortcuts-back]').focus();
   }
 
   renderShortcut(label, action, description) {
@@ -705,7 +735,9 @@ class SettingsView {
 
   bindSettingsEvents(repo) {
     this.dialog.querySelector('[data-settings-close]').onclick = () => this.close();
-    this.dialog.querySelector('[data-settings-shortcuts]').onclick = () => this.openShortcuts();
+    this.dialog.querySelectorAll('[data-settings-nav]').forEach(button => {
+      button.onclick = () => this.selectSection(button.dataset.settingsNav);
+    });
     this.overlay.onclick = event => {
       if (event.target === this.overlay) this.close();
     };

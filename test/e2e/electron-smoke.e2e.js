@@ -123,6 +123,58 @@ test('Electron opens a deep-linked repository and renders its deterministic hist
       }
     }
 
+    await page.locator('.graph-row').first().click();
+    await page.locator('#detail-meta:not(.is-hidden) #detail-files:not(:empty)').waitFor();
+    const inspectorLayout = await page.evaluate(() => {
+      const heading = document.querySelector('.detail-heading-row').getBoundingClientRect();
+      const toolbar = document.querySelector('.detail-view-toolbar').getBoundingClientRect();
+      const title = document.getElementById('detail-title').getBoundingClientRect();
+      const controls = document.querySelector('.detail-window-controls').getBoundingClientRect();
+      return {
+        headingBottom: heading.bottom,
+        toolbarTop: toolbar.top,
+        titleRight: title.right,
+        controlsLeft: controls.left,
+        title: document.getElementById('detail-title').textContent,
+        meta: document.getElementById('detail-meta').textContent
+      };
+    });
+    assert.ok(inspectorLayout.headingBottom <= inspectorLayout.toolbarTop + 1);
+    assert.ok(inspectorLayout.titleRight <= inspectorLayout.controlsLeft);
+    assert.match(inspectorLayout.title, /Initial fixture commit/);
+    assert.match(inspectorLayout.meta, /file/);
+
+    await page.locator('#btn-maximize-inspector').click();
+    await page.locator('#workspace-body.inspector-maximized').waitFor();
+    const maximizedInspector = await page.evaluate(() => ({
+      titleSize: getComputedStyle(document.getElementById('detail-title')).fontSize,
+      bodyPadding: getComputedStyle(document.getElementById('detail-body')).paddingTop,
+      splitActive: document.getElementById('btn-diff-split').classList.contains('active')
+    }));
+    assert.equal(maximizedInspector.titleSize, '20px');
+    assert.equal(maximizedInspector.bodyPadding, '20px');
+    assert.equal(maximizedInspector.splitActive, true);
+    await page.locator('#btn-maximize-inspector').click();
+    await page.waitForFunction(() => (
+      !document.getElementById('workspace-body').classList.contains('inspector-maximized')
+    ));
+
+    const detachedWindowPromise = application.waitForEvent('window');
+    await page.locator('#btn-popout-inspector').click();
+    const detachedInspector = await detachedWindowPromise;
+    await detachedInspector.locator('.inspector-window-header').waitFor();
+    const detachedLayout = await detachedInspector.evaluate(() => ({
+      width: window.innerWidth,
+      title: document.getElementById('inspector-title').textContent,
+      meta: document.getElementById('inspector-meta').textContent,
+      contentPadding: getComputedStyle(document.getElementById('inspector-body')).paddingTop
+    }));
+    assert.ok(detachedLayout.width >= 900);
+    assert.match(detachedLayout.title, /Initial fixture commit/);
+    assert.match(detachedLayout.meta, /file/);
+    assert.equal(detachedLayout.contentPadding, '20px');
+    await detachedInspector.close();
+
     const branchSearch = page.locator('#branch-search');
     const branchSearchVisible = await branchSearch.isVisible();
     if (branchSearchVisible) {
@@ -145,6 +197,7 @@ test('Electron opens a deep-linked repository and renders its deterministic hist
       });
       window.__remoteActionTelemetry = telemetry;
       window.__remoteActionGraphRow = document.querySelector('.graph-row');
+      document.querySelector('.graph-view').scrollTop = 0;
     });
     await page.locator('#btn-fetch').click();
     await page.waitForFunction(() => (
@@ -156,11 +209,13 @@ test('Electron opens a deep-linked repository and renders its deterministic hist
     const remoteActionTelemetry = await page.evaluate(() => ({
       ...window.__remoteActionTelemetry,
       graphRowPreserved: document.querySelector('.graph-row') === window.__remoteActionGraphRow,
-      branchFilter: document.getElementById('branch-search')?.value
+      branchFilter: document.getElementById('branch-search')?.value,
+      graphScrollTop: document.querySelector('.graph-view').scrollTop
     }));
     assert.equal(remoteActionTelemetry.openRepoCalls, 0);
     assert.equal(remoteActionTelemetry.loadStates.includes('loading'), false);
     assert.equal(remoteActionTelemetry.graphRowPreserved, true);
+    assert.equal(remoteActionTelemetry.graphScrollTop, 0);
     assert.equal(remoteActionTelemetry.branchFilter, branchSearchVisible ? 'feature' : '');
     if (branchSearchVisible) await branchSearch.fill('');
 
@@ -170,6 +225,34 @@ test('Electron opens a deep-linked repository and renders its deterministic hist
     assert.match(await page.locator('#changes-view').innerText(), /dirty\.txt/);
 
     await page.locator('#btn-settings').click();
+    await page.locator('.settings-dialog').waitFor();
+    const settingsLayout = await page.evaluate(() => {
+      const dialog = document.querySelector('.settings-dialog');
+      const navigation = document.querySelector('.settings-nav');
+      const content = document.querySelector('.settings-scroll');
+      return {
+        dialogWidth: dialog.getBoundingClientRect().width,
+        navigationWidth: navigation.getBoundingClientRect().width,
+        contentPadding: getComputedStyle(content).paddingTop,
+        activeSections: document.querySelectorAll('.settings-section.is-active:not([hidden])').length,
+        activeNavigation: document.querySelector('[data-settings-nav].is-active')?.dataset.settingsNav
+      };
+    });
+    assert.ok(settingsLayout.dialogWidth >= 900);
+    assert.ok(settingsLayout.navigationWidth >= 200);
+    assert.equal(settingsLayout.contentPadding, '32px');
+    assert.equal(settingsLayout.activeSections, 1);
+    assert.equal(settingsLayout.activeNavigation, 'appearance');
+    await page.locator('[data-theme-choice="dark"]').click();
+    assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark');
+    assert.notEqual(
+      await page.locator('.settings-nav').evaluate(element => getComputedStyle(element).backgroundColor),
+      'rgba(0, 0, 0, 0)'
+    );
+    await page.locator('[data-theme-choice="light"]').click();
+    assert.equal(await page.locator('html').getAttribute('data-theme'), 'light');
+    await page.locator('[data-settings-nav="about"]').click();
+    await page.locator('[data-settings-section="about"]:not([hidden])').waitFor();
     const diagnosticsButton = page.getByRole('button', {
       name: /Export diagnostics|Esporta diagnostica/
     });

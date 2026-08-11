@@ -22,6 +22,7 @@ function loadDiffViewer() {
       if (!buttons.has(id)) {
         buttons.set(id, {
           classList: { toggle() {} },
+          setAttribute() {},
           onclick: null
         });
       }
@@ -45,6 +46,19 @@ test('maximizing the inspector temporarily selects the side-by-side diff', () =>
   assert.equal(viewer.mode, 'split');
   viewer.setInspectorExpanded(false);
   assert.equal(viewer.mode, 'unified');
+});
+
+test('diff display changes keep the detached inspector synchronized', () => {
+  const DiffViewer = loadDiffViewer();
+  let payloadUpdates = 0;
+  const viewer = new DiffViewer(
+    { innerHTML: '' },
+    { pushInspectorPayload: () => { payloadUpdates += 1; } }
+  );
+
+  viewer.setMode('split');
+
+  assert.equal(payloadUpdates, 1);
 });
 
 test('split diff pairs deletions and additions on the same visual rows', () => {

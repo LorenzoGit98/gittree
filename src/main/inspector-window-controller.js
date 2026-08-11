@@ -3,11 +3,21 @@ function sanitizeInspectorPayload(payload) {
     title: typeof payload?.title === 'string' && payload.title.length <= 200
       ? payload.title
       : 'Inspector',
+    meta: typeof payload?.meta === 'string' && payload.meta.length <= 400
+      ? payload.meta
+      : '',
     theme: ['light', 'dark'].includes(payload?.theme) ? payload.theme : 'light',
     tone: typeof payload?.tone === 'string' && /^[a-z]{1,32}$/.test(payload.tone)
       ? payload.tone
       : '',
     mode: payload?.mode === 'split' ? 'split' : 'unified',
+    eyebrow: typeof payload?.eyebrow === 'string' && payload.eyebrow.length <= 80
+      ? payload.eyebrow
+      : 'Inspector',
+    modeLabel: typeof payload?.modeLabel === 'string' && payload.modeLabel.length <= 80
+      ? payload.modeLabel
+      : (payload?.mode === 'split' ? 'Split' : 'Unified'),
+    wordLevel: payload?.wordLevel === true,
     html: typeof payload?.html === 'string' && payload.html.length <= 2_000_000
       ? payload.html
       : '',
@@ -36,10 +46,10 @@ function createInspectorWindowController({
       return { success: true };
     }
     inspectorWindow = new BrowserWindow({
-      width: 820,
-      height: 620,
-      minWidth: 480,
-      minHeight: 360,
+      width: 1040,
+      height: 760,
+      minWidth: 620,
+      minHeight: 440,
       parent: getMainWindow(),
       title: safePayload.title,
       icon: iconPath(),

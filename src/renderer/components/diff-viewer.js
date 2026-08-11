@@ -21,6 +21,7 @@ class DiffViewer {
       localStorage.setItem('gittree.diff.wordLevel', this.wordLevel ? '1' : '0');
       this.syncModeButtons();
       if (this.currentDiff) this.render(this.currentDiff);
+      this.app.pushInspectorPayload?.();
     };
     this.syncModeButtons();
   }
@@ -34,18 +35,19 @@ class DiffViewer {
     }
     this.syncModeButtons();
     if (this.currentDiff) this.render(this.currentDiff);
+    this.app.pushInspectorPayload?.();
   }
 
   syncModeButtons() {
-    document.getElementById('btn-diff-unified').classList.toggle(
-      'active',
-      this.mode === 'unified'
-    );
-    document.getElementById('btn-diff-split').classList.toggle(
-      'active',
-      this.mode === 'split'
-    );
-    document.getElementById('btn-diff-word')?.classList.toggle('active', this.wordLevel);
+    const unifiedButton = document.getElementById('btn-diff-unified');
+    const splitButton = document.getElementById('btn-diff-split');
+    const wordButton = document.getElementById('btn-diff-word');
+    unifiedButton.classList.toggle('active', this.mode === 'unified');
+    unifiedButton.setAttribute('aria-pressed', String(this.mode === 'unified'));
+    splitButton.classList.toggle('active', this.mode === 'split');
+    splitButton.setAttribute('aria-pressed', String(this.mode === 'split'));
+    wordButton?.classList.toggle('active', this.wordLevel);
+    wordButton?.setAttribute('aria-pressed', String(this.wordLevel));
   }
 
   appendHighlightedLine(contentEl, text, counterpart) {
@@ -96,19 +98,39 @@ class DiffViewer {
     const compactTitle = t('details.changesIn', { hash: hash.substring(0, 7) });
     title.textContent = compactTitle;
     title.title = compactTitle;
+    this.syncCommitMeta({ hash });
     this.body.innerHTML = `<div class="diff-placeholder"><i class="ph ph-circle-notch"></i>${t('details.loading')}</div>`;
     try {
       const detail = await window.gitTree.getCommitDetail(repoPath, hash);
       if (detail?.error) { this.body.innerHTML = `<div class="diff-placeholder">${this.esc(detail.error)}</div>`; return; }
       this.currentDiff = detail.diff;
+      const subject = String(detail.message || '').split(/\r?\n/)[0].trim();
+      title.textContent = subject || compactTitle;
+      title.title = detail.message || compactTitle;
+      this.syncCommitMeta(detail);
       this.render(detail.diff);
-
-      if (detail.files?.length) {
-        title.title = `${compactTitle} — ${detail.files.join(', ')}`;
-      }
     } catch (e) {
       this.body.innerHTML = `<div class="diff-placeholder">${this.esc(e.message)}</div>`;
     }
+  }
+
+  syncCommitMeta(detail = null) {
+    const meta = document.getElementById('detail-meta');
+    if (!meta) return;
+    const hash = detail?.hash || '';
+    document.getElementById('detail-hash').textContent = hash ? hash.slice(0, 7) : '';
+    document.getElementById('detail-author').textContent = detail?.author_name || '';
+    document.getElementById('detail-date').textContent = detail?.date
+      ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+        .format(new Date(detail.date))
+      : '';
+    const count = typeof detail?.diff === 'string'
+      ? (detail.diff.match(/^diff --git /gm) || []).length
+      : 0;
+    document.getElementById('detail-files').textContent = count
+      ? t('details.files', { count })
+      : '';
+    meta.classList.toggle('is-hidden', !hash);
   }
 
   render(diffText) {
@@ -125,13 +147,20 @@ class DiffViewer {
     const frag = document.createDocumentFragment();
     this.body.style.setProperty('--diff-gutter-digits', DiffParser.maxDigits(lines));
     let lastRemoval = null;
+    let target = frag;
+    let fileIndex = 0;
 
     lines.forEach(line => {
       if (line.kind === 'file') {
+        const block = document.createElement('section');
+        block.className = 'diff-file-block';
+        block.style.setProperty('--file-index', String(fileIndex++));
         const hdr = document.createElement('div');
         hdr.className = 'diff-file-header';
         hdr.innerHTML = `<span class="diff-file-path">${this.esc(this.extractPath(line.content) || line.content)}</span>`;
-        frag.appendChild(hdr);
+        block.appendChild(hdr);
+        frag.appendChild(block);
+        target = block;
         return;
       }
 
@@ -151,7 +180,7 @@ class DiffViewer {
       }
       el.appendChild(content);
 
-      frag.appendChild(el);
+      target.appendChild(el);
     });
 
     this.body.innerHTML = '';
@@ -162,11 +191,13 @@ class DiffViewer {
     const wrapper = document.createElement('div');
     wrapper.className = 'diff-split';
     let columns = null;
+    let target = wrapper;
+    let fileIndex = 0;
     const ensureColumns = () => {
       if (columns) return columns;
       columns = document.createElement('div');
       columns.className = 'diff-split-columns';
-      wrapper.appendChild(columns);
+      target.appendChild(columns);
       return columns;
     };
 
@@ -177,10 +208,17 @@ class DiffViewer {
         columns = null;
         const el = document.createElement('div');
         if (row.kind === 'file') {
+          const block = document.createElement('section');
+          block.className = 'diff-file-block';
+          block.style.setProperty('--file-index', String(fileIndex++));
           el.className = 'diff-file-header';
           el.innerHTML = `<span class="diff-file-path">${
             this.esc(this.extractPath(row.content) || row.content)
           }</span>`;
+          block.appendChild(el);
+          wrapper.appendChild(block);
+          target = block;
+          return;
         } else {
           el.className = `diff-line ${row.kind}`;
           el.append(
@@ -192,12 +230,12 @@ class DiffViewer {
           content.textContent = row.content;
           el.appendChild(content);
         }
-        wrapper.appendChild(el);
+        target.appendChild(el);
         return;
       }
-      const target = ensureColumns();
-      target.appendChild(this.splitLine(row.left, 'old', row.right?.content));
-      target.appendChild(this.splitLine(row.right, 'new', row.left?.content));
+      const columnTarget = ensureColumns();
+      columnTarget.appendChild(this.splitLine(row.left, 'old', row.right?.content));
+      columnTarget.appendChild(this.splitLine(row.right, 'new', row.left?.content));
     });
 
     this.body.innerHTML = '';
@@ -243,6 +281,7 @@ class DiffViewer {
     const title = document.getElementById('detail-title');
     title.textContent = t('details.title');
     title.title = '';
+    this.syncCommitMeta();
   }
 }
 

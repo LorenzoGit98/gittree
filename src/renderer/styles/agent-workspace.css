@@ -266,19 +266,6 @@
 
 .branch-dialog-form textarea { min-height: 120px; resize: vertical; }
 
-.agent-settings-rows input[type="number"] {
-  width: 72px;
-  min-height: 34px;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  background: var(--surface-input);
-}
-
-.agent-adapter-settings { display: grid; }
-.agent-adapter-state { color: var(--error-text); font-size: var(--text-xs); }
-.agent-adapter-state.is-available { color: var(--success-text); }
-
 @media (max-width: 1040px) {
   .agent-drawer-actions .segmented-control { display: none; }
 }
