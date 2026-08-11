@@ -42,6 +42,7 @@ const SCOPES = {
       'src/renderer/html-encoder.js',
       'src/renderer/repository-load-session.js',
       'src/renderer/repository-workspace-controller.js',
+      'src/renderer/shortcut-controller.js',
       'src/renderer/workspace-state-controller.js',
       'src/renderer/components/branch-naming.js',
       'src/renderer/components/conflict-highlight.js',

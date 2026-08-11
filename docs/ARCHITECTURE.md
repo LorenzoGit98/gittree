@@ -44,6 +44,7 @@ globals or renderer state.
 | Provider list, detail and diff behavior | `src/main/hosting/providers/` | `test/hosting-provider-adapters.test.js` and `test/hosting-provider-read-contracts.test.js` |
 | Repository activation, readiness and stale-load cancellation | `src/renderer/repository-workspace-controller.js`; `repository-load-session.js` deduplicates reads inside one activation | `test/repository-workspace-controller.test.js`, load-session tests and Electron E2E |
 | Remote operation feedback | `src/renderer/remote-operation-controller.js` | `test/remote-operation-controller.test.js` and Electron E2E |
+| Keyboard commands and platform-specific shortcut presentation | `src/renderer/shortcut-controller.js` | `test/shortcut-controller.test.js` and semantic Electron E2E |
 | Workspace modes, panel visibility and persisted navigation state | `src/renderer/workspace-state-controller.js`; motion and resize remain separate collaborators | `test/workspace-state-controller.test.js`, motion/resize tests and renderer benchmark |
 | Workspace resize and panel motion | `src/renderer/workspace-resize-controller.js`, `src/renderer/workspace-panel-motion.js` | controller tests, performance benchmarks and `docs/MOTION.md` |
 | Visual rules and localization | `DESIGN.md`, renderer styles and i18n resources | design audit, i18n parity and Electron E2E |

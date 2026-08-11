@@ -9,6 +9,7 @@ const appGlobals = {
   RepositoryLoadSession: 'readonly',
   RepositoryWorkspaceController: 'readonly',
   RemoteOperationController: 'readonly',
+  ShortcutController: 'readonly',
   WorkspacePanelMotion: 'readonly',
   WorkspaceStateController: 'readonly',
   WorkspaceResizeController: 'readonly',

@@ -25,7 +25,6 @@ class GitTreeApp {
   }
 
   async init() {
-    this.setupPlatformChrome();
     this.components.welcome = new WelcomeScreen();
     this.components.repoTabs = new RepoTabs(document.getElementById('repo-tab-list'), this);
     this.components.settings = new SettingsView(this);
@@ -118,6 +117,21 @@ class GitTreeApp {
       onModeChange: mode => { this.workspaceMode = mode; },
       onInspectorStateChange: state => { this.inspectorState = state; }
     });
+    this.shortcutController = new ShortcutController({
+      document,
+      platform: window.gitTree.platform || 'win32',
+      translate: t,
+      callbacks: {
+        openRepository: () => this.components.welcome.openRepo(),
+        fetch: () => this.doFetch(),
+        pull: () => this.doPull(),
+        push: () => this.doPush(),
+        newBranch: () => this.components.branchList.promptCreateBranch(),
+        getInspectorState: () => this.inspectorState,
+        restoreInspector: () => this.setInspectorState('open')
+      }
+    });
+    this.setupPlatformChrome();
 
     this.bindEvents();
     await this.setupUpdates();
@@ -211,6 +225,7 @@ class GitTreeApp {
 
   setupPlatformChrome() {
     this.platform = window.gitTree.platform || 'win32';
+    this.shortcutController.setPlatform(this.platform);
     document.documentElement.dataset.platform = this.platform;
     this.setupShortcutHints();
     window.gitTree.onWindowState(state => this.updateWindowChrome(state));
@@ -218,41 +233,15 @@ class GitTreeApp {
   }
 
   shortcutDefinitions() {
-    return {
-      open: { key: 'o' },
-      search: { key: 'p' },
-      fetch: { key: 'f', shift: true },
-      pull: { key: 'l', shift: true },
-      push: { key: 'p', shift: true },
-      newBranch: { key: 'b', shift: true }
-    };
+    return this.shortcutController.definitions();
   }
 
   shortcutLabel(action) {
-    const shortcut = this.shortcutDefinitions()[action];
-    if (!shortcut) return '';
-    if (shortcut.primary === false) return shortcut.key;
-    if (this.platform === 'darwin') {
-      return `⌘${shortcut.shift ? '⇧' : ''}${shortcut.key.toUpperCase()}`;
-    }
-    return `Ctrl+${shortcut.shift ? 'Shift+' : ''}${shortcut.key.toUpperCase()}`;
+    return this.shortcutController.label(action);
   }
 
   setupShortcutHints() {
-    document.querySelectorAll('[data-platform-shortcut]').forEach(element => {
-      element.textContent = this.shortcutLabel(element.dataset.platformShortcut);
-    });
-    const titleKeys = {
-      fetch: 'actions.fetch',
-      pull: 'actions.pull',
-      push: 'actions.push',
-      newBranch: 'sidebar.newBranch'
-    };
-    document.querySelectorAll('[data-shortcut-title]').forEach(element => {
-      const action = element.dataset.shortcutTitle;
-      element.title = `${t(titleKeys[action])} (${this.shortcutLabel(action)})`;
-      element.setAttribute('aria-label', element.title);
-    });
+    return this.shortcutController.refreshHints();
   }
 
   updateWindowChrome(state) {
@@ -272,7 +261,7 @@ class GitTreeApp {
   }
 
   isPrimaryModifier(event) {
-    return this.platform === 'darwin' ? event.metaKey : event.ctrlKey;
+    return this.shortcutController.isPrimaryModifier(event);
   }
 
   async setupUpdates() {
@@ -755,35 +744,7 @@ class GitTreeApp {
   }
 
   setupGlobalShortcuts() {
-    document.addEventListener('keydown', (e) => {
-      const editable = e.target.closest?.('input, textarea, select, [contenteditable="true"]');
-      const modalOpen = !document.getElementById('modal-overlay').classList.contains('is-hidden');
-      const primary = this.isPrimaryModifier(e);
-      const key = e.key.toLowerCase();
-
-      if (!e.repeat && !editable && !modalOpen && primary && !e.shiftKey && key === 'o') {
-        e.preventDefault();
-        this.components.welcome.openRepo();
-      }
-      if (!e.repeat && !editable && !modalOpen && primary && e.shiftKey) {
-        if (key === 'f') {
-          e.preventDefault();
-          this.doFetch();
-        } else if (key === 'l') {
-          e.preventDefault();
-          this.doPull();
-        } else if (key === 'p') {
-          e.preventDefault();
-          this.doPush();
-        } else if (key === 'b') {
-          e.preventDefault();
-          this.components.branchList.promptCreateBranch();
-        }
-      }
-      if (e.key === 'Escape' && !modalOpen && this.inspectorState === 'maximized') {
-        this.setInspectorState('open');
-      }
-    });
+    return this.shortcutController.mount();
   }
 
   refreshLocalizedView() {
