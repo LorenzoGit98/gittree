@@ -1,5 +1,4 @@
 /* exported GraphView */
-/* eslint-disable-next-line no-unused-vars -- script-tag global consumed by app.js */
 class GraphView {
   constructor(container, body, app) {
     this.container = container;
@@ -172,9 +171,11 @@ class GraphView {
     const anchorIndex = state.anchorHash
       ? this.visibleRows.findIndex(row => row.commit.hash === state.anchorHash)
       : -1;
-    this.container.scrollTop = anchorIndex >= 0
-      ? Math.max(0, 36 + (anchorIndex * this.rowHeight) + state.anchorOffset)
-      : state.scrollTop;
+    this.container.scrollTop = state.scrollTop <= 36
+      ? state.scrollTop
+      : anchorIndex >= 0
+        ? Math.max(0, 36 + (anchorIndex * this.rowHeight) + state.anchorOffset)
+        : state.scrollTop;
   }
 
   applyFilter() {
@@ -739,3 +740,5 @@ class GraphView {
     return this.formatLocalizedDate(value, i18next.language);
   }
 }
+
+if (typeof module !== 'undefined') module.exports = GraphView;
