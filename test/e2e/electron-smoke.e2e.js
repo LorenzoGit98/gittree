@@ -86,6 +86,9 @@ test('Electron opens a deep-linked repository and renders its deterministic hist
     await inspector.evaluate(async element => {
       await Promise.allSettled(element.getAnimations().map(animation => animation.finished));
     });
+    await page.evaluate(() => {
+      window.__sidebarToggleGraphRow = document.querySelector('.graph-row');
+    });
 
     const panelMotions = [
       ['#btn-toggle-sidebar', 'sidebar', 'motion-panel-exit-left', 'is-sidebar-closing', 'closing'],
@@ -100,6 +103,23 @@ test('Electron opens a deep-linked repository and renders its deterministic hist
       assert.equal(motion.animationName, expectedName);
       assert.equal(motion.motionState, expectedState);
       assert.equal(motion.workspaceTransitionProperty, 'none');
+      if (panelId === 'sidebar' && expectedState === 'closing') {
+        await page.waitForFunction(() => (
+          document.getElementById('sidebar')?.dataset.motionState === 'idle'
+        ));
+        const isolatedSurfaces = await page.evaluate(() => {
+          const main = document.querySelector('.workspace-body > .main');
+          const inspector = document.getElementById('detail-panel');
+          return {
+            mainWidth: main.getBoundingClientRect().width,
+            inspectorWidth: inspector.getBoundingClientRect().width,
+            graphPreserved: document.querySelector('.graph-row') === window.__sidebarToggleGraphRow
+          };
+        });
+        assert.ok(isolatedSurfaces.mainWidth >= 360);
+        assert.ok(isolatedSurfaces.inspectorWidth >= 300);
+        assert.equal(isolatedSurfaces.graphPreserved, true);
+      }
     }
 
     const branchSearch = page.locator('#branch-search');
