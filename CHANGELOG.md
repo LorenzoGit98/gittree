@@ -1,3 +1,10 @@
+## [0.9.16](https://github.com/giannoccarol/gittree/compare/v0.9.15...v0.9.16) (2026-08-11)
+
+
+### Performance Improvements
+
+* **renderer:** avoid permanent graph row layers ([fdc0761](https://github.com/giannoccarol/gittree/commit/fdc076154f27be5fd7f17aa1422a7cbfcb98499c))
+
 ## [0.9.15](https://github.com/giannoccarol/gittree/compare/v0.9.14...v0.9.15) (2026-08-11)
 
 
