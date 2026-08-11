@@ -36,6 +36,11 @@ npm run quality       # complete local quality gate
   Electron wiring or user-visible workflows change.
 - Use conventional commit messages when possible.
 
+## Licensing contributions
+
+By submitting a contribution, you confirm that you have the right to provide
+it and agree that it is licensed under the project's [MIT License](LICENSE).
+
 ## Code of Conduct
 
 This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md). Be respectful and constructive.

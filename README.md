@@ -13,7 +13,7 @@
 <p align="center">
   <a href="https://github.com/lorenzogit98/gittree-minimal/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/lorenzogit98/gittree-minimal/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/lorenzogit98/gittree-minimal/releases"><img alt="Release" src="https://img.shields.io/github/v/release/lorenzogit98/gittree-minimal?display_name=tag"></a>
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-ISC-102A4C"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-102A4C"></a>
   <img alt="Platforms" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-102A4C">
 </p>
 
@@ -112,7 +112,7 @@ Release guide: [docs/RELEASING.md](docs/RELEASING.md) · OAuth: [docs/OAUTH.md](
 
 ## Brand
 
-Source code is ISC-licensed. The GitTree name, logo, and visual identity are not. Modified or commercial distributions must use distinct branding. See [TRADEMARKS.md](TRADEMARKS.md).
+Source code is MIT-licensed. The GitTree name, logo, and visual identity are not. Modified or commercial distributions must use distinct branding. See [TRADEMARKS.md](TRADEMARKS.md).
 
 ## Contributing
 
@@ -126,4 +126,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Before opening a PR:
 
 ## License
 
-[ISC](LICENSE)
+[MIT](LICENSE)
