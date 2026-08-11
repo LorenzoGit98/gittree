@@ -208,3 +208,57 @@ test('Electron opens a deep-linked repository and renders its deterministic hist
     if (!failed && application) await application.context().tracing.stop();
   }
 });
+
+test('Electron welcome is full-bleed and exposes only About and updates', async t => {
+  const fixture = createElectronFixture();
+  let application;
+
+  t.after(async () => {
+    if (application) await application.close();
+    fixture.cleanup();
+  });
+
+  application = await electron.launch({
+    args: [
+      projectRoot,
+      '--force-device-scale-factor=0.75',
+      `--user-data-dir=${fixture.userData}`
+    ],
+    cwd: projectRoot
+  });
+  const page = await application.firstWindow();
+  await page.locator('#welcome-screen:not(.is-hidden)').waitFor({ timeout: 60000 });
+
+  const welcomeLayout = await page.locator('.welcome-card').evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    return {
+      borderWidths: [
+        style.borderTopWidth,
+        style.borderRightWidth,
+        style.borderBottomWidth,
+        style.borderLeftWidth
+      ],
+      borderRadius: style.borderRadius,
+      boxShadow: style.boxShadow,
+      rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+      viewport: { width: window.innerWidth, height: window.innerHeight }
+    };
+  });
+  assert.deepEqual(welcomeLayout.borderWidths, ['0px', '0px', '0px', '0px']);
+  assert.equal(welcomeLayout.borderRadius, '0px');
+  assert.equal(welcomeLayout.boxShadow, 'none');
+  assert.equal(welcomeLayout.rect.x, 0);
+  assert.equal(welcomeLayout.rect.y, 0);
+  assert.ok(Math.abs(welcomeLayout.rect.width - welcomeLayout.viewport.width) <= 1);
+  assert.ok(Math.abs(welcomeLayout.rect.height - welcomeLayout.viewport.height) <= 1);
+
+  const welcomeSettings = page.getByRole('button', { name: /Settings|Impostazioni/ });
+  await welcomeSettings.click();
+  await page.locator('.settings-dialog.settings-dialog-about').waitFor();
+  assert.equal(await page.locator('[data-settings-section]').count(), 1);
+  assert.equal(await page.locator('[data-settings-section="about"]').count(), 1);
+  assert.equal(await page.locator('[data-settings-section="appearance"]').count(), 0);
+  assert.equal(await page.locator('#btn-check-update').isVisible(), true);
+  assert.equal(await page.locator('#btn-export-diagnostics').count(), 0);
+});

@@ -119,7 +119,9 @@ class GitTreeApp {
 
     document.getElementById('btn-add-repo-tab').onclick = () => this.components.welcome.openRepositoryPicker();
     document.querySelectorAll('.settings-open').forEach(button => {
-      button.onclick = () => this.components.settings.open();
+      button.onclick = () => this.components.settings.open(null, {
+        scope: button.dataset.settingsScope || 'full'
+      });
     });
 
     document.getElementById('btn-fetch').onclick = () => this.doFetch();

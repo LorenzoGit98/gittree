@@ -22,7 +22,7 @@ class SettingsView {
     this.timer = window.setInterval(() => this.tick(), 30000);
   }
 
-  async open(section = null) {
+  async open(section = null, { scope = 'full' } = {}) {
     const repo = this.app.state.repo;
     let metadata = this.app.components.branchList?.metadata;
     if (repo && !metadata) {
@@ -223,24 +223,37 @@ class SettingsView {
               </button>
               <span id="check-update-status" class="settings-update-status" aria-live="polite"></span>
             </div>
-            <div class="settings-update-row">
+            <div class="settings-update-row" data-settings-full-only>
               <button class="btn btn-small" id="btn-export-diagnostics" type="button">
                 <i class="ph ph-file-zip" aria-hidden="true"></i>
                 <span>${this.esc(t('settings.exportDiagnostics'))}</span>
               </button>
               <span id="export-diagnostics-status" class="settings-update-status" aria-live="polite"></span>
             </div>
-            <p class="text-tertiary">${this.esc(t('settings.exportDiagnosticsHelp'))}</p>
+            <p class="text-tertiary" data-settings-full-only>
+              ${this.esc(t('settings.exportDiagnosticsHelp'))}
+            </p>
           </div>
         </section>
       </div>
     `;
     this.overlay.classList.remove('is-hidden');
     this.bindSettingsEvents(repo);
+    this.applyScope(scope);
     this.syncAppearanceState();
     this.populateVersion();
-    if (section) this.focusSection(section);
+    if (section || scope === 'about') this.focusSection(section || 'about');
     this.dialog.querySelector('[data-settings-close]')?.focus();
+  }
+
+  applyScope(scope) {
+    const aboutOnly = scope === 'about';
+    this.dialog.classList.toggle('settings-dialog-about', aboutOnly);
+    if (!aboutOnly) return;
+    this.dialog.querySelectorAll('[data-settings-section]').forEach(section => {
+      if (section.dataset.settingsSection !== 'about') section.remove();
+    });
+    this.dialog.querySelectorAll('[data-settings-full-only]').forEach(element => element.remove());
   }
 
   close() {

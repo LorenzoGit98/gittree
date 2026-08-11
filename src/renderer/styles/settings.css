@@ -8,6 +8,10 @@
   animation: motion-scale-in-spring var(--duration-normal) var(--spring-gentle);
 }
 
+.settings-dialog.settings-dialog-about {
+  width: min(680px, calc(100vw - 48px));
+}
+
 .settings-header {
   flex: 0 0 auto;
   display: flex;
