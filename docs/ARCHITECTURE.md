@@ -42,7 +42,7 @@ globals or renderer state.
 | Repository path, Git Adapter and common-directory serialization | `src/main/git/repository-session.js` and `repository-queue.js` | Repository session and linked-worktree workspace tests |
 | Hosting credentials, auth, retry and error policy | `src/main/hosting-service.js` and the credential vault | hosting service and IPC contract tests |
 | Provider list, detail and diff behavior | `src/main/hosting/providers/` | `test/hosting-provider-adapters.test.js` and `test/hosting-provider-read-contracts.test.js` |
-| Repository activation and refresh | `src/renderer/repository-load-session.js` and renderer coordinators | focused controller tests and Electron E2E |
+| Repository activation, readiness and stale-load cancellation | `src/renderer/repository-workspace-controller.js`; `repository-load-session.js` deduplicates reads inside one activation | `test/repository-workspace-controller.test.js`, load-session tests and Electron E2E |
 | Remote operation feedback | `src/renderer/remote-operation-controller.js` | `test/remote-operation-controller.test.js` and Electron E2E |
 | Workspace resize and panel motion | `src/renderer/workspace-resize-controller.js`, `src/renderer/workspace-panel-motion.js` | controller tests, performance benchmarks and `docs/MOTION.md` |
 | Visual rules and localization | `DESIGN.md`, renderer styles and i18n resources | design audit, i18n parity and Electron E2E |
@@ -69,6 +69,10 @@ globals or renderer state.
   payload and normalized provider behavior.
 - Renderer Modules receive bridge, translation, storage and callbacks
   explicitly. Do not add new reads from `window.app`.
+- `RepositoryWorkspaceController` owns one complete renderer activation: it
+  restores the workspace mode, prioritizes the graph, coordinates supporting
+  views, rejects obsolete load publication and exposes interactive/settled
+  readiness. `GitTreeApp.openRepo()` remains the compatibility entry point.
 - Use `textContent` for plain data and the shared encoder only when markup is
   necessary.
 - Do not introduce a framework, bundler or TypeScript.

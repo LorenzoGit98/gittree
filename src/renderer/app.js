@@ -5,16 +5,21 @@ class GitTreeApp {
     this.inspectorState = 'open';
     this.workspaceMode = 'history';
     this.updateState = null;
-    this.repoLoadToken = 0;
     this._events = {};
     this.dialogs = new DialogService();
   }
 
   pathKey(value) {
-    return window.gitTree?.platform === 'win32' ? String(value).toLocaleLowerCase() : String(value);
+    if (this.repositoryWorkspace) return this.repositoryWorkspace.pathKey(value);
+    return window.gitTree?.platform === 'win32'
+      ? String(value).toLocaleLowerCase('en-US')
+      : String(value);
   }
 
   isCurrentRepo(repoPath) {
+    if (this.repositoryWorkspace) {
+      return this.repositoryWorkspace.isCurrentRepository(repoPath);
+    }
     const current = this.state.repo?.path;
     return Boolean(current) && this.pathKey(repoPath) === this.pathKey(current);
   }
@@ -47,6 +52,23 @@ class GitTreeApp {
     this.components.conflict = new ConflictResolver(this);
     this.components.gitflow = new GitFlow(this);
     this.components.statusBar = new StatusBar();
+    this.repositoryWorkspace = new RepositoryWorkspaceController({
+      bridge: window.gitTree,
+      document,
+      storage: localStorage,
+      translate: t,
+      state: this.state,
+      components: this.components,
+      createLoadSession: (bridge, repoPath) => new RepositoryLoadSession(bridge, repoPath),
+      callbacks: {
+        syncRemoteBusyUI: () => this.syncRemoteBusyUI(),
+        setWorkspaceMode: mode => this.setWorkspaceMode(mode, false),
+        loadStashes: repoPath => this.loadStashes(repoPath),
+        loadTags: repoPath => this.loadTags(repoPath),
+        updateStatus: (repoPath, loadSession) => this.updateStatus(repoPath, loadSession),
+        syncCurrentRepositoryState: repoPath => this.syncCurrentRepositoryState(repoPath)
+      }
+    });
     this.remoteOperations = new RemoteOperationController({
       bridge: window.gitTree,
       document,
@@ -333,71 +355,15 @@ class GitTreeApp {
   }
 
   async openRepo(repo, options = {}) {
-    const loadToken = ++this.repoLoadToken;
-    const loadSession = new RepositoryLoadSession(window.gitTree, repo.path);
-    this.state.repo = repo;
-    this.components.welcome.hide();
-    this.syncRemoteBusyUI();
-    this.setProjectLoading(true);
-    const savedMode = localStorage.getItem(this.workspaceModeKey(repo.path)) || 'history';
-    this.setWorkspaceMode(savedMode, false);
-
-    try {
-      const graphLoad = this.components.graphView.load(repo.path);
-      const supportingLoad = Promise.all([
-        this.components.branchList.load(repo.path, loadSession),
-        this.components.changes.load(repo.path),
-        this.components.pullRequests.load(repo.path, loadSession),
-        this.loadStashes(repo.path),
-        this.loadTags(repo.path),
-        this.updateStatus(repo.path, loadSession)
-      ]);
-      // Keep a rejection handler attached while the graph gets first priority.
-      // The same promise is still awaited below, so errors keep their semantics.
-      supportingLoad.catch(() => {});
-
-      await graphLoad;
-
-      if (loadToken !== this.repoLoadToken) return;
-      this.components.diffViewer.clear();
-      if (options.selectHash) this.components.graphView.select(options.selectHash);
-      this.setProjectInteractive();
-
-      await supportingLoad;
-      if (loadToken !== this.repoLoadToken) return;
-      const branchName = this.syncCurrentRepositoryState(repo.path);
-      document.getElementById('status-branch').textContent = branchName ? t('statusBar.onBranch', { branch: branchName }) : '';
-      document.getElementById('status-repo').textContent = repo.name;
-      this.components.statusBar.setRepo(repo.name);
-      this.components.welcome?.markStep?.('open');
-      const operationState = await loadSession.operationState();
-      if (loadToken === this.repoLoadToken && operationState?.type) {
-        await this.components.conflict.open(operationState);
-      }
-    } finally {
-      if (loadToken === this.repoLoadToken) this.setProjectLoading(false);
-    }
+    return this.repositoryWorkspace.open(repo, options);
   }
 
   setProjectLoading(loading) {
-    const workspace = document.getElementById('workspace');
-    workspace?.classList.toggle('is-project-loading', loading);
-    workspace?.setAttribute('aria-busy', String(loading));
-    if (workspace) workspace.dataset.loadState = loading ? 'loading' : 'settled';
-    document.querySelectorAll('#branch-loading-indicator, #workspace-loading-indicator, #inspector-loading-indicator')
-      .forEach(indicator => indicator.classList.toggle('is-hidden', !loading));
-    document.getElementById('sidebar')?.setAttribute('aria-busy', String(loading));
-    document.querySelector('.main')?.setAttribute('aria-busy', String(loading));
-    document.getElementById('detail-panel')?.setAttribute('aria-busy', String(loading));
+    return this.repositoryWorkspace.setLoading(loading);
   }
 
   setProjectInteractive() {
-    const workspace = document.getElementById('workspace');
-    if (workspace) workspace.dataset.loadState = 'interactive';
-    document.querySelectorAll('#workspace-loading-indicator, #inspector-loading-indicator')
-      .forEach(indicator => indicator.classList.add('is-hidden'));
-    document.querySelector('.main')?.setAttribute('aria-busy', 'false');
-    document.getElementById('detail-panel')?.setAttribute('aria-busy', 'false');
+    return this.repositoryWorkspace.setInteractive();
   }
 
   async loadStashes(repoPath) {

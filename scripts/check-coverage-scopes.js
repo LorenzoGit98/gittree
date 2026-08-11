@@ -41,6 +41,7 @@ const SCOPES = {
       'src/renderer/dialog-service.js',
       'src/renderer/html-encoder.js',
       'src/renderer/repository-load-session.js',
+      'src/renderer/repository-workspace-controller.js',
       'src/renderer/components/branch-naming.js',
       'src/renderer/components/conflict-highlight.js',
       'src/renderer/components/diff-parser.js',

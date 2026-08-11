@@ -21,6 +21,10 @@ Privacy-first: no accounts, no telemetry, no repository upload.
 - **Repository session** — the internal Git unit that owns a normalized path,
   the `simple-git` Adapter and one per-repository queue while `GitService`
   remains the stable public Interface.
+- **Repository workspace controller** — the renderer lifecycle owner for one
+  Repository activation. It restores view state, gives the graph first visual
+  priority, coordinates supporting reads and prevents stale tab loads from
+  publishing after a newer activation.
 - **Repository history** — the read-only Git capability for log, graph, refs,
   commit comparisons and commit diff/detail queries within one Repository
   session.

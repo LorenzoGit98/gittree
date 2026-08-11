@@ -7,6 +7,7 @@ const appGlobals = {
   HtmlEncoder: 'readonly',
   DialogService: 'readonly',
   RepositoryLoadSession: 'readonly',
+  RepositoryWorkspaceController: 'readonly',
   RemoteOperationController: 'readonly',
   WorkspacePanelMotion: 'readonly',
   WorkspaceResizeController: 'readonly',
