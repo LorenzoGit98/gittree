@@ -1,3 +1,10 @@
+## [0.9.10](https://github.com/lorenzogit98/gittree/compare/v0.9.9...v0.9.10) (2026-08-11)
+
+
+### Bug Fixes
+
+* **security:** centralize repository workspace admission ([9aa8043](https://github.com/lorenzogit98/gittree/commit/9aa8043f09900b3c86557c5f117b524c5490c710))
+
 ## [0.9.9](https://github.com/lorenzogit98/gittree/compare/v0.9.8...v0.9.9) (2026-08-11)
 
 ## [0.9.8](https://github.com/lorenzogit98/gittree-minimal/compare/v0.9.7...v0.9.8) (2026-08-02)
