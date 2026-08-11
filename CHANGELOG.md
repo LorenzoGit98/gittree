@@ -1,3 +1,10 @@
+## [0.9.13](https://github.com/giannoccarol/gittree/compare/v0.9.12...v0.9.13) (2026-08-11)
+
+
+### Bug Fixes
+
+* **ci:** make repository fixtures platform portable ([cb8b730](https://github.com/giannoccarol/gittree/commit/cb8b7303f5a4d98b9c7a8a87d9b807e9cc5ccb2a))
+
 ## [0.9.12](https://github.com/lorenzogit98/gittree/compare/v0.9.11...v0.9.12) (2026-08-11)
 
 
