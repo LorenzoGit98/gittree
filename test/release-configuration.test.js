@@ -85,6 +85,11 @@ test('semantic-release maps feat and breaking to minor, fixes to patch', () => {
   ));
   assert.ok(gitPlugin, 'semantic-release git plugin missing');
   assert.ok(gitPlugin[1].assets.includes('CHANGELOG.md'));
+
+  const releaseGuide = fs.readFileSync(path.join(root, 'docs', 'RELEASING.md'), 'utf8');
+  assert.doesNotMatch(releaseGuide, /0\.4\.N|v0\.3\.\*/);
+  assert.match(releaseGuide, /0\.9\.8` → `0\.10\.0/);
+  assert.match(releaseGuide, /1\.0\.0.*stabilità/);
 });
 
 test('the master application icon is release ready', () => {
@@ -130,6 +135,10 @@ test('automatic versioning explicitly dispatches the atomic release workflow', (
 
   assert.match(release, /workflow_dispatch:/);
   assert.match(versioning, /actions:\s*write/);
+  assert.match(versioning, /GIT_AUTHOR_NAME:\s*Lorenzo Giannoccaro/);
+  assert.match(versioning, /GIT_AUTHOR_EMAIL:\s*lorenzo\.giannoccaro998@gmail\.com/);
+  assert.match(versioning, /GIT_COMMITTER_NAME:\s*Lorenzo Giannoccaro/);
+  assert.match(versioning, /GIT_COMMITTER_EMAIL:\s*lorenzo\.giannoccaro998@gmail\.com/);
   assert.match(versioning, /git fetch origin master --tags/);
   assert.match(versioning, /git tag --points-at "\$release_commit"/);
   assert.match(versioning, /gh workflow run release\.yml --ref "\$tag"/);

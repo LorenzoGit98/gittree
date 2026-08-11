@@ -59,20 +59,26 @@ La release ufficiale viene generata automaticamente a ogni push su `master` tram
 
 ### Schema di versione
 
-Finché il prodotto resta in anteprima, la linea è **`0.4.N`** dopo la maturità delle fasi 1–5:
+Finché il prodotto resta in anteprima, GitTree usa versioni **`0.x.y`**. Il numero
+minor non rappresenta una percentuale di completamento: dopo `0.9.x` la linea
+successiva è `0.10.x`, mentre `1.0.0` è riservata alla dichiarazione di stabilità.
 
-- le **nuove funzionalità** (`feat:`) e i breaking change producono una **minor** (`0.4.0` → `0.4.1`…);
-- `fix:`, `perf:`, `refactor:` e `style:` producono una **patch** (`0.4.1` → `0.4.2`);
+- le **nuove funzionalità** (`feat:`) e i breaking change producono una **minor** (`0.9.8` → `0.10.0`);
+- `fix:`, `perf:`, `refactor:` e `style:` producono una **patch** (`0.9.8` → `0.9.9`);
 - `docs:`, `chore:`, `test:`, `ci:`, `build:` non aprono una release.
 
 Non creare tag a mano e non usare `npm version` per i rilasci ufficiali: lo fa il workflow.
 
 Il workflow `.github/workflows/versioning.yml` esegue semantic-release che:
-1. analizza i commit dall’ultimo tag `v0.3.*`;
-2. determina la patch successiva;
+1. analizza i commit dall’ultimo tag SemVer raggiungibile su `master`;
+2. determina la versione successiva dalle regole Conventional Commits;
 3. aggiorna `package.json` e `package-lock.json`;
-4. crea un commit `chore(release): X.Y.Z` con `[skip ci]`;
+4. crea un commit `chore(release): X.Y.Z` attribuito al maintainer Lorenzo Giannoccaro;
 5. pusha il tag `vX.Y.Z`.
+
+La GitHub Release resta pubblicata da `github-actions[bot]`: questa identità indica
+che gli artefatti provengono dalla pipeline verificata, mentre autore e committer
+del commit di versione restano attribuiti al maintainer.
 
 Il push del tag attiva `.github/workflows/release.yml` che:
 

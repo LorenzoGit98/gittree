@@ -35,6 +35,10 @@ jobs:
       - name: Run semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GIT_AUTHOR_NAME: Lorenzo Giannoccaro
+          GIT_AUTHOR_EMAIL: lorenzo.giannoccaro998@gmail.com
+          GIT_COMMITTER_NAME: Lorenzo Giannoccaro
+          GIT_COMMITTER_EMAIL: lorenzo.giannoccaro998@gmail.com
         run: npx semantic-release
 
       - name: Dispatch atomic native release
