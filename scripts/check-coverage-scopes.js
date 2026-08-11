@@ -25,7 +25,8 @@ const SCOPES = {
       'src/main/repo-manager.js',
       'src/main/repository-workspace.js',
       'src/main/repository-scanner.js',
-      'src/main/update-service.js'
+      'src/main/update-service.js',
+      'src/main/workspace-profile-conversion.js'
     ],
     gate: { lines: 75, branches: 60, functions: 75 },
     target: { lines: 75, branches: 60, functions: 75 }

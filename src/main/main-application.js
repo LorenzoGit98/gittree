@@ -22,6 +22,7 @@ const { createInspectorWindowController } = require('./inspector-window-controll
 const { createApplicationRuntime } = require('./application-runtime');
 const { DiagnosticsExporter } = require('./diagnostics-exporter');
 const { isWorkingTreeRepository } = require('./working-tree-repository');
+const { convertWorkspaceProfile } = require('./workspace-profile-conversion');
 
 const ALLOWED_EXTERNAL_HOSTS = new Set([
   'github.com',
@@ -64,7 +65,8 @@ function createModules(dependencies) {
     createInspectorWindowController: dependencies.createInspectorWindowController ||
       createInspectorWindowController,
     DiagnosticsExporter: dependencies.DiagnosticsExporter || DiagnosticsExporter,
-    isWorkingTreeRepository: dependencies.isWorkingTreeRepository || isWorkingTreeRepository
+    isWorkingTreeRepository: dependencies.isWorkingTreeRepository || isWorkingTreeRepository,
+    convertWorkspaceProfile: dependencies.convertWorkspaceProfile || convertWorkspaceProfile
   };
 }
 
@@ -340,8 +342,6 @@ class MainApplication {
     if (this.platform === 'darwin' && app.dock) {
       app.dock.setIcon(path.join(__dirname, '..', '..', 'icon.png'));
     }
-    const repoManager = new this.modules.RepoManager();
-    this.repositoryWorkspace = new this.modules.RepositoryWorkspace({ repoStore: repoManager });
     this.logger = new this.modules.Logger(path.join(app.getPath('userData'), 'logs'));
     const logLevelArg = this.argv.find(argument => argument.startsWith('--log-level='));
     if (logLevelArg) {
@@ -350,6 +350,21 @@ class MainApplication {
       if (requested !== undefined) this.logger.setLevel(requested);
     }
     this.logger.info('GitTree started', { version: app.getVersion(), platform: this.platform });
+    const userDataPath = app.getPath('userData');
+    const workspaceConfigPath = path.join(userDataPath, 'repos.json');
+    const conversion = this.modules.convertWorkspaceProfile({
+      currentConfigPath: workspaceConfigPath,
+      previousConfigPath: path.join(path.dirname(userDataPath), 'gittree-minimal', 'repos.json')
+    });
+    if (conversion.converted) {
+      this.logger.info('Previous repository workspace converted', { source: conversion.source });
+    } else if (conversion.error) {
+      this.logger.warn?.('Repository workspace conversion failed', {
+        error: conversion.error
+      });
+    }
+    const repoManager = new this.modules.RepoManager({ configPath: workspaceConfigPath });
+    this.repositoryWorkspace = new this.modules.RepositoryWorkspace({ repoStore: repoManager });
     this.credentialVault = new this.modules.CredentialVault({
       storagePath: path.join(app.getPath('userData'), 'hosting-vault.bin'),
       safeStorage,

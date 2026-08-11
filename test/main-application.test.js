@@ -12,6 +12,8 @@ function createHarness() {
   const handlers = new Map();
   const removedHandlers = [];
   const windows = [];
+  let repoManagerOptions;
+  let conversionOptions;
 
   class FakeWebContents extends EventEmitter {
     constructor() {
@@ -67,7 +69,8 @@ function createHarness() {
   }
 
   class FakeRepoManager {
-    constructor() {
+    constructor(options) {
+      repoManagerOptions = options;
       calls.push('repo-store');
     }
   }
@@ -144,7 +147,7 @@ function createHarness() {
     quit: () => calls.push('quit'),
     setName: name => calls.push(`name:${name}`),
     setAppUserModelId: id => calls.push(`app-id:${id}`),
-    getPath: () => 'C:\\user-data',
+    getPath: name => name === 'appData' ? 'C:\\profiles' : 'C:\\profiles\\GitTree',
     getVersion: () => '1.2.3',
     getAppPath: () => 'C:\\app'
   });
@@ -203,7 +206,11 @@ function createHarness() {
       parseDeepLink: url => url.startsWith('gittree://') ? 'C:\\repo' : null,
       isWorkingTreeRepository: async () => true,
       createInspectorWindowController: () => inspector,
-      scanRepositories: async () => ({ repositories: [] })
+      scanRepositories: async () => ({ repositories: [] }),
+      convertWorkspaceProfile: options => {
+        conversionOptions = options;
+        return { converted: false };
+      }
     }
   });
   return {
@@ -214,6 +221,8 @@ function createHarness() {
     handlers,
     processHost,
     removedHandlers,
+    getConversionOptions: () => conversionOptions,
+    getRepoManagerOptions: () => repoManagerOptions,
     windows
   };
 }
@@ -223,6 +232,13 @@ test('Main application composes Electron once and tears down every owned resourc
 
   assert.equal(await harness.application.start(), true);
   assert.equal(harness.windows.length, 1);
+  assert.deepEqual(harness.getConversionOptions(), {
+    currentConfigPath: 'C:\\profiles\\GitTree\\repos.json',
+    previousConfigPath: 'C:\\profiles\\gittree-minimal\\repos.json'
+  });
+  assert.deepEqual(harness.getRepoManagerOptions(), {
+    configPath: 'C:\\profiles\\GitTree\\repos.json'
+  });
   assert.equal(harness.handlers.size, 114);
   assert.equal(harness.processHost.listenerCount('unhandledRejection'), 1);
   assert.equal(harness.app.listenerCount('activate'), 1);
