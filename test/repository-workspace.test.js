@@ -76,6 +76,23 @@ test('Repository workspace admits only a directory selected by the main process'
   );
 });
 
+test('Repository workspace recognizes a canonical path through an existing alias', () => {
+  const aliasPath = path.resolve('workspace-alias');
+  const canonicalPath = path.resolve('workspace-canonical');
+  const realpathSync = value => (
+    path.normalize(value) === path.normalize(aliasPath) ? canonicalPath : path.normalize(value)
+  );
+  realpathSync.native = realpathSync;
+  const workspace = new RepositoryWorkspace({
+    repoStore: new MemoryRepoStore([{ path: canonicalPath, name: 'canonical' }]),
+    fileSystem: { realpathSync },
+    platform: 'win32'
+  });
+
+  assert.equal(workspace.isManaged(aliasPath), true);
+  assert.doesNotThrow(() => workspace.assertManaged(aliasPath));
+});
+
 test('Independent repositories retain parallel queues', async t => {
   const firstFixture = createRepository();
   const secondFixture = createRepository();

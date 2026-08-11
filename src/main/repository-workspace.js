@@ -59,19 +59,27 @@ class RepositoryWorkspace {
     return repository ? { ...repository } : null;
   }
 
-  managedRepository(repoPath) {
-    let key;
+  pathKeys(repoPath) {
+    const keys = new Set();
     try {
-      key = this.pathKey(repoPath, { mustExist: false });
+      keys.add(this.pathKey(repoPath));
     } catch {
-      return null;
+      // Missing repositories still need to be removable from the persisted workspace.
     }
+    try {
+      keys.add(this.pathKey(repoPath, { mustExist: false }));
+    } catch {
+      // Invalid paths never match a managed repository.
+    }
+    return keys;
+  }
+
+  managedRepository(repoPath) {
+    const requestedKeys = this.pathKeys(repoPath);
+    if (requestedKeys.size === 0) return null;
     return this.repositories().find(repository => {
-      try {
-        return this.pathKey(repository.path, { mustExist: false }) === key;
-      } catch {
-        return false;
-      }
+      const managedKeys = this.pathKeys(repository.path);
+      return [...managedKeys].some(key => requestedKeys.has(key));
     }) || null;
   }
 
