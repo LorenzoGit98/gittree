@@ -1,4 +1,5 @@
 const { EventEmitter } = require('node:events');
+const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
@@ -12,6 +13,8 @@ function createHarness() {
   const handlers = new Map();
   const removedHandlers = [];
   const windows = [];
+  const profileRoot = path.resolve('test-profiles');
+  const userDataPath = path.join(profileRoot, 'GitTree');
   let repoManagerOptions;
   let conversionOptions;
 
@@ -147,7 +150,7 @@ function createHarness() {
     quit: () => calls.push('quit'),
     setName: name => calls.push(`name:${name}`),
     setAppUserModelId: id => calls.push(`app-id:${id}`),
-    getPath: name => name === 'appData' ? 'C:\\profiles' : 'C:\\profiles\\GitTree',
+    getPath: () => userDataPath,
     getVersion: () => '1.2.3',
     getAppPath: () => 'C:\\app'
   });
@@ -221,6 +224,8 @@ function createHarness() {
     handlers,
     processHost,
     removedHandlers,
+    profileRoot,
+    userDataPath,
     getConversionOptions: () => conversionOptions,
     getRepoManagerOptions: () => repoManagerOptions,
     windows
@@ -233,11 +238,11 @@ test('Main application composes Electron once and tears down every owned resourc
   assert.equal(await harness.application.start(), true);
   assert.equal(harness.windows.length, 1);
   assert.deepEqual(harness.getConversionOptions(), {
-    currentConfigPath: 'C:\\profiles\\GitTree\\repos.json',
-    previousConfigPath: 'C:\\profiles\\gittree-minimal\\repos.json'
+    currentConfigPath: path.join(harness.userDataPath, 'repos.json'),
+    previousConfigPath: path.join(harness.profileRoot, 'gittree-minimal', 'repos.json')
   });
   assert.deepEqual(harness.getRepoManagerOptions(), {
-    configPath: 'C:\\profiles\\GitTree\\repos.json'
+    configPath: path.join(harness.userDataPath, 'repos.json')
   });
   assert.equal(harness.handlers.size, 114);
   assert.equal(harness.processHost.listenerCount('unhandledRejection'), 1);

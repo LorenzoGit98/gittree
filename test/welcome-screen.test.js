@@ -57,9 +57,14 @@ test('a fresh install adds the first repository through the registered tabs comp
 
 test('bulk repository import persists once and selects the first newly added repository', () => {
   const RepoManager = require('../src/main/repo-manager');
+  const repositories = {
+    existing: path.resolve('workspace', 'existing'),
+    alpha: path.resolve('workspace', 'alpha'),
+    beta: path.resolve('workspace', 'beta')
+  };
   const manager = Object.create(RepoManager.prototype);
   manager.repos = [
-    { path: 'C:\\workspace\\existing', name: 'existing', addedAt: 'before' }
+    { path: repositories.existing, name: 'existing', addedAt: 'before' }
   ];
   manager.activeRepoIndex = 0;
   manager.platform = process.platform;
@@ -68,9 +73,9 @@ test('bulk repository import persists once and selects the first newly added rep
   manager.saveRepos = () => { saves += 1; };
 
   const result = manager.addRepos([
-    'C:\\workspace\\existing',
-    'C:\\workspace\\alpha',
-    'C:\\workspace\\beta'
+    repositories.existing,
+    repositories.alpha,
+    repositories.beta
   ]);
 
   assert.equal(saves, 1);

@@ -106,26 +106,25 @@ test('concurrent operations on one service are serialized without deadlock', asy
 });
 
 test('repo-manager keeps the active repository when a repo above it is removed', () => {
-  const configPath = path.join(
-    fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'gittree-manager-')),
-    'repos.json'
+  const fixtureRoot = fs.mkdtempSync(
+    path.join(require('node:os').tmpdir(), 'gittree-manager-')
   );
+  const configPath = path.join(fixtureRoot, 'repos.json');
+  const repositories = ['a', 'b', 'c'].map(name => path.join(fixtureRoot, 'work', name));
   const manager = new RepoManager({ configPath });
-  manager.addRepo('C:\\work\\a');
-  manager.addRepo('C:\\work\\b');
-  manager.addRepo('C:\\work\\c');
+  repositories.forEach(repoPath => manager.addRepo(repoPath));
   manager.setActiveRepo(1);
 
-  assert.equal(manager.removeRepo('C:\\work\\a'), true);
-  assert.equal(manager.getActiveRepo().path, 'C:\\work\\b');
+  assert.equal(manager.removeRepo(repositories[0]), true);
+  assert.equal(manager.getActiveRepo().path, repositories[1]);
   assert.equal(manager.activeRepoIndex, 0);
 
-  assert.equal(manager.removeRepo('C:\\work\\c'), true);
-  assert.equal(manager.getActiveRepo().path, 'C:\\work\\b');
+  assert.equal(manager.removeRepo(repositories[2]), true);
+  assert.equal(manager.getActiveRepo().path, repositories[1]);
 
-  assert.equal(manager.removeRepo('C:\\work\\b'), true);
+  assert.equal(manager.removeRepo(repositories[1]), true);
   assert.equal(manager.getActiveRepo(), null);
-  fs.rmSync(path.dirname(configPath), { recursive: true, force: true });
+  fs.rmSync(fixtureRoot, { recursive: true, force: true });
 });
 
 test('credential vault write queue recovers after a failed write', async () => {
@@ -549,7 +548,7 @@ test('deep links parse only absolute repository paths', () => {
   assert.equal(parseDeepLink('gittree://open?path=' + encodeURIComponent('C:\\work\\repo')), 'C:\\work\\repo');
   assert.equal(parseDeepLink('gittree://open?path=' + encodeURIComponent('/home/user/repo')), '/home/user/repo');
   assert.equal(parseDeepLink('gittree://open?path=relative/path'), null);
-  assert.equal(parseDeepLink('https://github.com/lorenzogit98/gittree'), null);
+  assert.equal(parseDeepLink('https://github.com/giannoccarol/gittree'), null);
   assert.equal(parseDeepLink('gittree://open?path=' + encodeURIComponent('a' + String.fromCharCode(0) + 'b')), null);
   assert.equal(parseDeepLink('gittree://other?path=/tmp/x'), null);
   assert.equal(parseDeepLink(null), null);
