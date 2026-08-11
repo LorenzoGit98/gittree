@@ -18,6 +18,9 @@ const { registerGitHandlers } = require('./ipc/git-handlers');
 const { registerHostingHandlers } = require('./ipc/hosting-handlers');
 const { registerRepositoryHandlers } = require('./ipc/repository-handlers');
 const { registerWindowApplicationHandlers } = require('./ipc/window-application-handlers');
+const { registerAgentHandlers } = require('./ipc/agent-handlers');
+const AgentSessionService = require('./agents/agent-session-service');
+const { createPty } = require('./agents/pty-factory');
 const { createInspectorWindowController } = require('./inspector-window-controller');
 const { createApplicationRuntime } = require('./application-runtime');
 const { DiagnosticsExporter } = require('./diagnostics-exporter');
@@ -66,7 +69,9 @@ function createModules(dependencies) {
       createInspectorWindowController,
     DiagnosticsExporter: dependencies.DiagnosticsExporter || DiagnosticsExporter,
     isWorkingTreeRepository: dependencies.isWorkingTreeRepository || isWorkingTreeRepository,
-    convertWorkspaceProfile: dependencies.convertWorkspaceProfile || convertWorkspaceProfile
+    convertWorkspaceProfile: dependencies.convertWorkspaceProfile || convertWorkspaceProfile,
+    AgentSessionService: dependencies.AgentSessionService || AgentSessionService,
+    createPty: dependencies.createPty || createPty
   };
 }
 
@@ -96,11 +101,14 @@ class MainApplication {
   this.repositoryWorkspace = null;
   this.updateService = null;
   this.hostingService = null;
+  this.agentSessionService = null;
   this.credentialVault = null;
   this.logger = null;
   this.inspectorController = null;
   this.disposeHandlers = () => {};
   this.processListenersAttached = false;
+  this.allowWindowClose = false;
+  this.closeConfirmationPending = false;
   this.handleUnhandledRejection = this.handleUnhandledRejection.bind(this);
   this.handleUncaughtException = this.handleUncaughtException.bind(this);
   this.runtime = createApplicationRuntime({
@@ -188,6 +196,34 @@ class MainApplication {
     this.mainWindow.on('closed', () => {
       this.mainWindow = null;
     });
+    this.mainWindow.on('close', event => {
+      if (this.allowWindowClose || !this.agentSessionService?.getActiveCount?.()) return;
+      event.preventDefault();
+      this.confirmAgentShutdown();
+    });
+  }
+
+  async confirmAgentShutdown() {
+    if (this.closeConfirmationPending) return;
+    this.closeConfirmationPending = true;
+    try {
+      const result = await this.electron.dialog.showMessageBox(this.mainWindow, {
+        type: 'warning',
+        title: 'Agent sessions are still running',
+        message: 'Stop active agents and quit GitTree?',
+        detail: 'GitTree will interrupt each CLI, wait up to five seconds, then terminate remaining process trees.',
+        buttons: ['Stop agents and quit', 'Cancel'],
+        defaultId: 1,
+        cancelId: 1,
+        noLink: true
+      });
+      if (result.response !== 0) return;
+      await this.agentSessionService.shutdown({ timeoutMs: 5000 });
+      this.allowWindowClose = true;
+      this.mainWindow?.close();
+    } finally {
+      this.closeConfirmationPending = false;
+    }
   }
 
   focusMainWindow() {
@@ -296,6 +332,7 @@ class MainApplication {
         this.repositoryWorkspace.consumeAuthorizedDirectory(directoryPath)
       ),
       authorizeCreatedRepository: repoPath => this.repositoryWorkspace.authorizeDirectory(repoPath),
+      assertWorktreeRemovable: repoPath => this.agentSessionService.assertWorktreeRemovable(repoPath),
       sendToRenderer: (channel, payload) => this.sendToRenderer(channel, payload)
     });
     registerHostingHandlers({
@@ -313,11 +350,22 @@ class MainApplication {
     registerRepositoryHandlers({
       registerHandler,
       repositoryWorkspace: this.repositoryWorkspace,
+      consumeAuthorizedDirectory: directoryPath => (
+        this.repositoryWorkspace.consumeAuthorizedDirectory(directoryPath)
+      ),
       isWorkingTreeRepository: this.modules.isWorkingTreeRepository,
       createGitService: repoPath => new this.modules.GitService(repoPath),
       scanRepositories: this.modules.scanRepositories,
       sendToRenderer: (channel, payload) => this.sendToRenderer(channel, payload),
       logger: this.logger
+    });
+    registerAgentHandlers({
+      registerHandler,
+      registerManagedRepoHandler,
+      agentSessionService: this.agentSessionService,
+      repositoryWorkspace: this.repositoryWorkspace,
+      showOpenDialog: (...args) => dialog.showOpenDialog(...args),
+      getMainWindow: () => this.mainWindow
     });
   }
 
@@ -365,6 +413,12 @@ class MainApplication {
     }
     const repoManager = new this.modules.RepoManager({ configPath: workspaceConfigPath });
     this.repositoryWorkspace = new this.modules.RepositoryWorkspace({ repoStore: repoManager });
+    this.agentSessionService = new this.modules.AgentSessionService({
+      storagePath: path.join(app.getPath('userData'), 'agent-workspace.json'),
+      repositoryWorkspace: this.repositoryWorkspace,
+      createPty: this.modules.createPty,
+      emit: (channel, payload) => this.sendToRenderer(channel, payload)
+    });
     this.credentialVault = new this.modules.CredentialVault({
       storagePath: path.join(app.getPath('userData'), 'hosting-vault.bin'),
       safeStorage,
@@ -393,6 +447,8 @@ class MainApplication {
     this.updateService = null;
     this.hostingService?.destroy?.();
     this.hostingService = null;
+    this.agentSessionService?.destroy?.();
+    this.agentSessionService = null;
     if (this.mainWindow && !this.mainWindow.isDestroyed()) this.mainWindow.destroy();
     this.mainWindow = null;
   }

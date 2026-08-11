@@ -17,6 +17,10 @@ test('release dependencies are assigned to the correct package scopes', () => {
   assert.equal(packageJson.dependencies.electron, undefined);
   assert.match(packageJson.dependencies['electron-updater'], /^\^6\./);
   assert.match(packageJson.devDependencies.electron, /^\^43\./);
+  assert.equal(packageJson.dependencies['node-pty'], '1.1.0');
+  assert.equal(packageJson.dependencies['@xterm/xterm'], '6.0.0');
+  assert.equal(packageJson.dependencies['@xterm/addon-fit'], '0.11.0');
+  assert.equal(packageJson.scripts.postinstall, 'electron-builder install-app-deps');
   assert.ok(packageJson.scripts['prepare:assets']);
   assert.ok(packageJson.scripts['release:check']);
   assert.equal(
@@ -58,6 +62,7 @@ test('electron-builder emits installable and update-compatible artifacts', () =>
   assert.match(config, /-\s*zip/);
   assert.match(config, /-\s*AppImage/);
   assert.match(config, /generateUpdatesFilesForAllChannels:\s*true/);
+  assert.match(config, /asarUnpack:[\s\S]*node_modules\/node-pty\/\*\*\/\*/);
   assert.match(config, /from:\s*build\/oauth-config\.json/);
   assert.match(config, /include:\s*installer\.nsh/);
   assert.match(config, /deb:\s*[\s\S]*depends:/);

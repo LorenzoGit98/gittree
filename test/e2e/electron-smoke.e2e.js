@@ -48,6 +48,7 @@ test('Electron opens a deep-linked repository and renders its deterministic hist
     application = await electron.launch({
       args: [
         projectRoot,
+        '--no-sandbox',
         '--force-device-scale-factor=0.75',
         `--user-data-dir=${fixture.userData}`,
         fixture.deepLink
@@ -241,6 +242,7 @@ test('Electron welcome is full-bleed and exposes only About and updates', async 
   application = await electron.launch({
     args: [
       projectRoot,
+      '--no-sandbox',
       '--force-device-scale-factor=0.75',
       `--user-data-dir=${fixture.userData}`
     ],
@@ -281,4 +283,98 @@ test('Electron welcome is full-bleed and exposes only About and updates', async 
   assert.equal(await page.locator('[data-settings-section="appearance"]').count(), 0);
   assert.equal(await page.locator('#btn-check-update').isVisible(), true);
   assert.equal(await page.locator('#btn-export-diagnostics').count(), 0);
+});
+
+test('Electron runs a fixture agent in an isolated worktree and blocks dirty removal', async t => {
+  const fixture = createElectronFixture();
+  const agentRoot = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'gittree-agent-root-'));
+  const cliRoot = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'gittree-agent-cli-'));
+  const fixtureScript = path.join(cliRoot, 'fixture-agent.js');
+  fs.writeFileSync(fixtureScript, [
+    "process.stdout.write('fixture-ready\\n');",
+    "process.stdin.on('data', data => process.stdout.write('echo:' + data));",
+    'setInterval(() => {}, 1000);'
+  ].join('\n'));
+  if (process.platform === 'win32') {
+    fs.copyFileSync(process.execPath, path.join(cliRoot, 'codex.exe'));
+  } else {
+    fs.symlinkSync(process.execPath, path.join(cliRoot, 'codex'));
+  }
+  fs.writeFileSync(path.join(fixture.userData, 'agent-workspace.json'), JSON.stringify({
+    version: 1,
+    settings: {
+      worktreeRoot: agentRoot,
+      maxConcurrent: 4,
+      enabledAdapters: ['codex', 'claude', 'opencode']
+    },
+    tasks: []
+  }));
+  let application;
+  const processOutput = [];
+  t.after(async () => {
+    if (application) await application.close().catch(() => {});
+    fixture.cleanup();
+    fs.rmSync(agentRoot, { recursive: true, force: true });
+    fs.rmSync(cliRoot, { recursive: true, force: true });
+  });
+
+  application = await electron.launch({
+    args: [projectRoot, '--no-sandbox', `--user-data-dir=${fixture.userData}`, fixture.deepLink],
+    cwd: projectRoot,
+    env: { ...process.env, PATH: `${cliRoot}${path.delimiter}${process.env.PATH || ''}` }
+  });
+  application.process().stdout?.on('data', chunk => processOutput.push(String(chunk)));
+  application.process().stderr?.on('data', chunk => processOutput.push(String(chunk)));
+  const page = await application.firstWindow();
+  page.on('crash', () => {
+    const logPath = path.join(fixture.userData, 'logs', 'gittree.log');
+    const mainLog = fs.existsSync(logPath) ? fs.readFileSync(logPath, 'utf8').slice(-4000) : '';
+    console.error('Agent E2E renderer crashed', { processOutput, mainLog });
+  });
+  await page.locator('.repo-tab.active').waitFor({ timeout: 60000 });
+  await page.waitForFunction(() => document.getElementById('workspace')?.dataset.loadState === 'settled');
+  await page.locator('[data-sidebar-mode="agents"]').click();
+  await page.locator('#btn-new-agent-session').click();
+  await page.getByRole('dialog').waitFor();
+  await page.locator('input[name="title"]').fill('Fixture agent');
+  await page.locator('textarea[name="prompt"]').fill(fixtureScript);
+  await page.locator('select[name="adapterId"]').selectOption('codex');
+  await page.getByRole('dialog').locator('button[type="submit"]').click();
+  await page.locator('#agent-drawer:not(.is-hidden)').waitFor({ timeout: 60000 });
+  await page.locator('[data-agent-drawer-tab="terminal"]').click();
+  await page.waitForFunction(() => (
+    window.app.components.worktreeAgents.terminal?.buffer.active
+      .getLine(0)?.translateToString(true).includes('fixture-ready')
+  ), null, { timeout: 60000 });
+  await page.locator('.xterm-helper-textarea').click();
+  await page.keyboard.type('hello');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => (
+    Array.from(
+      { length: window.app.components.worktreeAgents.terminal?.buffer.active.length || 0 },
+      (_value, index) => window.app.components.worktreeAgents.terminal.buffer.active
+        .getLine(index)?.translateToString(true) || ''
+    ).join('\n').includes('echo:hello')
+  ), null, { timeout: 10000 });
+  const resizeResult = await page.evaluate(() => {
+    const taskId = window.app.components.worktreeAgents.selectedTaskId;
+    return window.gitTree.resizeAgentTerminal(taskId, 110, 35);
+  });
+  assert.equal(resizeResult?.error, undefined);
+  await page.locator('#btn-stop-agent').click();
+  await page.waitForFunction(() => {
+    const panel = window.app.components.worktreeAgents;
+    return panel.tasks.find(task => task.id === panel.selectedTaskId)?.status === 'stopped';
+  }, null, { timeout: 10000 });
+
+  const paths = await page.evaluate(() => {
+    const panel = window.app.components.worktreeAgents;
+    const task = panel.tasks.find(item => item.id === panel.selectedTaskId);
+    return { repositoryPath: task.repositoryPath, worktreePath: task.worktreePath };
+  });
+  fs.writeFileSync(path.join(paths.worktreePath, 'dirty-agent.txt'), 'dirty\n');
+  const removal = await page.evaluate(({ repositoryPath, worktreePath }) => (
+    window.gitTree.removeWorktree(repositoryPath, worktreePath)
+  ), paths);
+  assert.match(removal.error, /modified|untracked|working tree|worktree/i);
 });

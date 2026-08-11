@@ -7,6 +7,7 @@
   <title>GitTree</title>
   <link rel="icon" type="image/png" href="../../icon.png">
   <link rel="stylesheet" href="../../node_modules/@phosphor-icons/web/src/regular/style.css">
+  <link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css">
   <link rel="stylesheet" href="styles/variables.css">
   <link rel="stylesheet" href="styles/layout.css">
   <link rel="stylesheet" href="styles/components.css">
@@ -28,6 +29,7 @@
   <link rel="stylesheet" href="styles/settings.css">
   <link rel="stylesheet" href="styles/gitflow.css">
   <link rel="stylesheet" href="styles/reflog.css">
+  <link rel="stylesheet" href="styles/agent-workspace.css">
 </head>
 <body>
 <div id="app">
@@ -50,6 +52,7 @@
             <span data-i18n="welcome.clone">Clone repository</span>
           </button>
         </div>
+
         <div class="welcome-recent" id="recent-repos"></div>
         <div class="welcome-onboarding is-hidden" id="welcome-onboarding"></div>
       </div>
@@ -180,6 +183,15 @@
           </div>
         </div>
 
+        <div id="sidebar-mode-switch" class="segmented-control sidebar-mode-switch" role="tablist" aria-label="Sidebar view">
+          <button class="btn active" type="button" role="tab" aria-selected="true" data-sidebar-mode="repository">
+            <i class="ph ph-tree-structure" aria-hidden="true"></i><span data-i18n="agents.repository">Repository</span>
+          </button>
+          <button class="btn" type="button" role="tab" aria-selected="false" data-sidebar-mode="agents">
+            <i class="ph ph-robot" aria-hidden="true"></i><span data-i18n="agents.agents">Agents</span>
+          </button>
+        </div>
+
         <div class="sidebar-branches-area" id="sidebar-branches-area">
           <div class="sidebar-branches-inner">
             <div class="branch-search-wrapper search-clearable">
@@ -196,7 +208,40 @@
           </div>
         </div>
 
+        <section id="agent-sidebar" class="agent-sidebar is-hidden" aria-label="Agent sessions">
+          <div class="agent-sidebar-toolbar">
+            <button id="btn-new-agent-session" class="btn btn-primary" type="button">
+              <i class="ph ph-plus" aria-hidden="true"></i><span data-i18n="agents.newSession">New session</span>
+            </button>
+            <div class="agent-filter-row">
+              <select id="agent-status-filter" aria-label="Filter by status">
+                <option value="" data-i18n="agents.allStatuses">All statuses</option>
+                <option value="active" data-i18n="agents.active">Active</option>
+                <option value="attention" data-i18n="agents.attention">Needs attention</option>
+                <option value="finished" data-i18n="agents.finished">Finished</option>
+              </select>
+              <select id="agent-provider-filter" aria-label="Filter by provider">
+                <option value="" data-i18n="agents.allProviders">All providers</option>
+                <option value="codex">Codex</option>
+                <option value="claude">Claude Code</option>
+                <option value="opencode">OpenCode</option>
+              </select>
+            </div>
+          </div>
+          <div id="agent-card-list" class="agent-card-list" role="list"></div>
+        </section>
+
         <div class="sidebar-pinned-bottom">
+          <div class="sidebar-section" data-section="worktrees">
+            <button class="sidebar-section-header collapsible" type="button">
+              <i class="ph ph-caret-down collapse-arrow"></i>
+              <span data-i18n="agents.worktrees">Worktrees</span>
+              <span id="worktree-count" class="mode-count">0</span>
+            </button>
+            <div class="sidebar-section-body" id="worktree-section-body">
+              <div id="worktree-list" class="worktree-list"></div>
+            </div>
+          </div>
           <div class="sidebar-section" data-section="stashes">
             <button class="sidebar-section-header collapsible collapsed" type="button">
               <i class="ph ph-caret-down collapse-arrow collapsed"></i>
@@ -476,6 +521,25 @@
             <div id="pr-list" class="pr-list" role="list"></div>
           </div>
         </div>
+        <section id="agent-drawer" class="agent-drawer is-hidden" aria-label="Agent session">
+          <div id="agent-drawer-resize" class="agent-drawer-resize" role="separator" tabindex="0" aria-orientation="horizontal"></div>
+          <header class="agent-drawer-header">
+            <div class="agent-drawer-title">
+              <span class="agent-provider-mark"><i class="ph ph-robot" aria-hidden="true"></i></span>
+              <div><strong id="agent-drawer-name"></strong><small id="agent-drawer-meta"></small></div>
+            </div>
+            <div class="agent-drawer-actions">
+              <div class="segmented-control" role="tablist" aria-label="Agent session view">
+                <button class="btn active" type="button" role="tab" data-agent-drawer-tab="activity" aria-selected="true" data-i18n="agents.activity">Activity</button>
+                <button class="btn" type="button" role="tab" data-agent-drawer-tab="terminal" aria-selected="false" data-i18n="agents.terminal">Terminal</button>
+              </div>
+              <button id="btn-stop-agent" class="btn btn-small" type="button"><i class="ph ph-stop" aria-hidden="true"></i><span data-i18n="agents.stop">Stop</span></button>
+              <button id="btn-close-agent-drawer" class="btn-icon" type="button" aria-label="Close"><i class="ph ph-x" aria-hidden="true"></i></button>
+            </div>
+          </header>
+          <div id="agent-activity" class="agent-drawer-body agent-activity"></div>
+          <div id="agent-terminal" class="agent-drawer-body agent-terminal is-hidden"></div>
+        </section>
       </main>
 
       <div class="resize-handle-v" id="resize-handle-right" role="separator" aria-orientation="vertical"></div>
@@ -553,6 +617,8 @@
 </div>
 
 <script src="../../node_modules/i18next/dist/umd/i18next.min.js"></script>
+<script src="../../node_modules/@xterm/xterm/lib/xterm.js"></script>
+<script src="../../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
 <script src="i18n.js"></script>
 <script src="theme.js"></script>
 <script src="html-encoder.js"></script>
@@ -587,6 +653,7 @@
 <script src="components/welcome.js"></script>
 <script src="components/gitflow.js"></script>
 <script src="components/reflog-view.js"></script>
+<script src="components/worktree-agent-panel.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

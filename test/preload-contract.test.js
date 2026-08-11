@@ -46,7 +46,7 @@ function loadBridge() {
 test('preload exposes only the frozen named GitTree Interface', async () => {
   const { bridge, invokes } = loadBridge();
 
-  assert.equal(Object.keys(bridge).length, 124);
+  assert.equal(Object.keys(bridge).length, 147);
   assert.equal(bridge.platform, 'win32');
   assert.equal('invoke' in bridge, false);
   assert.equal(typeof bridge.exportDiagnostics, 'function');

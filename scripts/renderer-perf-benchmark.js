@@ -430,6 +430,39 @@ async function measureRenderer(page) {
         transition.keyframeProperties.sort().join(',') === 'opacity,transform'
       ));
 
+      const agentPanel = window.app.components.worktreeAgents;
+      const originalAgentWorktrees = agentPanel.worktrees;
+      const originalAgentTasks = agentPanel.tasks;
+      agentPanel.worktrees = Array.from({ length: 50 }, (_value, index) => ({
+        path: `C:\\benchmark\\worktree-${index}`,
+        branch: `agent/benchmark-${index}`
+      }));
+      agentPanel.tasks = agentPanel.worktrees.map((worktree, index) => ({
+        id: `benchmark-${index}`,
+        worktreePath: worktree.path,
+        title: `Benchmark task ${index}`,
+        adapterId: ['codex', 'claude', 'opencode'][index % 3],
+        status: index % 7 === 0 ? 'attention' : 'running',
+        needsAttention: index % 7 === 0,
+        wip: index % 5,
+        ahead: index % 3,
+        behind: 0,
+        updatedAt: new Date(Date.now() - index * 1000).toISOString()
+      }));
+      const agentCardsStartedAt = performance.now();
+      agentPanel.renderAgents();
+      document.getElementById('agent-card-list').getBoundingClientRect();
+      const agentCardsMs = performance.now() - agentCardsStartedAt;
+      const renderedAgentCards = document.querySelectorAll('.agent-card').length;
+      agentPanel.ensureTerminal();
+      const terminalStartedAt = performance.now();
+      for (let index = 0; index < 6000; index += 1) agentPanel.terminal?.write(`line ${index}\r\n`);
+      const terminalWriteMs = performance.now() - terminalStartedAt;
+      const terminalBufferLines = agentPanel.terminal?.buffer.active.length || 0;
+      agentPanel.worktrees = originalAgentWorktrees;
+      agentPanel.tasks = originalAgentTasks;
+      agentPanel.renderAgents();
+
       metrics = {
         syntheticCommits: syntheticRows.length,
         initialRenderMs,
@@ -444,6 +477,12 @@ async function measureRenderer(page) {
         resizeLiveFrame: summarize(resizeFrameSamples),
         historyResizePreview,
         panelMotion,
+        agentSessions: {
+          cards: renderedAgentCards,
+          cardRenderMs: agentCardsMs,
+          terminalWriteMs,
+          terminalBufferLines
+        },
         jsHeapUsedMb: performance.memory
           ? performance.memory.usedJSHeapSize / (1024 * 1024)
           : null,
@@ -471,6 +510,8 @@ async function measureRenderer(page) {
           historyResizeCommitsOnRelease: historyWidthAfter === historyWidthBefore + contractDelta,
           historyResizePersistsOnRelease: persistedHistoryWidth === historyWidthAfter,
           panelMotionUsesCompositorOnly,
+          rendersFiftyAgentCards: renderedAgentCards === 50,
+          terminalScrollbackIsBounded: terminalBufferLines <= 5050,
           panelMotionAvoidsGridAnimation:
             !panelMotion.workspaceTransitionProperty.includes('grid-template-columns'),
           panelMotionPreservesGraphRows:
@@ -535,6 +576,7 @@ async function runBenchmark() {
     application = await electron.launch({
       args: [
         projectRoot,
+        '--no-sandbox',
         `--user-data-dir=${fixture.userData}`,
         fixture.deepLink
       ],

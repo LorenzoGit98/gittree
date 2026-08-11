@@ -1,4 +1,6 @@
 const { EventEmitter } = require('node:events');
+const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -8,12 +10,13 @@ const {
   isSafeExternalUrl
 } = require('../src/main/main-application');
 
-function createHarness() {
+function createHarness(t) {
   const calls = [];
   const handlers = new Map();
   const removedHandlers = [];
   const windows = [];
-  const profileRoot = path.resolve('test-profiles');
+  const profileRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'gittree-main-application-'));
+  t.after(() => fs.rmSync(profileRoot, { recursive: true, force: true }));
   const userDataPath = path.join(profileRoot, 'GitTree');
   let repoManagerOptions;
   let conversionOptions;
@@ -232,8 +235,8 @@ function createHarness() {
   };
 }
 
-test('Main application composes Electron once and tears down every owned resource', async () => {
-  const harness = createHarness();
+test('Main application composes Electron once and tears down every owned resource', async t => {
+  const harness = createHarness(t);
 
   assert.equal(await harness.application.start(), true);
   assert.equal(harness.windows.length, 1);
@@ -244,7 +247,7 @@ test('Main application composes Electron once and tears down every owned resourc
   assert.deepEqual(harness.getRepoManagerOptions(), {
     configPath: path.join(harness.userDataPath, 'repos.json')
   });
-  assert.equal(harness.handlers.size, 114);
+  assert.equal(harness.handlers.size, 133);
   assert.equal(harness.processHost.listenerCount('unhandledRejection'), 1);
   assert.equal(harness.app.listenerCount('activate'), 1);
   assert.equal(
@@ -269,6 +272,16 @@ test('Main application composes Electron once and tears down every owned resourc
   assert.deepEqual(await harness.handlers.get('update:get-state')({}), {
     status: 'idle'
   });
+  assert.equal((await harness.handlers.get('agent:settings')({})).agentsEnabled, true);
+  assert.equal((await harness.handlers.get('agent:enabled-set')({}, false)).agentsEnabled, false);
+  assert.equal((await harness.handlers.get('agent:concurrency-set')({}, 3)).maxConcurrent, 3);
+  assert.deepEqual(
+    (await harness.handlers.get('agent:adapters-set')({}, ['codex'])).enabledAdapters,
+    ['codex']
+  );
+  assert.deepEqual(await harness.handlers.get('agent:tasks')({}, 'C:\\repo'), []);
+  assert.match((await harness.handlers.get('agent:task-stop')({}, 'missing')).error, /Unknown agent task/);
+  assert.equal(await harness.handlers.get('agent:root-select')({}), null);
   assert.equal(await harness.handlers.get('dialog:select-directory')({}), null);
   assert.deepEqual(await harness.handlers.get('window:open-inspector')({}, {}), {
     success: true
@@ -315,7 +328,7 @@ test('Main application composes Electron once and tears down every owned resourc
   await harness.application.stop();
 
   assert.equal(harness.handlers.size, 0);
-  assert.equal(new Set(harness.removedHandlers).size, 114);
+  assert.equal(new Set(harness.removedHandlers).size, 133);
   assert.equal(harness.windows[0].isDestroyed(), true);
   assert.equal(harness.processHost.listenerCount('unhandledRejection'), 0);
   assert.equal(harness.app.listenerCount('activate'), 0);

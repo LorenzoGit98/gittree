@@ -30,7 +30,12 @@ class SettingsView {
       metadata = response?.error ? null : response;
     }
     const remotes = repo ? await this.readRemotes(repo.path) : [];
-    const worktrees = repo ? await this.readWorktrees(repo.path) : [];
+    const [agentSettings, agentAdapters] = scope === 'about'
+      ? [null, []]
+      : await Promise.all([
+          window.gitTree.getAgentSettings?.().catch(() => null),
+          window.gitTree.detectAgentAdapters?.().catch(() => [])
+        ]);
     const schedules = this.readObject(this.autoFetchStorageKey);
     let profiles = this.readArray(this.profilesStorageKey);
     const assignments = this.readObject(this.assignmentsStorageKey);
@@ -155,16 +160,43 @@ class SettingsView {
           </form>
         </section>
 
-        <section class="settings-section" data-settings-section="worktrees">
+        <section class="settings-section" data-settings-section="agents">
           <div class="settings-section-heading">
-            <i class="ph ph-tabs" aria-hidden="true"></i>
+            <i class="ph ph-robot" aria-hidden="true"></i>
             <div>
-              <h3>${this.esc(t('settings.worktreesTitle'))}</h3>
-              <p>${this.esc(t('settings.worktreesHelp'))}</p>
+              <h3>${this.esc(t('agents.settingsTitle'))}</h3>
+              <p>${this.esc(t('agents.settingsHelp'))}</p>
             </div>
           </div>
-          <div class="settings-remotes-list" id="settings-worktrees-list">
-            ${worktrees.map(worktree => this.renderWorktreeRow(worktree)).join('') || `<div class="settings-empty">${this.esc(t('settings.noWorktrees'))}</div>`}
+          <div class="settings-toolbar-rows agent-settings-rows">
+            <label class="settings-toolbar-row">
+              <div class="settings-toolbar-copy">
+                <strong>${this.esc(t('agents.featureEnabled'))}</strong>
+                <small>${this.esc(t('agents.featureEnabledHelp'))}</small>
+              </div>
+              <span class="settings-switch"><input id="settings-agents-enabled" type="checkbox"${agentSettings?.agentsEnabled !== false ? ' checked' : ''}><span aria-hidden="true"></span></span>
+            </label>
+            <div class="settings-toolbar-row">
+              <div class="settings-toolbar-copy">
+                <strong>${this.esc(t('agents.worktreeRoot'))}</strong>
+                <small id="agent-root-value">${this.esc(agentSettings?.worktreeRoot || t('agents.notConfigured'))}</small>
+              </div>
+              <button id="settings-agent-root" class="btn btn-small" type="button">${this.esc(t('agents.choose'))}</button>
+            </div>
+            <label class="settings-toolbar-row">
+              <div class="settings-toolbar-copy">
+                <strong>${this.esc(t('agents.concurrency'))}</strong>
+                <small>${this.esc(t('agents.concurrencyHelp'))}</small>
+              </div>
+              <input id="settings-agent-concurrency" type="number" min="1" max="32" value="${Number(agentSettings?.maxConcurrent) || 4}">
+            </label>
+            <div class="agent-adapter-settings">
+              ${(Array.isArray(agentAdapters) ? agentAdapters : []).map(adapter => `<label class="settings-toolbar-row">
+                <div class="settings-toolbar-copy"><strong>${this.esc(adapter.label)}</strong><small>${this.esc(adapter.version || t('agents.cliNotFound'))}</small></div>
+                <span class="agent-adapter-state ${adapter.available ? 'is-available' : ''}">${this.esc(t(adapter.available ? 'agents.detected' : 'agents.unavailable'))}</span>
+                <span class="settings-switch"><input type="checkbox" data-agent-adapter="${this.esc(adapter.id)}"${agentSettings?.enabledAdapters?.includes(adapter.id) ? ' checked' : ''}><span aria-hidden="true"></span></span>
+              </label>`).join('')}
+            </div>
           </div>
         </section>
 
@@ -376,67 +408,6 @@ class SettingsView {
     } catch {
       return [];
     }
-  }
-
-  async readWorktrees(repoPath) {
-    try {
-      const result = await window.gitTree.getWorktrees(repoPath);
-      return Array.isArray(result) ? result : [];
-    } catch {
-      return [];
-    }
-  }
-
-  renderWorktreeRow(worktree) {
-    const isCurrent = worktree.path === this.app.state.repo?.path;
-    return `<div class="settings-remote-row" data-worktree-path="${this.esc(worktree.path)}">
-      <i class="ph ph-tabs" aria-hidden="true"></i>
-      <div class="settings-remote-copy">
-        <strong>${this.esc(worktree.branch || worktree.head || '—')}</strong>
-        <span class="settings-remote-url" title="${this.esc(worktree.path)}">${this.esc(worktree.path)}</span>
-      </div>
-      ${isCurrent ? `<span class="badge badge-head">${this.esc(t('settings.currentWorktree'))}</span>` : ''}
-      <div class="settings-remote-actions">
-        <button class="btn btn-small is-danger" type="button" data-action="remove" title="${this.esc(t('settings.removeWorktree'))}" aria-label="${this.esc(t('settings.removeWorktree'))}" ${isCurrent ? 'disabled' : ''}>
-          <i class="ph ph-trash" aria-hidden="true"></i>
-        </button>
-      </div>
-    </div>`;
-  }
-
-  async refreshWorktreesList(repo) {
-    const container = this.dialog.querySelector('#settings-worktrees-list');
-    if (!container || !repo) return;
-    const worktrees = await this.readWorktrees(repo.path);
-    container.innerHTML = worktrees.map(worktree => this.renderWorktreeRow(worktree)).join('')
-      || `<div class="settings-empty">${this.esc(t('settings.noWorktrees'))}</div>`;
-    this.bindWorktrees(repo);
-  }
-
-  bindWorktrees(repo) {
-    if (!repo) return;
-    const list = this.dialog.querySelector('#settings-worktrees-list');
-    list?.querySelectorAll('[data-worktree-path]').forEach(row => {
-      const directory = row.dataset.worktreePath;
-      const removeButton = row.querySelector('[data-action="remove"]');
-      if (!removeButton) return;
-      removeButton.onclick = async () => {
-        const confirmed = await this.app.confirmDialog(
-          t('settings.removeWorktreeTitle'),
-          t('settings.removeWorktreeConfirm', { path: directory }),
-          t('settings.removeWorktree'),
-          true
-        );
-        if (!confirmed) return;
-        const result = await window.gitTree.removeWorktree(repo.path, directory);
-        if (result?.error) {
-          this.app.showToast(result.error, 'error');
-          return;
-        }
-        await this.refreshWorktreesList(repo);
-        this.app.showToast(t('settings.worktreeRemoved'), 'success');
-      };
-    });
   }
 
   renderRemoteRow(remote) {
@@ -822,7 +793,46 @@ class SettingsView {
     };
 
     this.bindRemotes(repo);
-    this.bindWorktrees(repo);
+    const rootButton = this.dialog.querySelector('#settings-agent-root');
+    if (rootButton) {
+      rootButton.onclick = async () => {
+        const result = await window.gitTree.chooseAgentWorktreeRoot();
+        if (result?.error) return this.app.showToast(result.error, 'error');
+        if (result?.worktreeRoot) this.dialog.querySelector('#agent-root-value').textContent = result.worktreeRoot;
+      };
+    }
+    const agentsEnabled = this.dialog.querySelector('#settings-agents-enabled');
+    if (agentsEnabled) {
+      agentsEnabled.onchange = async () => {
+        const result = await window.gitTree.setAgentSessionsEnabled(agentsEnabled.checked);
+        if (result?.error) {
+          agentsEnabled.checked = !agentsEnabled.checked;
+          this.app.showToast(result.error, 'error');
+          return;
+        }
+        window.dispatchEvent(new CustomEvent('gittree:agent-settings-changed', { detail: result }));
+      };
+    }
+    const concurrency = this.dialog.querySelector('#settings-agent-concurrency');
+    if (concurrency) {
+      concurrency.onchange = async () => {
+        const result = await window.gitTree.setAgentConcurrency(Number(concurrency.value));
+        if (result?.error) this.app.showToast(result.error, 'error');
+        else concurrency.value = String(result.maxConcurrent);
+      };
+    }
+    this.dialog.querySelectorAll('[data-agent-adapter]').forEach(input => {
+      input.onchange = async () => {
+        const enabled = [...this.dialog.querySelectorAll('[data-agent-adapter]')]
+          .filter(item => item.checked)
+          .map(item => item.dataset.agentAdapter);
+        const result = await window.gitTree.setEnabledAgentAdapters(enabled);
+        if (result?.error) {
+          input.checked = !input.checked;
+          this.app.showToast(result.error, 'error');
+        }
+      };
+    });
     this.dialog.querySelectorAll('[data-profile-apply]').forEach(button => {
       button.onclick = async () => {
         const profile = this.readArray(this.profilesStorageKey)

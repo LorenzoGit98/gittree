@@ -1,3 +1,4 @@
+/* global WorktreeAgentPanel */
 class GitTreeApp {
   constructor() {
     this.state = { repo: null, activeRepoIndex: -1, currentBranch: null };
@@ -51,6 +52,7 @@ class GitTreeApp {
     this.components.conflict = new ConflictResolver(this);
     this.components.gitflow = new GitFlow(this);
     this.components.statusBar = new StatusBar();
+    this.components.worktreeAgents = new WorktreeAgentPanel(this);
     this.repositoryWorkspace = new RepositoryWorkspaceController({
       bridge: window.gitTree,
       document,
@@ -63,6 +65,7 @@ class GitTreeApp {
         restoreWorkspaceMode: repoPath => this.workspaceState.restoreMode(repoPath),
         loadStashes: repoPath => this.loadStashes(repoPath),
         loadTags: repoPath => this.loadTags(repoPath),
+        loadWorktreeAgents: repo => this.components.worktreeAgents.load(repo),
         updateStatus: (repoPath, loadSession) => this.updateStatus(repoPath, loadSession),
         syncCurrentRepositoryState: repoPath => this.syncCurrentRepositoryState(repoPath)
       }
@@ -144,6 +147,7 @@ class GitTreeApp {
     this.setupGlobalShortcuts();
     await this.components.repoTabs.init();
     this.components.settings.init();
+    this.components.worktreeAgents.mount();
 
     const repos = this.components.repoTabs.repos;
     if (repos && repos.length > 0) {

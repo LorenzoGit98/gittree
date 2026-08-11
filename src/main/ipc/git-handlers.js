@@ -17,6 +17,7 @@ function registerGitHandlers({
   getGitService,
   consumeAuthorizedDirectory = directoryPath => directoryPath,
   authorizeCreatedRepository = repoPath => repoPath,
+  assertWorktreeRemovable = () => true,
   sendToRenderer = () => {}
 }) {
   const forwards = [
@@ -60,7 +61,8 @@ function registerGitHandlers({
     ['git:stash-pop', 'stashPop'],
     ['git:stash-apply', 'stashApply'],
     ['git:stash-drop', 'stashDrop'],
-    ['git:worktree-remove', 'removeWorktree'],
+    ['git:worktree-lock', 'lockWorktree'],
+    ['git:worktree-unlock', 'unlockWorktree'],
     ['git:submodules-init', 'initSubmodules'],
     ['git:submodules-update', 'updateSubmodules'],
     ['git:remote-add', 'addRemote'],
@@ -87,6 +89,20 @@ function registerGitHandlers({
     );
     authorizeCreatedRepository(result.path);
     return result;
+  });
+
+  registerManagedRepoHandler('git:worktree-create-managed', async (repoPath, directory, options) => {
+    const result = await getGitService(repoPath).createManagedWorktree({
+      ...(options || {}),
+      directory: consumeAuthorizedDirectory(directory)
+    });
+    authorizeCreatedRepository(result.path);
+    return result;
+  });
+
+  registerManagedRepoHandler('git:worktree-remove', async (repoPath, directory) => {
+    assertWorktreeRemovable(directory);
+    return getGitService(repoPath).removeWorktree(directory);
   });
 
   const registerLogged = (channel, method, message) => {

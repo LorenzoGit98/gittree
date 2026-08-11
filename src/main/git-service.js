@@ -6,6 +6,7 @@ const RepositorySession = require('./git/repository-session');
 const RepositoryHistory = require('./git/repository-history');
 const RepositoryWorkingTree = require('./git/repository-working-tree');
 const RepositoryOperations = require('./git/repository-operations');
+const RepositoryWorktrees = require('./git/repository-worktrees');
 const { parseRemoteUrl } = require('./provider-links');
 
 const execFileAsync = promisify(execFile);
@@ -37,6 +38,16 @@ class GitService {
       assertSafeRef: ref => this.assertSafeRef(ref),
       assertCommitish: ref => this.assertCommitish(ref),
       validateRepositoryPath: filePath => this.validateRepositoryPath(filePath)
+    });
+    this.worktrees = new RepositoryWorktrees({
+      git: this.git,
+      repoPath: this.repoPath,
+      readStatus: async worktreePath => this.worktrees.parseStatus(await this.git.raw([
+        '-C', worktreePath, 'status', '--porcelain=v2', '--branch', '--untracked-files=normal'
+      ])),
+      assertNoPendingOperation: () => this.assertNoPendingOperation(),
+      assertValidBranchName: branch => this.assertValidBranchName(branch),
+      assertCommitish: ref => this.assertCommitish(ref)
     });
   }
 
@@ -891,59 +902,28 @@ class GitService {
   }
 
   async getWorktrees() {
-    try {
-      const raw = await this.git.raw(['worktree', 'list', '--porcelain']);
-      const worktrees = [];
-      let current = null;
-      for (const line of raw.split(/\r?\n/)) {
-        if (line.startsWith('worktree ')) {
-          if (current) worktrees.push(current);
-          current = { path: line.slice('worktree '.length) };
-        } else if (line.startsWith('branch ')) {
-          current.branch = line.slice('branch '.length).replace(/^refs\/heads\//, '');
-        } else if (line.startsWith('HEAD ')) {
-          current.head = line.slice('HEAD '.length);
-        }
-      }
-      if (current) worktrees.push(current);
-      return worktrees;
-    } catch (error) {
-      throw new Error(`Failed to get worktrees: ${error.message}`, { cause: error });
-    }
+    return this.worktrees.list();
   }
 
   async createWorktree(directory, branch) {
-    await this.assertNoPendingOperation();
-    await this.assertValidBranchName(branch);
-    if (
-      typeof directory !== 'string' ||
-      !path.isAbsolute(directory) ||
-      /[\0\r\n]/.test(directory)
-    ) {
-      throw new Error('Invalid worktree directory');
-    }
-    try {
-      await this.git.raw(['worktree', 'add', '-b', branch, directory]);
-      return { success: true, path: directory, branch };
-    } catch (error) {
-      throw new Error(`Failed to create worktree: ${error.message}`, { cause: error });
-    }
+    const result = await this.worktrees.create({ directory, branch, baseRef: 'HEAD' });
+    return { success: true, path: result.path, branch: result.branch };
+  }
+
+  async createManagedWorktree(options) {
+    return this.worktrees.create(options || {});
   }
 
   async removeWorktree(directory) {
-    if (
-      typeof directory !== 'string' ||
-      !path.isAbsolute(directory) ||
-      /[\0\r\n]/.test(directory)
-    ) {
-      throw new Error('Invalid worktree directory');
-    }
-    try {
-      await this.git.raw(['worktree', 'remove', directory]);
-      return { success: true, path: directory };
-    } catch (error) {
-      throw new Error(`Failed to remove worktree: ${error.message}`, { cause: error });
-    }
+    return this.worktrees.remove(directory);
+  }
+
+  async lockWorktree(directory, reason = '') {
+    return this.worktrees.lock(directory, reason);
+  }
+
+  async unlockWorktree(directory) {
+    return this.worktrees.unlock(directory);
   }
 
   async getSubmodules() {

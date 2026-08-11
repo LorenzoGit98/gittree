@@ -28,11 +28,16 @@ test('every preload invoke has exactly one registered main-process handler', () 
     path.join(root, 'src', 'main', 'ipc', 'window-application-handlers.js'),
     'utf8'
   );
+  const agentHandlers = fs.readFileSync(
+    path.join(root, 'src', 'main', 'ipc', 'agent-handlers.js'),
+    'utf8'
+  );
   const handlerModules = [
     gitHandlers,
     hostingHandlers,
     repositoryHandlers,
-    windowHandlers
+    windowHandlers,
+    agentHandlers
   ].join('\n');
   const invoked = matches(preload, /ipcRenderer\.invoke\(\s*'([^']+)'/g);
   const registered = [
@@ -44,10 +49,10 @@ test('every preload invoke has exactly one registered main-process handler', () 
     )
   ];
 
-  assert.equal(invoked.length, 114);
-  assert.equal(new Set(invoked).size, 114);
-  assert.equal(registered.length, 114);
-  assert.equal(new Set(registered).size, 114);
+  assert.equal(invoked.length, 133);
+  assert.equal(new Set(invoked).size, 133);
+  assert.equal(registered.length, 133);
+  assert.equal(new Set(registered).size, 133);
   assert.deepEqual([...registered].sort(), [...invoked].sort());
 });
 
@@ -64,7 +69,7 @@ test('all managed Git channels use the validating registrar', () => {
     ...matches(gitHandlers, /register(?:ManagedRepoHandler|Logged|ConflictOperation)\(\s*'([^']+)'/g)
   ]);
 
-  assert.equal(managedGitChannels.length, 70);
+  assert.equal(managedGitChannels.length, 73);
   for (const channel of managedGitChannels) {
     assert.equal(registered.has(channel), true, `${channel} is not managed`);
   }

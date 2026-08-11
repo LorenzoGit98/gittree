@@ -48,6 +48,7 @@ class RepositoryWorkspaceController {
         this.components.pullRequests.load(repo.path, loadSession),
         this.callbacks.loadStashes(repo.path),
         this.callbacks.loadTags(repo.path),
+        this.callbacks.loadWorktreeAgents?.(repo),
         this.callbacks.updateStatus(repo.path, loadSession)
       ]);
       // Attach a handler immediately while the graph retains visual priority.

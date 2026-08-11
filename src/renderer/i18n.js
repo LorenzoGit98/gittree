@@ -134,6 +134,40 @@ const I18n = {
               changes: 'Changes',
               pullRequests: 'Pull Requests'
             },
+            agents: {
+              repository: 'Repository', agents: 'Agents', worktrees: 'Worktrees',
+              newSession: 'New session', allStatuses: 'All statuses', allProviders: 'All providers',
+              active: 'Active', attention: 'Needs attention', finished: 'Finished',
+              noWorktrees: 'No worktrees', noSessions: 'No worktrees match these filters.',
+              detached: 'Detached HEAD', main: 'Main', actions: 'Worktree actions', open: 'Open',
+              startAgent: 'Start agent', externalTerminal: 'External terminal', lock: 'Lock',
+              unlock: 'Unlock', remove: 'Remove', removeTitle: 'Remove worktree',
+              removeConfirm: 'Remove the worktree at {{path}}? Dirty, locked, or active worktrees cannot be removed.',
+              availableWorktree: 'Available worktree', activity: 'Activity', terminal: 'Terminal',
+              stop: 'Stop', resume: 'Resume', start: 'Start session', title: 'Title', prompt: 'Prompt',
+              baseRef: 'Base reference', branch: 'Branch', branchMode: 'Branch mode',
+              newBranch: 'Create a new branch', existingBranch: 'Use an existing branch', adapter: 'Agent CLI',
+              setup: 'Confirmed setup recipe', noSetup: 'No setup', customPath: 'Choose an advanced custom worktree path', noActivity: 'No activity yet',
+              mainWarningTitle: 'No worktree isolation',
+              mainWarning: 'This agent will modify the main worktree. Uncommitted changes and your current branch are not isolated.',
+              settingsTitle: 'Agent sessions',
+              settingsHelp: 'GitTree orchestrates installed CLIs. Authentication, models and permission policies remain in each CLI.',
+              featureEnabled: 'Enable agent sessions', featureEnabledHelp: 'Show agent controls and allow GitTree to launch configured CLIs.', featureDisabled: 'Agent sessions are disabled in Settings.',
+              worktreeRoot: 'Automatic worktree root', notConfigured: 'Not configured', choose: 'Choose…',
+              concurrency: 'Global concurrency', concurrencyHelp: 'Running agent sessions, from 1 to 32.',
+              cliNotFound: 'CLI not found on PATH', detected: 'Detected', unavailable: 'Unavailable',
+              status: {
+                available: 'Available', queued: 'Queued', preparing: 'Preparing', running: 'Running',
+                attention: 'Needs attention', stopping: 'Stopping', stopped: 'Stopped', completed: 'Completed',
+                failed: 'Error', interrupted: 'Interrupted', archived: 'Archived'
+              },
+              event: {
+                queued: 'Added to queue', preparing: 'Running setup recipe', running: 'Agent started',
+                attention: 'Attention requested', gitChanged: 'Git state changed', stopping: 'Stopping agent', stopped: 'Agent stopped',
+                completed: 'Agent completed', failed: 'Agent error', interrupted: 'Session interrupted',
+                archived: 'Task archived'
+              }
+            },
             settings: {
               eyebrow: 'Application preferences',
               title: 'Settings',
@@ -832,6 +866,40 @@ const I18n = {
               history: 'Cronologia',
               changes: 'Modifiche',
               pullRequests: 'Pull Request'
+            },
+            agents: {
+              repository: 'Repository', agents: 'Agenti', worktrees: 'Worktree',
+              newSession: 'Nuova sessione', allStatuses: 'Tutti gli stati', allProviders: 'Tutti i provider',
+              active: 'Attivi', attention: 'Richiede attenzione', finished: 'Terminati',
+              noWorktrees: 'Nessun worktree', noSessions: 'Nessun worktree corrisponde ai filtri.',
+              detached: 'HEAD scollegato', main: 'Principale', actions: 'Azioni worktree', open: 'Apri',
+              startAgent: 'Avvia agente', externalTerminal: 'Terminale esterno', lock: 'Blocca',
+              unlock: 'Sblocca', remove: 'Rimuovi', removeTitle: 'Rimuovi worktree',
+              removeConfirm: 'Rimuovere il worktree in {{path}}? I worktree dirty, bloccati o con agente attivo non possono essere rimossi.',
+              availableWorktree: 'Worktree disponibile', activity: 'Attività', terminal: 'Terminale',
+              stop: 'Interrompi', resume: 'Riprendi', start: 'Avvia sessione', title: 'Titolo', prompt: 'Prompt',
+              baseRef: 'Riferimento di base', branch: 'Branch', branchMode: 'Modalità branch',
+              newBranch: 'Crea un nuovo branch', existingBranch: 'Usa un branch esistente', adapter: 'CLI agente',
+              setup: 'Ricetta di preparazione confermata', noSetup: 'Nessuna preparazione', customPath: 'Scegli un percorso worktree personalizzato avanzato', noActivity: 'Nessuna attività',
+              mainWarningTitle: 'Nessun isolamento worktree',
+              mainWarning: 'Questo agente modificherà il worktree principale. Le modifiche non committate e il branch corrente non sono isolati.',
+              settingsTitle: 'Sessioni agente',
+              settingsHelp: 'GitTree orchestra le CLI installate. Autenticazione, modelli e policy dei permessi restano in ciascuna CLI.',
+              featureEnabled: 'Abilita sessioni agente', featureEnabledHelp: 'Mostra i controlli agente e consente a GitTree di avviare le CLI configurate.', featureDisabled: 'Le sessioni agente sono disabilitate nelle Impostazioni.',
+              worktreeRoot: 'Root automatica dei worktree', notConfigured: 'Non configurata', choose: 'Scegli…',
+              concurrency: 'Concorrenza globale', concurrencyHelp: 'Sessioni agente in esecuzione, da 1 a 32.',
+              cliNotFound: 'CLI non trovata nel PATH', detected: 'Rilevata', unavailable: 'Non disponibile',
+              status: {
+                available: 'Disponibile', queued: 'In coda', preparing: 'Preparazione', running: 'In esecuzione',
+                attention: 'Richiede attenzione', stopping: 'Interruzione', stopped: 'Interrotto', completed: 'Terminato',
+                failed: 'Errore', interrupted: 'Interrotto', archived: 'Archiviato'
+              },
+              event: {
+                queued: 'Aggiunto alla coda', preparing: 'Ricetta di preparazione', running: 'Agente avviato',
+                attention: 'Attenzione richiesta', gitChanged: 'Stato Git modificato', stopping: 'Interruzione agente', stopped: 'Agente interrotto',
+                completed: 'Agente terminato', failed: 'Errore agente', interrupted: 'Sessione interrotta',
+                archived: 'Task archiviato'
+              }
             },
             settings: {
               eyebrow: 'Preferenze applicazione',

@@ -3,6 +3,8 @@ productName: GitTree
 copyright: Copyright © 2026 Lorenzo
 
 asar: true
+asarUnpack:
+  - node_modules/node-pty/**/*
 compression: maximum
 generateUpdatesFilesForAllChannels: true
 

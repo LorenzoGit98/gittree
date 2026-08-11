@@ -385,9 +385,22 @@ class BranchContextMenu {
   async createWorktreeForBranch(repo, branch) {
     const directory = await window.gitTree.selectDirectory();
     if (!directory) return;
-    const name = await this.promptText(t('branchMenu.worktreeBranch'), branch.name);
-    if (!name) return;
-    const result = await window.gitTree.createWorktree(repo.path, directory, name);
+    const values = await this.formDialog(t('branchMenu.worktreeBranch'), `
+      <label>${this.esc(t('agents.branchMode'))}
+        <select name="mode">
+          <option value="new">${this.esc(t('agents.newBranch'))}</option>
+          <option value="existing">${this.esc(t('agents.existingBranch'))}</option>
+        </select>
+      </label>
+      <label>${this.esc(t('agents.baseRef'))}<input name="baseRef" value="${this.esc(branch.name)}" maxlength="512" required></label>
+      <label>${this.esc(t('agents.branch'))}<input name="branch" value="${this.esc(`${branch.name}-worktree`)}" maxlength="255" required></label>
+    `, form => ({
+      createBranch: form.elements.mode.value === 'new',
+      baseRef: form.elements.baseRef.value.trim(),
+      branch: form.elements.branch.value.trim()
+    }));
+    if (!values) return;
+    const result = await window.gitTree.createManagedWorktree(repo.path, directory, values);
     if (result?.error) {
       this.app.showToast(result.error, 'error');
       return;

@@ -180,8 +180,89 @@ contextBridge.exposeInMainWorld('gitTree', {
   createWorktree: (repoPath, directory, branch) =>
     ipcRenderer.invoke('git:worktree-create', repoPath, directory, branch),
 
+  createManagedWorktree: (repoPath, directory, options) =>
+    ipcRenderer.invoke('git:worktree-create-managed', repoPath, directory, options),
+
+  openWorktree: (repoPath, worktreePath) =>
+    ipcRenderer.invoke('agent:worktree-open', repoPath, worktreePath),
+
+  lockWorktree: (repoPath, directory, reason = '') =>
+    ipcRenderer.invoke('git:worktree-lock', repoPath, directory, reason),
+
+  unlockWorktree: (repoPath, directory) =>
+    ipcRenderer.invoke('git:worktree-unlock', repoPath, directory),
+
   removeWorktree: (repoPath, directory) =>
     ipcRenderer.invoke('git:worktree-remove', repoPath, directory),
+
+  getAgentSettings: () =>
+    ipcRenderer.invoke('agent:settings'),
+
+  chooseAgentWorktreeRoot: () =>
+    ipcRenderer.invoke('agent:root-select'),
+
+  setAgentConcurrency: value =>
+    ipcRenderer.invoke('agent:concurrency-set', value),
+
+  setAgentSessionsEnabled: enabled =>
+    ipcRenderer.invoke('agent:enabled-set', enabled),
+
+  detectAgentAdapters: () =>
+    ipcRenderer.invoke('agent:adapters-detect'),
+
+  setEnabledAgentAdapters: adapterIds =>
+    ipcRenderer.invoke('agent:adapters-set', adapterIds),
+
+  listAgentTasks: repoPath =>
+    ipcRenderer.invoke('agent:tasks', repoPath),
+
+  createAgentTask: (repoPath, options) =>
+    ipcRenderer.invoke('agent:task-create', repoPath, options),
+
+  createAgentTaskForWorktree: (repoPath, worktreePath, options) =>
+    ipcRenderer.invoke('agent:task-create-worktree', repoPath, worktreePath, options),
+
+  stopAgentTask: taskId =>
+    ipcRenderer.invoke('agent:task-stop', taskId),
+
+  resumeAgentTask: taskId =>
+    ipcRenderer.invoke('agent:task-resume', taskId),
+
+  archiveAgentTask: taskId =>
+    ipcRenderer.invoke('agent:task-archive', taskId),
+
+  writeAgentTerminal: (taskId, data) =>
+    ipcRenderer.invoke('agent:terminal-write', taskId, data),
+
+  resizeAgentTerminal: (taskId, cols, rows) =>
+    ipcRenderer.invoke('agent:terminal-resize', taskId, cols, rows),
+
+  acknowledgeAgentAttention: taskId =>
+    ipcRenderer.invoke('agent:attention-ack', taskId),
+
+  onAgentTaskChanged: callback => {
+    const listener = (_event, task) => callback(task);
+    ipcRenderer.on('agent:task-changed', listener);
+    return () => ipcRenderer.removeListener('agent:task-changed', listener);
+  },
+
+  onAgentTerminalData: callback => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('agent:terminal-data', listener);
+    return () => ipcRenderer.removeListener('agent:terminal-data', listener);
+  },
+
+  onAgentAttention: callback => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('agent:attention', listener);
+    return () => ipcRenderer.removeListener('agent:attention', listener);
+  },
+
+  onAgentQueueChanged: callback => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('agent:queue-changed', listener);
+    return () => ipcRenderer.removeListener('agent:queue-changed', listener);
+  },
 
   getSubmodules: (repoPath) =>
     ipcRenderer.invoke('git:submodules', repoPath),
