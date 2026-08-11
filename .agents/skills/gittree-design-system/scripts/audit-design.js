@@ -45,6 +45,9 @@ for (const file of walk(rendererRoot).filter(file => allowedExtensions.has(path.
     if (/style\s*=\s*["'](?!width:\$\{)/.test(line)) {
       report(file, number, 'replace static inline styles with shared classes');
     }
+    if (/will-change\s*:/i.test(line)) {
+      report(file, number, 'permanent will-change creates avoidable compositor layers');
+    }
   });
 }
 
@@ -59,4 +62,4 @@ if (violations.length) {
   process.exit(1);
 }
 
-console.log('Design-system audit passed: opaque surfaces, scoped gradients, semantic colors, and icon rules are clean.');
+console.log('Design-system audit passed: opaque surfaces, scoped gradients, semantic colors, icons, and compositor rules are clean.');
