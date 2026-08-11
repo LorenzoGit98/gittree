@@ -35,6 +35,7 @@ globals or renderer state.
 | Git public operations | `src/main/git-service.js` | `test/git-service*.test.js` with deterministic real repositories |
 | Repository history, graph, refs and commit diff | `src/main/git/repository-history.js` behind `GitService` | `test/git-history-repository-contracts.test.js` and graph integration tests |
 | Repository status, snapshots, file and hunk operations | `src/main/git/repository-working-tree.js` plus the pure patch parser | working-tree contracts, integration tests and hardening tests |
+| Merge, rebase, cherry-pick, conflicts and recovery | `src/main/git/repository-operations.js` behind `GitService` | `test/repository-operations-contracts.test.js` and focused Git integration tests |
 | Repository path, Git Adapter and serialization | `src/main/git/repository-session.js` | `test/repository-session.test.js` |
 | Hosting credentials, auth, retry and error policy | `src/main/hosting-service.js` and the credential vault | hosting service and IPC contract tests |
 | Provider list, detail and diff behavior | `src/main/hosting/providers/` | `test/hosting-provider-adapters.test.js` and `test/hosting-provider-read-contracts.test.js` |
@@ -52,6 +53,9 @@ globals or renderer state.
   `{ error }`, and validate managed repositories at the boundary.
 - `GitService` is the public Interface. Every asynchronous repository operation
   continues through the same per-repository queue.
+- `RepositoryOperations` owns one complete mutation cycle: preflight,
+  execution, conflict state and recovery. It uses the session's Git Adapter
+  and path but never creates a second queue.
 - `HostingService` owns cross-provider policy. Provider Adapters own endpoint,
   payload and normalized provider behavior.
 - Renderer Modules receive bridge, translation, storage and callbacks
@@ -95,9 +99,10 @@ Before extracting a Module, answer these questions:
   list, detail, diff, thread resolution, review submission and creation.
   `HostingService` retains validation, authenticated transport, vault ownership
   and the retry journal without exposing credentials to an Adapter.
-- `GitService` remains intentionally stable. Repository history and Repository
-  working tree are cohesive internal Modules; all calls continue through the
-  existing Repository session and per-repository queue.
+- `GitService` remains intentionally stable. Repository history, Repository
+  working tree and Repository operations are cohesive internal Modules; all
+  calls continue through the existing Repository session and per-repository
+  queue.
 - `GitTreeApp` is still a large renderer coordinator. New work should deepen
   existing controller Modules instead of adding more responsibilities to it.
 
