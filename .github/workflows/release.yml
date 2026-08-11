@@ -164,6 +164,18 @@ jobs:
       - run: npm ci
       - run: npm run prepare:assets
       - run: npx electron-builder --linux --x64 --publish never
+      - name: Validate Linux runtime dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          deb="$(find dist -maxdepth 1 -type f -name 'GitTree-*-linux-*.deb' -print -quit)"
+          if [[ -z "$deb" ]]; then
+            echo "Linux DEB artifact was not generated." >&2
+            exit 1
+          fi
+          dpkg-deb --field "$deb" Depends \
+            | tr ',' '\n' \
+            | grep -Eq '^[[:space:]]*libasound2([[:space:](]|$)'
       - name: Validate and upload Linux OTA assets
         run: node scripts/release-assets.js --platform linux --directory dist --tag "$GITHUB_REF_NAME"
 

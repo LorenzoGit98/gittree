@@ -60,6 +60,21 @@ test('electron-builder emits installable and update-compatible artifacts', () =>
   assert.match(config, /generateUpdatesFilesForAllChannels:\s*true/);
   assert.match(config, /from:\s*build\/oauth-config\.json/);
   assert.match(config, /include:\s*installer\.nsh/);
+  assert.match(config, /deb:\s*[\s\S]*depends:/);
+  for (const dependency of [
+    'libgtk-3-0',
+    'libnotify4',
+    'libnss3',
+    'libxss1',
+    'libxtst6',
+    'xdg-utils',
+    'libatspi2.0-0',
+    'libuuid1',
+    'libsecret-1-0',
+    'libasound2'
+  ]) {
+    assert.ok(config.includes(`- ${dependency}`), `${dependency} dependency missing`);
+  }
   const nsh = fs.readFileSync(path.join(root, 'build', 'installer.nsh'), 'utf8');
   assert.match(nsh, /!macro customInstallMode/);
   assert.match(nsh, /!macro customFinishPage/);
@@ -121,6 +136,8 @@ test('release workflow publishes one atomic draft after every native build succe
   assert.match(workflow, /platform="mac-manual"/);
   assert.match(workflow, /GITTREE_GITHUB_CLIENT_ID/);
   assert.match(workflow, /GITTREE_GITLAB_CLIENT_ID/);
+  assert.match(workflow, /dpkg-deb\s+--field/);
+  assert.match(workflow, /libasound2/);
 });
 
 test('automatic versioning explicitly dispatches the atomic release workflow', () => {
