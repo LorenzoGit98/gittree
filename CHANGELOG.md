@@ -1,3 +1,15 @@
+# [0.11.0](https://github.com/giannoccarol/gittree/compare/v0.10.0...v0.11.0) (2026-08-11)
+
+
+### Bug Fixes
+
+* preserve history viewport after remote actions ([1c966ff](https://github.com/giannoccarol/gittree/commit/1c966ffcaf152f900638668f334c042bbad074da))
+
+
+### Features
+
+* redesign settings and commit inspector ([5cb764e](https://github.com/giannoccarol/gittree/commit/5cb764ee273400dbb1c92fad9fe3aa66700b4aa9))
+
 # [0.10.0](https://github.com/giannoccarol/gittree/compare/v0.9.19...v0.10.0) (2026-08-11)
 
 
