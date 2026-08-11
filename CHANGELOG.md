@@ -1,3 +1,10 @@
+# [0.10.0](https://github.com/giannoccarol/gittree/compare/v0.9.19...v0.10.0) (2026-08-11)
+
+
+### Features
+
+* add worktree agent sessions control center ([24333e0](https://github.com/giannoccarol/gittree/commit/24333e0e127849c257a12ff5cfbae28e50f44e1f))
+
 ## [0.9.19](https://github.com/giannoccarol/gittree/compare/v0.9.18...v0.9.19) (2026-08-11)
 
 ## [0.9.18](https://github.com/giannoccarol/gittree/compare/v0.9.17...v0.9.18) (2026-08-11)
