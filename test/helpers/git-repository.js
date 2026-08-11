@@ -13,7 +13,10 @@ function git(cwd, ...args) {
       GIT_AUTHOR_EMAIL: 'gittree@example.test',
       GIT_COMMITTER_NAME: 'GitTree Tests',
       GIT_COMMITTER_EMAIL: 'gittree@example.test',
-      GIT_EDITOR: 'true'
+      GIT_EDITOR: 'true',
+      GIT_CONFIG_GLOBAL: process.platform === 'win32' ? 'NUL' : '/dev/null',
+      GIT_CONFIG_NOSYSTEM: '1',
+      XDG_CONFIG_HOME: path.join(path.dirname(cwd), '.xdg')
     }
   }).trim();
 }

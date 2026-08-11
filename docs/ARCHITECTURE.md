@@ -32,11 +32,12 @@ globals or renderer state.
 | --- | --- | --- |
 | Electron lifecycle, windows and deep links | `src/main/application-runtime.js`, composed by `src/main/main.js` | `test/application-runtime.test.js` and Electron E2E |
 | IPC registration and error envelopes | `src/main/ipc/` plus `src/preload.js` | IPC handler, parity and preload contract tests |
+| Repository admission, persistence, service reuse and queue identity | `src/main/repository-workspace.js` with `repo-manager.js` as storage Adapter | `test/repository-workspace.test.js`, repository IPC and RepoManager tests |
 | Git public operations | `src/main/git-service.js` | `test/git-service*.test.js` with deterministic real repositories |
 | Repository history, graph, refs and commit diff | `src/main/git/repository-history.js` behind `GitService` | `test/git-history-repository-contracts.test.js` and graph integration tests |
 | Repository status, snapshots, file and hunk operations | `src/main/git/repository-working-tree.js` plus the pure patch parser | working-tree contracts, integration tests and hardening tests |
 | Merge, rebase, cherry-pick, conflicts and recovery | `src/main/git/repository-operations.js` behind `GitService` | `test/repository-operations-contracts.test.js` and focused Git integration tests |
-| Repository path, Git Adapter and serialization | `src/main/git/repository-session.js` | `test/repository-session.test.js` |
+| Repository path, Git Adapter and common-directory serialization | `src/main/git/repository-session.js` and `repository-queue.js` | Repository session and linked-worktree workspace tests |
 | Hosting credentials, auth, retry and error policy | `src/main/hosting-service.js` and the credential vault | hosting service and IPC contract tests |
 | Provider list, detail and diff behavior | `src/main/hosting/providers/` | `test/hosting-provider-adapters.test.js` and `test/hosting-provider-read-contracts.test.js` |
 | Repository activation and refresh | `src/renderer/repository-load-session.js` and renderer coordinators | focused controller tests and Electron E2E |
@@ -51,6 +52,9 @@ globals or renderer state.
   `invoke(channel, ...)` escape hatch.
 - IPC handlers preserve the existing argument/result contract, return
   `{ error }`, and validate managed repositories at the boundary.
+- `RepositoryWorkspace` is the only admission and GitService registry Seam.
+  Native selection and scan results create narrow, one-use path capabilities;
+  renderer strings alone cannot expand the workspace.
 - `GitService` is the public Interface. Every asynchronous repository operation
   continues through the same per-repository queue.
 - `RepositoryOperations` owns one complete mutation cycle: preflight,
@@ -101,8 +105,8 @@ Before extracting a Module, answer these questions:
   and the retry journal without exposing credentials to an Adapter.
 - `GitService` remains intentionally stable. Repository history, Repository
   working tree and Repository operations are cohesive internal Modules; all
-  calls continue through the existing Repository session and per-repository
-  queue.
+  calls continue through the existing Repository session and common-directory
+  queue shared by linked worktrees.
 - `GitTreeApp` is still a large renderer coordinator. New work should deepen
   existing controller Modules instead of adding more responsibilities to it.
 

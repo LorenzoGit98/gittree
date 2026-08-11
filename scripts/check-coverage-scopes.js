@@ -22,6 +22,7 @@ const SCOPES = {
       'src/main/oauth-config.js',
       'src/main/provider-links.js',
       'src/main/repo-manager.js',
+      'src/main/repository-workspace.js',
       'src/main/repository-scanner.js',
       'src/main/update-service.js'
     ],

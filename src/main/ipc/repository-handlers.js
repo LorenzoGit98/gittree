@@ -19,7 +19,7 @@ function validateCloneUrl(value) {
   return supported && !hasControlCharacters ? url : null;
 }
 
-async function cloneRepository(url, parentDirectory, repoManager) {
+async function cloneRepository(url, parentDirectory, repositoryWorkspace) {
   const remoteUrl = validateCloneUrl(url);
   if (!remoteUrl) {
     return { error: 'Only remote repository URLs are supported (https, ssh or git@host:path)' };
@@ -27,9 +27,15 @@ async function cloneRepository(url, parentDirectory, repoManager) {
   if (typeof parentDirectory !== 'string' || !path.isAbsolute(parentDirectory)) {
     return { error: 'Invalid destination folder' };
   }
+  let destinationRoot;
+  try {
+    destinationRoot = repositoryWorkspace.consumeAuthorizedDirectory(parentDirectory);
+  } catch (error) {
+    return { error: error.message };
+  }
   let stat;
   try {
-    stat = await fs.promises.stat(parentDirectory);
+    stat = await fs.promises.stat(destinationRoot);
   } catch {
     return { error: 'Destination folder does not exist' };
   }
@@ -39,7 +45,7 @@ async function cloneRepository(url, parentDirectory, repoManager) {
   if (!name || name === '.' || name === '..') {
     return { error: 'Could not determine repository name from URL' };
   }
-  const targetPath = path.join(parentDirectory, name);
+  const targetPath = path.join(destinationRoot, name);
   try {
     await fs.promises.access(targetPath);
     return { error: `Destination already exists: ${targetPath}` };
@@ -47,21 +53,27 @@ async function cloneRepository(url, parentDirectory, repoManager) {
     // Destination is available.
   }
   await execFileAsync('git', ['clone', remoteUrl, targetPath], {
-    cwd: parentDirectory,
+    cwd: destinationRoot,
     windowsHide: true,
     maxBuffer: 10 * 1024 * 1024
   });
-  return repoManager.addRepo(targetPath) || { path: targetPath, name };
+  return repositoryWorkspace.addTrustedRepository(targetPath) || { path: targetPath, name };
 }
 
-function registerScanHandlers({ registerHandler, scanRepositories, sendToRenderer }) {
+function registerScanHandlers({
+  registerHandler,
+  scanRepositories,
+  sendToRenderer,
+  repositoryWorkspace
+}) {
   const scans = new Map();
   registerHandler('repo:scan-start', rootPath => {
+    const authorizedRoot = repositoryWorkspace.beginScan(rootPath);
     const scanId = crypto.randomUUID();
     const controller = new AbortController();
     scans.set(scanId, controller);
     let lastProgressAt = 0;
-    scanRepositories(rootPath, {
+    scanRepositories(authorizedRoot, {
       signal: controller.signal,
       onProgress(progress) {
         const now = Date.now();
@@ -71,8 +83,10 @@ function registerScanHandlers({ registerHandler, scanRepositories, sendToRendere
         }
       }
     }).then(result => {
+      repositoryWorkspace.authorizeScanResults(authorizedRoot, result.repositories);
       sendToRenderer('repo:scan-complete', { scanId, ...result });
     }).catch(error => {
+      repositoryWorkspace.authorizeScanResults(authorizedRoot, []);
       sendToRenderer('repo:scan-complete', {
         scanId,
         repositories: [],
@@ -92,7 +106,7 @@ function registerScanHandlers({ registerHandler, scanRepositories, sendToRendere
   });
 }
 
-async function addRepositories(repoPaths, createGitService, repoManager) {
+async function addRepositories(repoPaths, createGitService, repositoryWorkspace) {
   if (!Array.isArray(repoPaths) || repoPaths.length > 10000) {
     return { added: [], existing: [], failed: [], activeRepo: null, error: 'Invalid repository list' };
   }
@@ -101,6 +115,10 @@ async function addRepositories(repoPaths, createGitService, repoManager) {
   for (const repoPath of repoPaths) {
     if (typeof repoPath !== 'string' || !path.isAbsolute(repoPath)) {
       failed.push({ path: String(repoPath || ''), error: 'Invalid repository path' });
+      continue;
+    }
+    if (!repositoryWorkspace.canAdd(repoPath)) {
+      failed.push({ path: repoPath, error: 'Repository path was not authorized' });
       continue;
     }
     try {
@@ -113,43 +131,54 @@ async function addRepositories(repoPaths, createGitService, repoManager) {
       failed.push({ path: repoPath, error: error.message || 'Not a valid Git repository' });
     }
   }
-  return { ...repoManager.addRepos(valid), failed };
+  const result = repositoryWorkspace.addAuthorizedRepositories(valid);
+  return { ...result, failed: [...failed, ...result.failed] };
 }
 
 function registerRepositoryHandlers(dependencies) {
   const {
     registerHandler,
-    repoManager,
+    repositoryWorkspace,
     isWorkingTreeRepository,
     createGitService,
     scanRepositories,
     sendToRenderer,
-    evictGitService,
     logger
   } = dependencies;
-  registerHandler('git:is-repo', repoPath => isWorkingTreeRepository(repoPath));
-  registerHandler('git:clone', (url, directory) => cloneRepository(url, directory, repoManager));
-  registerHandler('repo:list', () => repoManager.getAllRepos());
+  registerHandler('git:is-repo', repoPath => (
+    repositoryWorkspace.canInspect(repoPath) && isWorkingTreeRepository(repoPath)
+  ));
+  registerHandler('git:clone', (url, directory) => (
+    cloneRepository(url, directory, repositoryWorkspace)
+  ));
+  registerHandler('repo:list', () => repositoryWorkspace.list());
   registerHandler('repo:add', async repoPath => {
+    if (!repositoryWorkspace.canAdd(repoPath)) {
+      return { error: 'Repository path was not authorized' };
+    }
     if (!await isWorkingTreeRepository(repoPath)) {
       return { error: 'Not a valid Git repository' };
     }
-    const repository = repoManager.addRepo(repoPath);
+    const repository = repositoryWorkspace.addAuthorizedRepository(repoPath);
     logger?.info('Repository added', { path: repoPath });
     return repository;
   });
-  registerScanHandlers({ registerHandler, scanRepositories, sendToRenderer });
+  registerScanHandlers({
+    registerHandler,
+    scanRepositories,
+    sendToRenderer,
+    repositoryWorkspace
+  });
   registerHandler('repo:add-many', repoPaths => (
-    addRepositories(repoPaths, createGitService, repoManager)
+    addRepositories(repoPaths, createGitService, repositoryWorkspace)
   ));
   registerHandler('repo:remove', repoPath => {
-    const removed = repoManager.removeRepo(repoPath);
-    if (removed) evictGitService(repoPath);
+    repositoryWorkspace.remove(repoPath);
     logger?.info('Repository removed', { path: repoPath });
-    return repoManager.getActiveRepo();
+    return repositoryWorkspace.active();
   });
-  registerHandler('repo:set-active', index => repoManager.setActiveRepo(index));
-  registerHandler('repo:active', () => repoManager.getActiveRepo());
+  registerHandler('repo:set-active', index => repositoryWorkspace.setActive(index));
+  registerHandler('repo:active', () => repositoryWorkspace.active());
 }
 
 module.exports = { registerRepositoryHandlers };

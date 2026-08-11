@@ -72,6 +72,7 @@ function registerWindowApplicationHandlers(dependencies) {
     getGitVersion,
     exportDiagnostics,
     showOpenDialog,
+    authorizeDirectory = directoryPath => directoryPath,
     openInspector,
     updateInspector
   } = dependencies;
@@ -93,7 +94,9 @@ function registerWindowApplicationHandlers(dependencies) {
   registerHandler('window:update-inspector', payload => updateInspector(payload));
   registerHandler('dialog:select-directory', async () => {
     const result = await showOpenDialog(getMainWindow(), { properties: ['openDirectory'] });
-    return !result.canceled && result.filePaths.length ? result.filePaths[0] : null;
+    return !result.canceled && result.filePaths.length
+      ? authorizeDirectory(result.filePaths[0])
+      : null;
   });
 }
 

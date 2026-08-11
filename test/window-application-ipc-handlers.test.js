@@ -29,3 +29,38 @@ test('terminal and explorer actions require a managed repository registrar', () 
     'app:open-terminal'
   ]);
 });
+
+test('directory selection authorizes the native dialog result before returning it', async () => {
+  const handlers = new Map();
+  const calls = [];
+  registerWindowApplicationHandlers({
+    registerHandler(channel, implementation) {
+      handlers.set(channel, implementation);
+    },
+    registerManagedRepoHandler() {},
+    getMainWindow: () => ({ id: 1 }),
+    getWindowState: () => ({}),
+    getUpdateService() {},
+    getAppVersion() {},
+    getGitVersion() {},
+    openExternal() {},
+    setTheme() {},
+    exportDiagnostics() {},
+    openInspector() {},
+    updateInspector() {},
+    async showOpenDialog(window, options) {
+      calls.push(['dialog', window.id, options.properties]);
+      return { canceled: false, filePaths: ['C:\\selected'] };
+    },
+    authorizeDirectory(directory) {
+      calls.push(['authorize', directory]);
+      return 'C:\\canonical';
+    }
+  });
+
+  assert.equal(await handlers.get('dialog:select-directory')(), 'C:\\canonical');
+  assert.deepEqual(calls, [
+    ['dialog', 1, ['openDirectory']],
+    ['authorize', 'C:\\selected']
+  ]);
+});

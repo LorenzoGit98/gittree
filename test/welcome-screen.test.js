@@ -62,6 +62,8 @@ test('bulk repository import persists once and selects the first newly added rep
     { path: 'C:\\workspace\\existing', name: 'existing', addedAt: 'before' }
   ];
   manager.activeRepoIndex = 0;
+  manager.platform = process.platform;
+  manager.now = () => 'now';
   let saves = 0;
   manager.saveRepos = () => { saves += 1; };
 

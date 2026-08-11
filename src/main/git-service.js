@@ -11,8 +11,8 @@ const { parseRemoteUrl } = require('./provider-links');
 const execFileAsync = promisify(execFile);
 
 class GitService {
-  constructor(repoPath) {
-    this.session = new RepositorySession(repoPath);
+  constructor(repoPath, { queue } = {}) {
+    this.session = new RepositorySession(repoPath, { queue });
     this.git = this.session.git;
     this.repoPath = this.session.path;
     this.operations = new RepositoryOperations({

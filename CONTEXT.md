@@ -11,6 +11,10 @@ Privacy-first: no accounts, no telemetry, no repository upload.
   entry point only constructs and starts it.
 - **Repository** — a git working tree registered in the workspace (the app only
   operates on registered repositories; `assertManagedRepo`).
+- **Repository workspace** — the main-process capability that owns Repository
+  admission, canonical identity, active/persisted entries, GitService reuse and
+  queue identity. Renderer paths are admitted only after a native directory
+  selection, an approved scan, clone completion or a validated deep link.
 - **Repository session** — the internal Git unit that owns a normalized path,
   the `simple-git` Adapter and one per-repository queue while `GitService`
   remains the stable public Interface.
@@ -29,8 +33,9 @@ Privacy-first: no accounts, no telemetry, no repository upload.
 - **Operation state** — an in-progress merge/rebase/cherry-pick detected from
   git state files; blocks destructive actions until continued, skipped or aborted.
 - **Per-repo queue** — every async git operation on a `GitService` runs
-  serialized through a promise chain (`AsyncLocalStorage` marks re-entrant
-  internal calls so they don't deadlock).
+  serialized through a promise chain keyed by the common Git directory;
+  linked worktrees therefore share ref serialization while unrelated
+  repositories stay parallel. `AsyncLocalStorage` keeps nested calls re-entrant.
 - **Conflict block** — a `<<<<<<<`/`=======`/`>>>>>>>` region parsed from a
   conflicted file for the visual resolver.
 - **Hosting provider adapter** — the provider-specific Implementation of the
@@ -41,7 +46,8 @@ Privacy-first: no accounts, no telemetry, no repository upload.
 
 - **Main process** (`src/main/`) — `main.js` is a composition root;
   `application-runtime.js` owns lifecycle and windows, and domain handlers live
-  in `src/main/ipc/`. `GitService` and `HostingService` are stable Interfaces
+  in `src/main/ipc/`. `RepositoryWorkspace` owns admission and GitService
+  identity. `GitService` and `HostingService` are stable Interfaces
   over deeper internal Modules and provider Adapters.
 - **Git implementation** — `git-service.js` exposes the public capability while
   `src/main/git/` owns Repository sessions, Repository history, Repository

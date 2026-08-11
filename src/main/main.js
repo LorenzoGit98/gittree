@@ -5,6 +5,7 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 const GitService = require('./git-service');
 const RepoManager = require('./repo-manager');
+const RepositoryWorkspace = require('./repository-workspace');
 const { scanRepositories } = require('./repository-scanner');
 const UpdateService = require('./update-service');
 const CredentialVault = require('./credential-vault');
@@ -25,34 +26,17 @@ const { DiagnosticsExporter } = require('./diagnostics-exporter');
 const { isWorkingTreeRepository } = require('./working-tree-repository');
 let mainWindow;
 let repoManager;
+let repositoryWorkspace;
 let updateService;
 let hostingService;
 let credentialVault;
 let logger;
-const gitServices = new Map();
-function normalizeRepoPath(repoPath) {
-  const normalized = path.normalize(repoPath || '');
-  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
-}
-
 function assertManagedRepo(repoPath) {
-  if (typeof repoPath !== 'string' || !repoPath || !path.isAbsolute(repoPath)) {
-    throw new Error('Invalid repository path');
-  }
-  const normalized = normalizeRepoPath(repoPath);
-  const known = (repoManager?.getAllRepos() || []).some(
-    repo => normalizeRepoPath(repo.path) === normalized
-  );
-  if (!known) throw new Error('Repository is not opened in this workspace');
+  repositoryWorkspace.assertManaged(repoPath);
 }
 
 function getGitService(repoPath) {
-  assertManagedRepo(repoPath);
-  const key = normalizeRepoPath(repoPath);
-  if (!gitServices.has(key)) {
-    gitServices.set(key, new GitService(repoPath));
-  }
-  return gitServices.get(key);
+  return repositoryWorkspace.getGitService(repoPath);
 }
 
 async function getHostingRepository(repoPath, provider) {
@@ -157,7 +141,7 @@ function handleDeepLink(url) {
   if (!repoPath) return;
   isWorkingTreeRepository(repoPath).then(isRepo => {
     if (!isRepo) return;
-    const repo = repoManager.addRepo(repoPath);
+    const repo = repositoryWorkspace.addTrustedRepository(repoPath);
     if (repo) {
       logger?.info('Repository opened via deep link', { path: repoPath });
       sendToRenderer('deep-link:open-repo', repo);
@@ -219,7 +203,7 @@ function registerIpcHandlers() {
     app, logger, getGitVersion,
     showSaveDialog: options => dialog.showSaveDialog(mainWindow, options),
     getUpdateState: () => updateService?.getState() || { status: 'not-ready' },
-    getRepositories: () => repoManager.getAllRepos()
+    getRepositories: () => repositoryWorkspace.list()
   });
   registerWindowApplicationHandlers({
     registerHandler,
@@ -248,11 +232,20 @@ function registerIpcHandlers() {
     getUpdateService: () => updateService,
     isPackaged: app.isPackaged,
     showOpenDialog: (...args) => dialog.showOpenDialog(...args),
+    authorizeDirectory: directoryPath => repositoryWorkspace.authorizeDirectory(directoryPath),
     openInspector: payload => inspectorController.open(payload),
     updateInspector: payload => inspectorController.update(payload)
   });
 
-  registerGitHandlers({ registerManagedRepoHandler, getGitService, sendToRenderer });
+  registerGitHandlers({
+    registerManagedRepoHandler,
+    getGitService,
+    consumeAuthorizedDirectory: directoryPath => (
+      repositoryWorkspace.consumeAuthorizedDirectory(directoryPath)
+    ),
+    authorizeCreatedRepository: repoPath => repositoryWorkspace.authorizeDirectory(repoPath),
+    sendToRenderer
+  });
   registerHostingHandlers({
     registerHandler,
     registerManagedRepoHandler,
@@ -267,12 +260,11 @@ function registerIpcHandlers() {
   });
   registerRepositoryHandlers({
     registerHandler,
-    repoManager,
+    repositoryWorkspace,
     isWorkingTreeRepository,
     createGitService: repoPath => new GitService(repoPath),
     scanRepositories,
     sendToRenderer,
-    evictGitService: repoPath => gitServices.delete(normalizeRepoPath(repoPath)),
     logger
   });
 }
@@ -300,6 +292,7 @@ createApplicationRuntime({
       app.dock.setIcon(path.join(__dirname, '..', '..', 'icon.png'));
     }
     repoManager = new RepoManager();
+    repositoryWorkspace = new RepositoryWorkspace({ repoStore: repoManager });
     logger = new Logger(path.join(app.getPath('userData'), 'logs'));
     const logLevelArg = process.argv.find(arg => arg.startsWith('--log-level='));
     if (logLevelArg) {

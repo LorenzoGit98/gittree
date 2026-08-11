@@ -17,12 +17,13 @@ Every async method of `GitService` runs serialized through a per-instance
 promise chain. Internal cross-method calls (e.g. `commitChanges` →
 `getIdentity` → `getConfigValue`) are detected with `AsyncLocalStorage` and
 run inline in the current queued task, avoiding self-deadlock. Repository
-paths are normalized (case-insensitive on Windows) so one repo always maps to
-one queue.
+working-tree paths are canonicalized, then their `.git`/`commondir` metadata is
+resolved so every linked worktree of one Git repository maps to the same queue.
 
 ## Consequences
 
-- Mutating and reading operations on the same repository are strictly
-  serialized; different repositories stay fully parallel.
+- Mutating and reading operations across the same repository and all its linked
+  worktrees are strictly serialized; repositories with different common Git
+  directories stay fully parallel.
 - Synchronous helpers (`parseNameStatus`, validation) are not queued.
 - The renderer's 2s poll waits behind a push — locally this is milliseconds.

@@ -67,3 +67,39 @@ test('conflicting Git operations preserve the conflict state envelope', async ()
     conflictState: { type: 'rebase', conflicts: ['README.md'] }
   });
 });
+
+test('worktree creation consumes a main-authorized destination', async () => {
+  const registrations = [];
+  const calls = [];
+  registerGitHandlers({
+    registerManagedRepoHandler(channel, implementation) {
+      registrations.push({ channel, implementation });
+    },
+    consumeAuthorizedDirectory(directory) {
+      calls.push(['authorize', directory]);
+      return 'C:\\canonical-worktree';
+    },
+    authorizeCreatedRepository(directory) {
+      calls.push(['admit-created', directory]);
+    },
+    getGitService(repoPath) {
+      return {
+        async createWorktree(directory, branch) {
+          calls.push(['create', repoPath, directory, branch]);
+          return { success: true, path: directory, branch };
+        }
+      };
+    }
+  });
+  const handler = registrations.find(item => item.channel === 'git:worktree-create');
+
+  assert.deepEqual(
+    await handler.implementation('C:\\repo', 'C:\\selected', 'feature/topic'),
+    { success: true, path: 'C:\\canonical-worktree', branch: 'feature/topic' }
+  );
+  assert.deepEqual(calls, [
+    ['authorize', 'C:\\selected'],
+    ['create', 'C:\\repo', 'C:\\canonical-worktree', 'feature/topic'],
+    ['admit-created', 'C:\\canonical-worktree']
+  ]);
+});

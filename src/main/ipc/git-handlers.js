@@ -15,6 +15,8 @@ async function runWithConflictState(git, operation) {
 function registerGitHandlers({
   registerManagedRepoHandler,
   getGitService,
+  consumeAuthorizedDirectory = directoryPath => directoryPath,
+  authorizeCreatedRepository = repoPath => repoPath,
   sendToRenderer = () => {}
 }) {
   const forwards = [
@@ -58,7 +60,6 @@ function registerGitHandlers({
     ['git:stash-pop', 'stashPop'],
     ['git:stash-apply', 'stashApply'],
     ['git:stash-drop', 'stashDrop'],
-    ['git:worktree-create', 'createWorktree'],
     ['git:worktree-remove', 'removeWorktree'],
     ['git:submodules-init', 'initSubmodules'],
     ['git:submodules-update', 'updateSubmodules'],
@@ -78,6 +79,15 @@ function registerGitHandlers({
       getGitService(repoPath)[method](...args)
     ));
   }
+
+  registerManagedRepoHandler('git:worktree-create', async (repoPath, directory, branch) => {
+    const result = await getGitService(repoPath).createWorktree(
+      consumeAuthorizedDirectory(directory),
+      branch
+    );
+    authorizeCreatedRepository(result.path);
+    return result;
+  });
 
   const registerLogged = (channel, method, message) => {
     registerManagedRepoHandler(channel, async (repoPath, ...args) => {

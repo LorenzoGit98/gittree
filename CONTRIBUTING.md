@@ -15,6 +15,7 @@ Thanks for your interest in GitTree. Everyone is welcome to contribute.
 - **Git operations**: Keep the public `GitService` facade stable. `RepositoryOperations` owns the entire merge/rebase/cherry-pick cycle—preflight, execution, conflicts and recovery—so do not split individual commands into shallow modules
 - **Git tests**: Characterize operation workflows through `test/repository-operations-contracts.test.js` with isolated real repositories before changing the internal implementation
 - **Git IPC**: Register IPC in the matching `src/main/ipc/` domain module, bridge explicitly in `src/preload.js`, and consume it through injected renderer dependencies
+- **Repository workspace**: Keep admission, canonical paths, persisted entries, GitService reuse and linked-worktree queue identity in `src/main/repository-workspace.js`; add contracts in `test/repository-workspace.test.js` before changing this Seam
 - **UI modules**: Keep views in `src/renderer/components/` and lifecycle or operation policy in focused renderer controllers; do not add responsibilities to `GitTreeApp` when an existing Module owns the capability
 - **Styling**: CSS custom properties in `src/renderer/styles/variables.css`, component styles in `src/renderer/styles/`
 - **i18n**: Add translations in `src/renderer/i18n.js` under the appropriate locale
