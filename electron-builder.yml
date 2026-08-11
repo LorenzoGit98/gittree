@@ -30,7 +30,7 @@ artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 
 publish:
   provider: github
-  owner: lorenzogit98
+  owner: giannoccarol
   repo: gittree
   releaseType: release
 

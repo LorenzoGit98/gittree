@@ -10,10 +10,10 @@ test('release dependencies are assigned to the correct package scopes', () => {
   assert.equal(packageJson.name, 'gittree');
   assert.equal(
     packageJson.repository.url,
-    'git+https://github.com/lorenzogit98/gittree.git'
+    'git+https://github.com/giannoccarol/gittree.git'
   );
-  assert.equal(packageJson.homepage, 'https://github.com/lorenzogit98/gittree#readme');
-  assert.equal(packageJson.bugs.url, 'https://github.com/lorenzogit98/gittree/issues');
+  assert.equal(packageJson.homepage, 'https://github.com/giannoccarol/gittree#readme');
+  assert.equal(packageJson.bugs.url, 'https://github.com/giannoccarol/gittree/issues');
   assert.equal(packageJson.dependencies.electron, undefined);
   assert.match(packageJson.dependencies['electron-updater'], /^\^6\./);
   assert.match(packageJson.devDependencies.electron, /^\^43\./);
@@ -52,7 +52,7 @@ test('continuous integration exercises Electron on required operating systems', 
 test('electron-builder emits installable and update-compatible artifacts', () => {
   const config = fs.readFileSync(path.join(root, 'electron-builder.yml'), 'utf8');
   assert.match(config, /provider:\s*github/);
-  assert.match(config, /owner:\s*lorenzogit98/);
+  assert.match(config, /owner:\s*giannoccarol/);
   assert.match(config, /repo:\s*gittree(?:\r?\n|$)/);
   assert.match(config, /target:\s*nsis/);
   assert.match(config, /-\s*zip/);

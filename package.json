@@ -32,11 +32,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lorenzogit98/gittree.git"
+    "url": "git+https://github.com/giannoccarol/gittree.git"
   },
-  "homepage": "https://github.com/lorenzogit98/gittree#readme",
+  "homepage": "https://github.com/giannoccarol/gittree#readme",
   "bugs": {
-    "url": "https://github.com/lorenzogit98/gittree/issues"
+    "url": "https://github.com/giannoccarol/gittree/issues"
   },
   "keywords": [
     "git",

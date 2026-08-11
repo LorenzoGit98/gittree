@@ -8,7 +8,7 @@ Questa guida descrive il percorso supportato per produrre installer locali o pub
 - npm e Git disponibili nel `PATH`.
 - Working tree pulito.
 - Versione SemVer coerente in `package.json`.
-- Per le release ufficiali: repository GitHub `lorenzogit98/gittree`.
+- Per le release ufficiali: repository GitHub `giannoccarol/gittree`.
 - Client ID pubblici di GitHub App e GitLab OAuth Application.
 - Per macOS OTA: certificato Developer ID e credenziali Apple per la notarizzazione.
 - Per eliminare gli avvisi Windows: certificato Authenticode oppure adesione a un servizio gratuito per progetti open source come SignPath Foundation.
