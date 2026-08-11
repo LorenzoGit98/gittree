@@ -1,3 +1,11 @@
+## [0.9.12](https://github.com/lorenzogit98/gittree/compare/v0.9.11...v0.9.12) (2026-08-11)
+
+
+### Bug Fixes
+
+* **renderer:** simplify the welcome workspace ([c403f86](https://github.com/lorenzogit98/gittree/commit/c403f866f509c3d225b5027e356626b586c09d0d))
+* **workspace:** restore repositories after package rename ([156b4d7](https://github.com/lorenzogit98/gittree/commit/156b4d7508a3cfca2ad0342be32c7b22d499e0e4))
+
 ## [0.9.11](https://github.com/lorenzogit98/gittree/compare/v0.9.10...v0.9.11) (2026-08-11)
 
 ## [0.9.10](https://github.com/lorenzogit98/gittree/compare/v0.9.9...v0.9.10) (2026-08-11)
