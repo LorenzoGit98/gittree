@@ -1,3 +1,10 @@
+## [0.9.14](https://github.com/giannoccarol/gittree/compare/v0.9.13...v0.9.14) (2026-08-11)
+
+
+### Bug Fixes
+
+* **workspace:** canonicalize repository aliases ([5eba8b3](https://github.com/giannoccarol/gittree/commit/5eba8b3686ffc12709e41df0b47640317693fd10))
+
 ## [0.9.13](https://github.com/giannoccarol/gittree/compare/v0.9.12...v0.9.13) (2026-08-11)
 
 
