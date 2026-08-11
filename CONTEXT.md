@@ -25,6 +25,9 @@ Privacy-first: no accounts, no telemetry, no repository upload.
   Repository activation. It restores view state, gives the graph first visual
   priority, coordinates supporting reads and prevents stale tab loads from
   publishing after a newer activation.
+- **Workspace state controller** — the renderer owner of history/changes/review
+  modes, sidebar and inspector visibility, accessibility attributes and their
+  persisted state. Motion and realtime resize remain separate collaborators.
 - **Repository history** — the read-only Git capability for log, graph, refs,
   commit comparisons and commit diff/detail queries within one Repository
   session.

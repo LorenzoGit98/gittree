@@ -55,14 +55,13 @@ class GitTreeApp {
     this.repositoryWorkspace = new RepositoryWorkspaceController({
       bridge: window.gitTree,
       document,
-      storage: localStorage,
       translate: t,
       state: this.state,
       components: this.components,
       createLoadSession: (bridge, repoPath) => new RepositoryLoadSession(bridge, repoPath),
       callbacks: {
         syncRemoteBusyUI: () => this.syncRemoteBusyUI(),
-        setWorkspaceMode: mode => this.setWorkspaceMode(mode, false),
+        restoreWorkspaceMode: repoPath => this.workspaceState.restoreMode(repoPath),
         loadStashes: repoPath => this.loadStashes(repoPath),
         loadTags: repoPath => this.loadTags(repoPath),
         updateStatus: (repoPath, loadSession) => this.updateStatus(repoPath, loadSession),
@@ -107,6 +106,18 @@ class GitTreeApp {
       },
       prefersReducedMotion: () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
     });
+    this.workspaceState = new WorkspaceStateController({
+      document,
+      storage: localStorage,
+      translate: t,
+      panelMotion: this.panelMotion,
+      state: this.state,
+      components: this.components,
+      viewportWidth: () => window.innerWidth,
+      computedStyle: element => getComputedStyle(element),
+      onModeChange: mode => { this.workspaceMode = mode; },
+      onInspectorStateChange: state => { this.inspectorState = state; }
+    });
 
     this.bindEvents();
     await this.setupUpdates();
@@ -116,7 +127,6 @@ class GitTreeApp {
     this.setupResize();
     this.setupWorkspaceState();
     this.applyToolbarVisibility();
-    this.setupWorkspaceModes();
     this.setupGlobalShortcuts();
     await this.components.repoTabs.init();
     this.components.settings.init();
@@ -188,58 +198,15 @@ class GitTreeApp {
   }
 
   setupWorkspaceModes() {
-    document.querySelectorAll('[data-workspace-mode]').forEach(button => {
-      button.onclick = () => this.setWorkspaceMode(button.dataset.workspaceMode);
-    });
-    this.setWorkspaceMode('history', false);
+    this.workspaceState.setMode('history', false);
   }
 
   workspaceModeKey(repoPath = this.state.repo?.path) {
-    return `gittree.workspace.mode:${repoPath || ''}`;
+    return this.workspaceState.modeKey(repoPath);
   }
 
   setWorkspaceMode(mode, persist = true) {
-    const safeMode = ['history', 'changes', 'pullRequests'].includes(mode)
-      ? mode
-      : 'history';
-    this.workspaceMode = safeMode;
-    document.querySelectorAll('[data-workspace-mode]').forEach(button => {
-      const active = button.dataset.workspaceMode === safeMode;
-      button.classList.toggle('active', active);
-      button.setAttribute('aria-selected', String(active));
-    });
-    document.getElementById('main-view').classList.toggle('is-hidden', safeMode !== 'history');
-    document.getElementById('changes-view').classList.toggle('is-hidden', safeMode !== 'changes');
-    document.getElementById('pull-requests-view').classList.toggle(
-      'is-hidden',
-      safeMode !== 'pullRequests'
-    );
-    document.getElementById('global-search').classList.toggle(
-      'is-hidden',
-      safeMode !== 'history'
-    );
-    const eyebrowKey = safeMode === 'history'
-      ? 'history.eyebrow'
-      : safeMode === 'changes'
-        ? 'changes.eyebrow'
-        : 'pullRequests.eyebrow';
-    const titleKey = safeMode === 'history'
-      ? 'history.title'
-      : safeMode === 'changes'
-        ? 'changes.title'
-        : 'pullRequests.title';
-    const title = document.getElementById('workspace-title');
-    const eyebrow = title.querySelector('.eyebrow');
-    const heading = title.querySelector('h2');
-    eyebrow.dataset.i18n = eyebrowKey;
-    heading.dataset.i18n = titleKey;
-    eyebrow.textContent = t(eyebrowKey);
-    heading.textContent = t(titleKey);
-    this.components.changes?.setActive(safeMode === 'changes');
-    this.components.pullRequests?.setActive(safeMode === 'pullRequests');
-    if (persist && this.state.repo) {
-      localStorage.setItem(this.workspaceModeKey(), safeMode);
-    }
+    return this.workspaceState.setMode(mode, persist);
   }
 
   setupPlatformChrome() {
@@ -738,62 +705,12 @@ class GitTreeApp {
   }
 
   setupWorkspaceState() {
-    const savedInspectorState = localStorage.getItem('gittree.workspace.inspector') || 'open';
-    this.setInspectorState(savedInspectorState, false);
-
-    document.getElementById('btn-toggle-inspector').onclick = () => {
-      const hiddenByResponsiveLayout =
-        this.inspectorState !== 'closed' &&
-        getComputedStyle(document.getElementById('detail-panel')).display === 'none';
-      if (this.inspectorState === 'closed') {
-        this.setInspectorState(window.innerWidth <= 1120 ? 'maximized' : 'open');
-      } else if (hiddenByResponsiveLayout) {
-        this.setInspectorState('maximized');
-      } else {
-        this.setInspectorState('closed');
-      }
-    };
-    document.getElementById('btn-close-inspector').onclick = () => {
-      this.setInspectorState('closed');
-    };
-    document.getElementById('btn-maximize-inspector').onclick = () => {
-      this.setInspectorState(this.inspectorState === 'maximized' ? 'open' : 'maximized');
-    };
-    document.querySelector('.detail-panel-header').addEventListener('dblclick', event => {
-      if (event.target.closest('button')) return;
-      this.setInspectorState(this.inspectorState === 'maximized' ? 'open' : 'maximized');
-    });
-
-    this.setupSidebarToggle();
+    this.workspaceState.mount();
     this.setupInspectorPopout();
-    this.setupPersistentSidebarSections();
-  }
-
-  setupSidebarToggle() {
-    const collapsed = localStorage.getItem('gittree.sidebar.collapsed') === 'true';
-    this.setSidebarCollapsed(collapsed, false);
-    const toggle = () => {
-      const isCollapsed = document.getElementById('workspace-body').classList.contains('sidebar-collapsed');
-      this.setSidebarCollapsed(!isCollapsed);
-    };
-    document.getElementById('btn-toggle-sidebar').onclick = toggle;
-    document.getElementById('btn-collapse-sidebar').onclick = toggle;
   }
 
   setSidebarCollapsed(collapsed, persist = true) {
-    const workspace = document.getElementById('workspace-body');
-    const toggleButton = document.getElementById('btn-toggle-sidebar');
-    const changed = workspace.classList.contains('sidebar-collapsed') !== collapsed;
-    this.panelMotion.transition('sidebar', {
-      opening: !collapsed,
-      animate: persist && changed,
-      applyState: () => {
-        workspace.classList.toggle('sidebar-collapsed', collapsed);
-        toggleButton.classList.toggle('active', !collapsed);
-        toggleButton.setAttribute('aria-pressed', String(!collapsed));
-      }
-    });
-    if (persist) localStorage.setItem('gittree.sidebar.collapsed', String(collapsed));
+    return this.workspaceState.setSidebarCollapsed(collapsed, persist);
   }
 
   setupInspectorPopout() {
@@ -830,84 +747,11 @@ class GitTreeApp {
   }
 
   setInspectorState(state, persist = true) {
-    const safeState = ['open', 'closed', 'maximized'].includes(state) ? state : 'open';
-    const previousState = this.inspectorState;
-    const workspace = document.getElementById('workspace-body');
-    const toggleButton = document.getElementById('btn-toggle-inspector');
-    const maximizeButton = document.getElementById('btn-maximize-inspector');
-    const isOpen = safeState !== 'closed';
-    const isMaximized = safeState === 'maximized';
-    const changedVisibility = (previousState === 'closed') !== (safeState === 'closed');
-
-    this.panelMotion.transition('inspector', {
-      opening: isOpen,
-      animate: persist && changedVisibility,
-      applyState: () => {
-        this.inspectorState = safeState;
-        workspace.classList.toggle('inspector-closed', safeState === 'closed');
-        workspace.classList.toggle('inspector-maximized', isMaximized);
-        toggleButton.classList.toggle('active', isOpen);
-        toggleButton.setAttribute('aria-pressed', String(isOpen));
-      }
-    });
-
-    const maximizeIcon = maximizeButton.querySelector('i');
-    maximizeIcon.className = isMaximized ? 'ph ph-arrows-in-simple' : 'ph ph-arrows-out-simple';
-    maximizeButton.dataset.i18nTitle = isMaximized ? 'details.restore' : 'details.maximize';
-    maximizeButton.title = t(maximizeButton.dataset.i18nTitle);
-
-    if (previousState !== safeState) {
-      this.components.diffViewer?.setInspectorExpanded(isMaximized);
-      if (previousState === 'maximized' && !isMaximized) {
-        this.animatePanelRestore(workspace);
-      }
-    }
-    if (persist) localStorage.setItem('gittree.workspace.inspector', safeState);
+    return this.workspaceState.setInspectorState(state, persist);
   }
 
   animatePanelRestore(workspace) {
-    workspace.classList.add('is-restoring');
-    setTimeout(() => workspace.classList.remove('is-restoring'), 320);
-  }
-
-  setupPersistentSidebarSections() {
-    const storageKey = 'gittree.sidebar.sections';
-    let savedSections = null;
-    try {
-      const parsed = JSON.parse(localStorage.getItem(storageKey));
-      if (Array.isArray(parsed)) savedSections = new Set(parsed);
-    } catch { /* invalid stored sections are ignored */ }
-
-    const headers = document.querySelectorAll('.sidebar-section-header.collapsible');
-    headers.forEach(header => {
-      const section = header.parentElement;
-      const sectionId = section.dataset.section;
-      const body = section.querySelector('.sidebar-section-body');
-      const arrow = header.querySelector('.collapse-arrow');
-      if (!sectionId || !body || !arrow) return;
-
-      const collapsed = savedSections
-        ? savedSections.has(sectionId)
-        : body.classList.contains('collapsed');
-      body.classList.toggle('collapsed', collapsed);
-      arrow.classList.toggle('collapsed', collapsed);
-      header.classList.toggle('collapsed', collapsed);
-      header.setAttribute('aria-expanded', String(!collapsed));
-
-      header.addEventListener('click', () => {
-        const nextCollapsed = !body.classList.contains('collapsed');
-        body.classList.toggle('collapsed', nextCollapsed);
-        arrow.classList.toggle('collapsed', nextCollapsed);
-        header.classList.toggle('collapsed', nextCollapsed);
-        header.setAttribute('aria-expanded', String(!nextCollapsed));
-
-        const collapsedSections = [...headers]
-          .filter(item => item.classList.contains('collapsed'))
-          .map(item => item.parentElement.dataset.section)
-          .filter(Boolean);
-        localStorage.setItem(storageKey, JSON.stringify(collapsedSections));
-      });
-    });
+    return this.workspaceState.animatePanelRestore(workspace);
   }
 
   setupGlobalShortcuts() {

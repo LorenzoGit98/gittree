@@ -91,7 +91,6 @@ function createHarness({ graphLoad, supportingLoad } = {}) {
   const controller = new RepositoryWorkspaceController({
     bridge,
     document,
-    storage: { getItem: key => key.includes('C:\\repo-a') ? 'changes' : null },
     translate: (key, values) => key === 'statusBar.onBranch' ? `On ${values.branch}` : key,
     state,
     components,
@@ -101,7 +100,7 @@ function createHarness({ graphLoad, supportingLoad } = {}) {
     }),
     callbacks: {
       syncRemoteBusyUI: () => calls.push('remote:sync'),
-      setWorkspaceMode: mode => calls.push(`mode:${mode}`),
+      restoreWorkspaceMode: repoPath => calls.push(`mode:${repoPath.endsWith('repo-a') ? 'changes' : 'history'}`),
       loadStashes: repoPath => calls.push(`stashes:${repoPath}`),
       loadTags: repoPath => calls.push(`tags:${repoPath}`),
       updateStatus: repoPath => calls.push(`update-status:${repoPath}`),

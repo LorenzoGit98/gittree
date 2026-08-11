@@ -44,6 +44,7 @@ globals or renderer state.
 | Provider list, detail and diff behavior | `src/main/hosting/providers/` | `test/hosting-provider-adapters.test.js` and `test/hosting-provider-read-contracts.test.js` |
 | Repository activation, readiness and stale-load cancellation | `src/renderer/repository-workspace-controller.js`; `repository-load-session.js` deduplicates reads inside one activation | `test/repository-workspace-controller.test.js`, load-session tests and Electron E2E |
 | Remote operation feedback | `src/renderer/remote-operation-controller.js` | `test/remote-operation-controller.test.js` and Electron E2E |
+| Workspace modes, panel visibility and persisted navigation state | `src/renderer/workspace-state-controller.js`; motion and resize remain separate collaborators | `test/workspace-state-controller.test.js`, motion/resize tests and renderer benchmark |
 | Workspace resize and panel motion | `src/renderer/workspace-resize-controller.js`, `src/renderer/workspace-panel-motion.js` | controller tests, performance benchmarks and `docs/MOTION.md` |
 | Visual rules and localization | `DESIGN.md`, renderer styles and i18n resources | design audit, i18n parity and Electron E2E |
 | Packaging and release integrity | `.github/workflows/`, release scripts and electron-builder config | release contract tests and package checks |
@@ -73,6 +74,9 @@ globals or renderer state.
   restores the workspace mode, prioritizes the graph, coordinates supporting
   views, rejects obsolete load publication and exposes interactive/settled
   readiness. `GitTreeApp.openRepo()` remains the compatibility entry point.
+- `WorkspaceStateController` owns workspace modes, sidebar/inspector visibility,
+  accessibility state and their storage keys. It delegates animation execution
+  to `WorkspacePanelMotion` and never rebuilds Repository views while panels move.
 - Use `textContent` for plain data and the shared encoder only when markup is
   necessary.
 - Do not introduce a framework, bundler or TypeScript.

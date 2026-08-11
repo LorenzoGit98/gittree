@@ -3,7 +3,6 @@ class RepositoryWorkspaceController {
   constructor({
     bridge,
     document,
-    storage,
     translate,
     state,
     components,
@@ -12,7 +11,6 @@ class RepositoryWorkspaceController {
   }) {
     this.bridge = bridge;
     this.document = document;
-    this.storage = storage;
     this.translate = translate;
     this.state = state;
     this.components = components;
@@ -33,10 +31,6 @@ class RepositoryWorkspaceController {
     return Boolean(current) && this.pathKey(repoPath) === this.pathKey(current);
   }
 
-  workspaceModeKey(repoPath) {
-    return `gittree.workspace.mode:${repoPath || ''}`;
-  }
-
   async open(repo, options = {}) {
     const loadToken = ++this.loadToken;
     const loadSession = this.createLoadSession(this.bridge, repo.path);
@@ -44,8 +38,7 @@ class RepositoryWorkspaceController {
     this.components.welcome.hide();
     this.callbacks.syncRemoteBusyUI();
     this.setLoading(true);
-    const savedMode = this.storage.getItem(this.workspaceModeKey(repo.path)) || 'history';
-    this.callbacks.setWorkspaceMode(savedMode);
+    this.callbacks.restoreWorkspaceMode(repo.path);
 
     try {
       const graphLoad = this.components.graphView.load(repo.path);
