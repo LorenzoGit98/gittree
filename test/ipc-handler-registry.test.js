@@ -65,3 +65,19 @@ test('registerManagedRepoHandler validates before invoking the implementation', 
     ['validate', 'unmanaged']
   ]);
 });
+
+test('handler registry removes exactly the channels it registered', () => {
+  const removed = [];
+  const registry = createHandlerRegistry({
+    handle() {},
+    removeHandler: channel => removed.push(channel),
+    assertManagedRepo() {}
+  });
+  registry.registerHandler('app:version', () => '1.0.0');
+  registry.registerManagedRepoHandler('git:status', () => ({ clean: true }));
+
+  registry.dispose();
+  registry.dispose();
+
+  assert.deepEqual(removed.sort(), ['app:version', 'git:status']);
+});

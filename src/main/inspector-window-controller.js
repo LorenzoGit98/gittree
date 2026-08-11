@@ -69,7 +69,12 @@ function createInspectorWindowController({
     return { success: true };
   }
 
-  return { open, update };
+  function destroy() {
+    if (inspectorWindow && !inspectorWindow.isDestroyed()) inspectorWindow.destroy();
+    inspectorWindow = null;
+  }
+
+  return { open, update, destroy };
 }
 
 module.exports = { createInspectorWindowController };

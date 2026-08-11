@@ -6,9 +6,12 @@ Privacy-first: no accounts, no telemetry, no repository upload.
 
 ## Domain language
 
-- **Application runtime** — the Electron lifecycle, dependency composition,
-  deep-link routing and window teardown owned by `application-runtime.js`; the
-  entry point only constructs and starts it.
+- **Main Application** — the import-safe composition root in
+  `main-application.js`; it constructs services, registers IPC, owns windows and
+  exposes deterministic `start()`/`stop()`. `main.js` only injects Electron and
+  starts it.
+- **Application runtime** — the host lifecycle and deep-link readiness policy in
+  `application-runtime.js`; it owns Electron event subscriptions, not services.
 - **Repository** — a git working tree registered in the workspace (the app only
   operates on registered repositories; `assertManagedRepo`).
 - **Repository workspace** — the main-process capability that owns Repository
@@ -44,9 +47,10 @@ Privacy-first: no accounts, no telemetry, no repository upload.
 
 ## Architecture
 
-- **Main process** (`src/main/`) — `main.js` is a composition root;
-  `application-runtime.js` owns lifecycle and windows, and domain handlers live
-  in `src/main/ipc/`. `RepositoryWorkspace` owns admission and GitService
+- **Main process** (`src/main/`) — `main.js` is a side-effect-only entry point;
+  `main-application.js` is the tested composition root, `application-runtime.js`
+  owns host lifecycle, and domain handlers live in `src/main/ipc/`.
+  `RepositoryWorkspace` owns admission and GitService
   identity. `GitService` and `HostingService` are stable Interfaces
   over deeper internal Modules and provider Adapters.
 - **Git implementation** — `git-service.js` exposes the public capability while

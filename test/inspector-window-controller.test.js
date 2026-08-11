@@ -21,6 +21,7 @@ test('inspector controller creates one locked-down window and reuses it', () => 
     }
     isDestroyed() { return false; }
     focus() { this.focused = true; }
+    destroy() { this.destroyed = true; }
     loadFile(filename) { this.loaded = filename; }
     on(event, listener) { this.listeners.set(event, listener); }
   }
@@ -53,6 +54,9 @@ test('inspector controller creates one locked-down window and reuses it', () => 
   controller.open({ title: 'Next' });
   assert.equal(created.length, 1);
   assert.equal(created[0].focused, true);
+
+  controller.destroy();
+  assert.equal(created[0].destroyed, true);
 
   created[0].listeners.get('closed')();
   assert.deepEqual(rendererEvents, [['inspector:closed']]);

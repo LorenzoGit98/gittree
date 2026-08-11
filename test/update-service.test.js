@@ -7,6 +7,7 @@ const UpdateService = require('../src/main/update-service');
 function createHarness({ packaged = true, version = '1.2.3' } = {}) {
   const sent = [];
   const scheduled = [];
+  const cleared = [];
   const updater = new EventEmitter();
   updater.checkForUpdates = async () => {};
   updater.downloadUpdate = async () => {};
@@ -30,9 +31,11 @@ function createHarness({ packaged = true, version = '1.2.3' } = {}) {
     setImmediate(callback) {
       scheduled.push(['immediate']);
       callback();
-    }
+    },
+    clearTimeout(value) { cleared.push(['timeout', value]); },
+    clearInterval(value) { cleared.push(['interval', value]); }
   });
-  return { service, updater, window, sent, scheduled };
+  return { service, updater, window, sent, scheduled, cleared };
 }
 
 test('unpackaged update service stays disabled and broadcasts safely', async () => {
@@ -55,7 +58,9 @@ test('unpackaged update service stays disabled and broadcasts safely', async () 
 });
 
 test('packaged update service configures updater and follows updater events', () => {
-  const { service, updater, sent, scheduled } = createHarness({ version: '1.2.3-beta.1' });
+  const { service, updater, sent, scheduled, cleared } = createHarness({
+    version: '1.2.3-beta.1'
+  });
   service.initialize();
 
   assert.equal(updater.autoDownload, false);
@@ -88,6 +93,10 @@ test('packaged update service configures updater and follows updater events', ()
   updater.emit('error', 'offline');
   assert.equal(service.getState().error, 'offline');
   assert.ok(sent.length >= 9);
+
+  service.destroy();
+  assert.equal(updater.eventNames().length, 0);
+  assert.deepEqual(cleared.map(item => item[0]).sort(), ['interval', 'timeout']);
 });
 
 test('update commands expose skip, error, download and install outcomes', async () => {

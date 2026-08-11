@@ -111,6 +111,11 @@ test('PAT, cancellation and logout validate input and clear provider state', asy
   assert.deepEqual(await service.cancelLogin('github'), { success: true });
   assert.equal(controller.signal.aborted, true);
   assert.equal(service.loginSessions.has('github'), false);
+  const pendingController = new AbortController();
+  service.loginSessions.set('gitlab', { controller: pendingController });
+  service.destroy();
+  assert.equal(pendingController.signal.aborted, true);
+  assert.equal(service.loginSessions.size, 0);
   assert.deepEqual(await service.logout('github'), { success: true, provider: 'github' });
   assert.ok(vault.calls.some(call => call[0] === 'removeAccount'));
   assert.ok(vault.calls.some(call => call[0] === 'removeProviderDrafts'));

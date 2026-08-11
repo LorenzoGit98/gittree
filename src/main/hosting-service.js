@@ -261,6 +261,11 @@ class HostingService {
     return { success: true };
   }
 
+  destroy() {
+    for (const session of this.loginSessions.values()) session.controller.abort();
+    this.loginSessions.clear();
+  }
+
   async logout(provider) {
     await this.cancelLogin(provider);
     await this.vault.removeAccount(provider);

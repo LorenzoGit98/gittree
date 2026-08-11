@@ -19,6 +19,7 @@ const SCOPES = {
       'src/main/inspector-window-controller.js',
       'src/main/ipc/**/*.js',
       'src/main/logger.js',
+      'src/main/main-application.js',
       'src/main/oauth-config.js',
       'src/main/provider-links.js',
       'src/main/repo-manager.js',

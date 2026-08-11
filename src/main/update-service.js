@@ -9,10 +9,14 @@ class UpdateService {
     this.timers = {
       setTimeout: dependencies.setTimeout || setTimeout,
       setInterval: dependencies.setInterval || setInterval,
-      setImmediate: dependencies.setImmediate || setImmediate
+      setImmediate: dependencies.setImmediate || setImmediate,
+      clearTimeout: dependencies.clearTimeout || clearTimeout,
+      clearInterval: dependencies.clearInterval || clearInterval
     };
     this.initialized = false;
+    this.startupTimer = null;
     this.timer = null;
+    this.updaterListeners = [];
     this.state = {
       status: this.app.isPackaged ? 'idle' : 'disabled',
       currentVersion: this.app.getVersion(),
@@ -43,42 +47,60 @@ class UpdateService {
     this.autoUpdater.allowDowngrade = false;
     this.autoUpdater.allowPrerelease = this.app.getVersion().includes('-');
 
-    this.autoUpdater.on('checking-for-update', () => this.setState({
+    this.listenToUpdater('checking-for-update', () => this.setState({
       status: 'checking',
       error: null
     }));
-    this.autoUpdater.on('update-available', info => this.setState({
+    this.listenToUpdater('update-available', info => this.setState({
       status: 'available',
       availableVersion: info.version,
       progress: 0,
       error: null
     }));
-    this.autoUpdater.on('update-not-available', () => this.setState({
+    this.listenToUpdater('update-not-available', () => this.setState({
       status: 'idle',
       availableVersion: null,
       progress: 0,
       error: null
     }));
-    this.autoUpdater.on('download-progress', progress => this.setState({
+    this.listenToUpdater('download-progress', progress => this.setState({
       status: 'downloading',
       progress: Math.max(0, Math.min(100, Math.round(progress.percent || 0))),
       error: null
     }));
-    this.autoUpdater.on('update-downloaded', info => this.setState({
+    this.listenToUpdater('update-downloaded', info => this.setState({
       status: 'downloaded',
       availableVersion: info.version,
       progress: 100,
       error: null
     }));
-    this.autoUpdater.on('error', error => this.setState({
+    this.listenToUpdater('error', error => this.setState({
       status: 'error',
       error: error?.message || String(error)
     }));
 
-    this.timers.setTimeout(() => this.check(false), 15000).unref?.();
+    this.startupTimer = this.timers.setTimeout(() => this.check(false), 15000);
+    this.startupTimer.unref?.();
     this.timer = this.timers.setInterval(() => this.check(false), 6 * 60 * 60 * 1000);
     this.timer.unref?.();
     this.broadcast();
+  }
+
+  listenToUpdater(event, listener) {
+    this.autoUpdater.on(event, listener);
+    this.updaterListeners.push([event, listener]);
+  }
+
+  destroy() {
+    if (this.startupTimer) this.timers.clearTimeout(this.startupTimer);
+    if (this.timer) this.timers.clearInterval(this.timer);
+    this.startupTimer = null;
+    this.timer = null;
+    for (const [event, listener] of this.updaterListeners.splice(0)) {
+      this.autoUpdater.removeListener?.(event, listener);
+    }
+    this.window = null;
+    this.initialized = false;
   }
 
   getState() {

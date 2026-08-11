@@ -93,3 +93,55 @@ test('Application runtime dispatches startup deep links only after initializatio
     'deep-link:gittree://open?path=C%3A%5Crepo'
   ]);
 });
+
+test('Application runtime removes host and renderer listeners before teardown', async () => {
+  const listeners = new Map();
+  const removed = [];
+  const calls = [];
+  let readinessListener;
+  const webContents = {
+    once(_event, listener) {
+      readinessListener = listener;
+    },
+    removeListener(event, listener) {
+      removed.push(['renderer', event, listener === readinessListener]);
+    }
+  };
+  const runtime = createApplicationRuntime({
+    host: {
+      requestSingleInstanceLock: () => true,
+      whenReady: () => Promise.resolve(),
+      on(event, listener) {
+        listeners.set(event, listener);
+      },
+      removeListener(event, listener) {
+        removed.push(['host', event, listeners.get(event) === listener]);
+      },
+      quit() {}
+    },
+    initialize() {},
+    createWindow() {},
+    getMainWindow: () => ({ webContents }),
+    getWindowCount: () => 1,
+    focusMainWindow() {},
+    handleDeepLink() {},
+    teardown() {
+      calls.push('teardown');
+    },
+    argv: [],
+    platform: 'linux'
+  });
+
+  assert.equal(await runtime.start(), true);
+  await runtime.stop();
+  await runtime.stop();
+
+  assert.deepEqual(removed, [
+    ['renderer', 'did-finish-load', true],
+    ['host', 'second-instance', true],
+    ['host', 'open-url', true],
+    ['host', 'window-all-closed', true],
+    ['host', 'activate', true]
+  ]);
+  assert.deepEqual(calls, ['teardown']);
+});

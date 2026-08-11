@@ -8,7 +8,8 @@ contracts stable and place volatile details behind narrow Seams.
 
 ```text
 Electron entry point
-  -> Application runtime
+  -> Main Application
+    -> Application runtime
     -> domain IPC registration
       -> stable service Interface
         -> internal Module or provider Adapter
@@ -30,7 +31,8 @@ globals or renderer state.
 
 | Capability | Primary owner | Verification |
 | --- | --- | --- |
-| Electron lifecycle, windows and deep links | `src/main/application-runtime.js`, composed by `src/main/main.js` | `test/application-runtime.test.js` and Electron E2E |
+| Dependency composition, windows, IPC ownership and teardown | `src/main/main-application.js`; `main.js` is the minimal entry point | `test/main-application.test.js` and Electron E2E |
+| Electron host lifecycle and deep-link readiness | `src/main/application-runtime.js` | `test/application-runtime.test.js` |
 | IPC registration and error envelopes | `src/main/ipc/` plus `src/preload.js` | IPC handler, parity and preload contract tests |
 | Repository admission, persistence, service reuse and queue identity | `src/main/repository-workspace.js` with `repo-manager.js` as storage Adapter | `test/repository-workspace.test.js`, repository IPC and RepoManager tests |
 | Git public operations | `src/main/git-service.js` | `test/git-service*.test.js` with deterministic real repositories |
@@ -55,6 +57,9 @@ globals or renderer state.
 - `RepositoryWorkspace` is the only admission and GitService registry Seam.
   Native selection and scan results create narrow, one-use path capabilities;
   renderer strings alone cannot expand the workspace.
+- `MainApplication` is import-safe and owns every composed resource. Its
+  `stop()` removes IPC/process/Electron listeners, cancels provider sessions,
+  stops updater timers and destroys owned windows.
 - `GitService` is the public Interface. Every asynchronous repository operation
   continues through the same per-repository queue.
 - `RepositoryOperations` owns one complete mutation cycle: preflight,
@@ -97,8 +102,8 @@ Before extracting a Module, answer these questions:
 
 ## Current consolidation state
 
-- The Application runtime and domain IPC registration are extracted and
-  covered behind stable contracts.
+- The Main Application, host runtime and domain IPC registration are covered
+  through a fake Electron Adapter without launching Electron.
 - Hosting provider Adapters own the complete normalized pull-request capability:
   list, detail, diff, thread resolution, review submission and creation.
   `HostingService` retains validation, authenticated transport, vault ownership
