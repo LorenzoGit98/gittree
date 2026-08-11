@@ -1,3 +1,5 @@
+## [0.9.11](https://github.com/lorenzogit98/gittree/compare/v0.9.10...v0.9.11) (2026-08-11)
+
 ## [0.9.10](https://github.com/lorenzogit98/gittree/compare/v0.9.9...v0.9.10) (2026-08-11)
 
 
