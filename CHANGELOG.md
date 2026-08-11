@@ -1,3 +1,11 @@
+## [0.9.15](https://github.com/giannoccarol/gittree/compare/v0.9.14...v0.9.15) (2026-08-11)
+
+
+### Bug Fixes
+
+* **release:** declare Linux audio dependency ([937efc9](https://github.com/giannoccarol/gittree/commit/937efc9ada06eedbaeb3b262387bc22217981a71))
+* **renderer:** preserve workspace when sidebar closes ([8a3d012](https://github.com/giannoccarol/gittree/commit/8a3d0124926ec4d1b9913035d2d58d499b07f5c9))
+
 ## [0.9.14](https://github.com/giannoccarol/gittree/compare/v0.9.13...v0.9.14) (2026-08-11)
 
 
