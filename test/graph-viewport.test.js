@@ -36,3 +36,38 @@ test('remote refresh keeps the visible commit anchored away from the top', () =>
 
   assert.equal(view.container.scrollTop, 169);
 });
+
+test('inspector snapshot exposes only graph geometry and tooltip metadata', () => {
+  const view = Object.create(GraphView.prototype);
+  view.rows = [{
+    commit: { hash: 'abc1234', subject: 'Inspector layout', authorName: 'Ada' },
+    lane: 1,
+    incoming: true,
+    before: ['parent', 'abc1234'],
+    after: ['parent'],
+    parents: [{ hash: 'parent', lane: 0, kind: 'first-parent' }]
+  }];
+  view.refsByHash = new Map([['abc1234', [{
+    fullName: 'refs/heads/main', shortName: 'main', type: 'branch', upstream: 'origin/main'
+  }]]]);
+  view.dataRevision = 7;
+  view.laneCount = 2;
+  view.hasMore = false;
+  view.selectedHash = 'abc1234';
+
+  assert.deepEqual(view.getInspectorSnapshot(), {
+    revision: 7,
+    laneCount: 2,
+    hasMore: false,
+    selectedHash: 'abc1234',
+    rows: [{
+      hash: 'abc1234',
+      subject: 'Inspector layout',
+      lane: 1,
+      incoming: true,
+      before: ['parent', 'abc1234'],
+      parents: [{ hash: 'parent', lane: 0, kind: 'first-parent' }],
+      refs: [{ shortName: 'main', type: 'branch' }]
+    }]
+  });
+});

@@ -54,6 +54,8 @@ test('inspector controller creates one locked-down window and reuses it', () => 
   assert.deepEqual(created[0].sent.at(-1), ['inspector:render', {
     title: 'Commit', meta: 'abc1234 · Ada · 1 file', theme: 'dark', tone: 'blue', mode: 'split',
     eyebrow: 'Inspector', modeLabel: 'Split', wordLevel: false,
+    graph: { revision: 0, laneCount: 1, hasMore: false, selectedHash: null, rows: [] },
+    files: [], selectedFile: null, filesOpen: true,
     html: '<b>x</b>', diffText: '+x'
   }]);
   controller.open({ title: 'Next' });
@@ -102,6 +104,57 @@ test('inspector controller sanitizes oversized and invalid payload fields', () =
   assert.deepEqual(window.lastSend, ['inspector:render', {
     title: 'Inspector', meta: '', theme: 'light', tone: '', mode: 'unified',
     eyebrow: 'Inspector', modeLabel: 'Unified', wordLevel: false,
+    graph: { revision: 0, laneCount: 1, hasMore: false, selectedHash: null, rows: [] },
+    files: [], selectedFile: null, filesOpen: true,
     html: '', diffText: ''
   }]);
+});
+
+test('inspector controller bounds structured graph and file navigation data', () => {
+  let inspectorWindow;
+  class FakeWindow {
+    constructor() {
+      this.webContents = { once() {}, send: (...args) => { this.lastSend = args; } };
+      inspectorWindow = this;
+    }
+    isDestroyed() { return false; }
+    loadFile() {}
+    on() {}
+  }
+  const controller = createInspectorWindowController({
+    BrowserWindow: FakeWindow,
+    getMainWindow: () => null,
+    lockDownWindow() {},
+    iconPath: () => null,
+    preloadPath: '',
+    htmlPath: '',
+    sendToRenderer() {}
+  });
+  controller.open({});
+  controller.update({
+    graph: {
+      revision: 4,
+      laneCount: 2,
+      hasMore: true,
+      selectedHash: 'abc1234',
+      rows: [{
+        hash: 'abc1234', subject: 'Ship inspector', lane: 1, incoming: true,
+        before: ['abc1234', null],
+        parents: [{ hash: 'parent123', lane: 0, kind: 'first-parent' }],
+        refs: [{ fullName: 'refs/heads/main', shortName: 'main', type: 'branch' }]
+      }]
+    },
+    files: [{ path: 'src/app.js', status: 'M', additions: 3, deletions: 1 }],
+    selectedFile: 'src/app.js',
+    filesOpen: false
+  });
+
+  const payload = inspectorWindow.lastSend[1];
+  assert.equal(payload.graph.rows[0].subject, 'Ship inspector');
+  assert.deepEqual(payload.graph.rows[0].refs, [{ shortName: 'main', type: 'branch' }]);
+  assert.deepEqual(payload.files, [{
+    path: 'src/app.js', oldPath: null, status: 'M', additions: 3, deletions: 1
+  }]);
+  assert.equal(payload.selectedFile, 'src/app.js');
+  assert.equal(payload.filesOpen, false);
 });

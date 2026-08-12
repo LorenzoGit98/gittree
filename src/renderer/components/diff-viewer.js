@@ -8,6 +8,8 @@ class DiffViewer {
     this.modeBeforeExpanded = null;
     this.inspectorExpanded = false;
     this.currentDiff = null;
+    this.fileSummaries = [];
+    this.selectedFilePath = null;
 
     const savedPad = localStorage.getItem('gittree.diff.gutterPad');
     if (savedPad) document.documentElement.style.setProperty('--diff-gutter-pad', savedPad + 'px');
@@ -98,12 +100,17 @@ class DiffViewer {
     const compactTitle = t('details.changesIn', { hash: hash.substring(0, 7) });
     title.textContent = compactTitle;
     title.title = compactTitle;
+    this.currentDiff = null;
+    this.fileSummaries = [];
+    this.selectedFilePath = null;
     this.syncCommitMeta({ hash });
     this.body.innerHTML = `<div class="diff-placeholder"><i class="ph ph-circle-notch"></i>${t('details.loading')}</div>`;
+    this.app.syncInspectorWorkspace?.({ push: false });
     try {
       const detail = await window.gitTree.getCommitDetail(repoPath, hash);
       if (detail?.error) { this.body.innerHTML = `<div class="diff-placeholder">${this.esc(detail.error)}</div>`; return; }
       this.currentDiff = detail.diff;
+      this.fileSummaries = this.extractFileSummaries(detail.diff);
       const subject = String(detail.message || '').split(/\r?\n/)[0].trim();
       title.textContent = subject || compactTitle;
       title.title = detail.message || compactTitle;
@@ -155,9 +162,7 @@ class DiffViewer {
         const block = document.createElement('section');
         block.className = 'diff-file-block';
         block.style.setProperty('--file-index', String(fileIndex++));
-        const hdr = document.createElement('div');
-        hdr.className = 'diff-file-header';
-        hdr.innerHTML = `<span class="diff-file-path">${this.esc(this.extractPath(line.content) || line.content)}</span>`;
+        const hdr = this.createFileHeader(block, line.content);
         block.appendChild(hdr);
         frag.appendChild(block);
         target = block;
@@ -211,11 +216,8 @@ class DiffViewer {
           const block = document.createElement('section');
           block.className = 'diff-file-block';
           block.style.setProperty('--file-index', String(fileIndex++));
-          el.className = 'diff-file-header';
-          el.innerHTML = `<span class="diff-file-path">${
-            this.esc(this.extractPath(row.content) || row.content)
-          }</span>`;
-          block.appendChild(el);
+          const header = this.createFileHeader(block, row.content);
+          block.appendChild(header);
           wrapper.appendChild(block);
           target = block;
           return;
@@ -273,15 +275,82 @@ class DiffViewer {
     return m ? m[2] : null;
   }
 
+  createFileHeader(block, content) {
+    const path = this.extractPath(content) || content;
+    block.dataset.filePath = path;
+    const header = document.createElement('div');
+    header.className = 'diff-file-header';
+    const label = document.createElement('span');
+    label.className = 'diff-file-path';
+    label.textContent = path;
+    header.appendChild(label);
+    return header;
+  }
+
+  extractFileSummaries(diffText) {
+    const summaries = [];
+    let current = null;
+    const finish = () => {
+      if (current?.path) summaries.push(current);
+      current = null;
+    };
+
+    for (const line of DiffParser.parseUnified(diffText || '')) {
+      if (line.kind === 'file') {
+        finish();
+        current = {
+          path: this.extractPath(line.content) || line.content,
+          oldPath: null,
+          status: 'M',
+          additions: 0,
+          deletions: 0
+        };
+        continue;
+      }
+      if (!current) continue;
+      if (line.kind === 'add') current.additions += 1;
+      else if (line.kind === 'del') current.deletions += 1;
+      else if (line.kind === 'header') {
+        if (line.content.startsWith('new file mode ')) current.status = 'A';
+        else if (line.content.startsWith('deleted file mode ')) current.status = 'D';
+        else if (line.content.startsWith('rename from ')) {
+          current.status = 'R';
+          current.oldPath = line.content.slice('rename from '.length);
+        } else if (line.content.startsWith('rename to ')) {
+          current.status = 'R';
+          current.path = line.content.slice('rename to '.length);
+        }
+      }
+    }
+    finish();
+    return summaries;
+  }
+
+  scrollToFile(path) {
+    const blocks = [...this.body.querySelectorAll('.diff-file-block')];
+    const block = blocks.find(element => element.dataset.filePath === path);
+    if (!block) return false;
+    this.selectedFilePath = path;
+    this.app.components?.inspectorWorkspace?.setSelectedFile(path);
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    block.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+    block.classList.add('is-file-target');
+    window.setTimeout(() => block.classList.remove('is-file-target'), 1000);
+    return true;
+  }
+
   esc(value) { return HtmlEncoder.encode(value); }
 
   clear() {
     this.currentDiff = null;
+    this.fileSummaries = [];
+    this.selectedFilePath = null;
     this.body.innerHTML = `<div class="diff-placeholder"><i class="ph ph-cursor-click"></i>${t('details.placeholder')}</div>`;
     const title = document.getElementById('detail-title');
     title.textContent = t('details.title');
     title.title = '';
     this.syncCommitMeta();
+    this.app.syncInspectorWorkspace?.();
   }
 }
 

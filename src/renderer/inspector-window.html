@@ -8,7 +8,9 @@
   <link rel="stylesheet" href="../../node_modules/@phosphor-icons/web/src/regular/style.css">
   <link rel="stylesheet" href="styles/variables.css">
   <link rel="stylesheet" href="styles/components.css">
+  <link rel="stylesheet" href="styles/graph.css">
   <link rel="stylesheet" href="styles/diff-viewer.css">
+  <link rel="stylesheet" href="styles/inspector-workspace.css">
   <link rel="stylesheet" href="styles/inspector-window.css">
 </head>
 <body>
@@ -24,13 +26,42 @@
         <span id="inspector-word" class="badge badge-head is-hidden">Words</span>
       </div>
     </header>
-    <main id="inspector-body">
-      <div class="diff-placeholder">
-        <i class="ph ph-circle-notch"></i>
-        <span>Loading…</span>
+    <main id="inspector-workspace" class="inspector-workspace inspector-workspace-popout">
+      <aside id="inspector-graph-panel" class="inspector-graph-panel" aria-label="Commit graph" data-i18n-aria-label="details.graphTitle">
+        <header class="inspector-side-header">
+          <div class="inspector-side-heading">
+            <strong data-i18n="details.graphTitle">Commit graph</strong>
+            <small data-i18n="details.graphHint">Hover a node for details</small>
+          </div>
+        </header>
+        <div id="inspector-graph-view" class="inspector-graph-view" role="list"></div>
+      </aside>
+      <div class="inspector-diff-pane">
+        <div id="inspector-body" class="detail-panel-body">
+          <div class="diff-placeholder">
+            <i class="ph ph-circle-notch"></i>
+            <span data-i18n="common.loading">Loading…</span>
+          </div>
+        </div>
       </div>
+      <aside id="inspector-files-panel" class="inspector-files-panel" aria-label="Changed files" data-i18n-aria-label="details.fileListTitle">
+        <header class="inspector-side-header">
+          <div class="inspector-side-heading">
+            <strong data-i18n="details.fileListTitle">Changed files</strong>
+            <small data-inspector-file-count>0 files</small>
+          </div>
+          <button id="btn-toggle-inspector-files" class="btn-icon" type="button" aria-controls="inspector-file-list" aria-expanded="true" title="Hide changed files" data-i18n-title="details.filesClose">
+            <i class="ph ph-caret-right" aria-hidden="true"></i>
+          </button>
+        </header>
+        <div id="inspector-file-list" class="inspector-file-list" role="listbox"></div>
+      </aside>
     </main>
   </div>
+  <script src="../../node_modules/i18next/dist/umd/i18next.min.js"></script>
+  <script src="i18n.js"></script>
+  <script src="components/inspector-graph.js"></script>
+  <script src="components/inspector-workspace.js"></script>
   <script src="inspector-window.js"></script>
 </body>
 </html>

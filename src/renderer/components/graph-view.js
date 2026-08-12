@@ -22,6 +22,7 @@ class GraphView {
     this.layoutState = { lanes: [] };
     this.laneCount = 1;
     this.generation = 0;
+    this.dataRevision = 0;
     this.rowHeight = 38;
     this.overscan = 20;
     this.raf = 0;
@@ -85,6 +86,8 @@ class GraphView {
     this.layoutState = { lanes: [] };
     this.laneCount = 1;
     this.renderedRange = [-1, -1];
+    this.dataRevision += 1;
+    this.app.syncInspectorWorkspace?.();
     if (!keepContent) {
       this.layer.replaceChildren(this.emptyState('ph-circle-notch', t('history.loading')));
     }
@@ -127,6 +130,8 @@ class GraphView {
       this.updateAuthorOptions();
       this.updateGraphWidth();
       if (options.render !== false) this.renderViewport(true);
+      this.dataRevision += 1;
+      this.app.syncInspectorWorkspace?.();
       return true;
     } catch (error) {
       if (generation === this.generation) {
@@ -676,6 +681,7 @@ class GraphView {
     this.selectedHashes.add(hash);
     this.selectionAnchor = hash;
     this.updateVisibleSelection();
+    this.app.syncInspectorWorkspace?.();
     if (emit) this.app.emit('commit:selected', hash);
   }
 
@@ -707,7 +713,34 @@ class GraphView {
       this.selectedHash = hash;
     }
     this.updateVisibleSelection();
+    this.app.syncInspectorWorkspace?.();
     if (this.selectedHash) this.app.emit('commit:selected', this.selectedHash);
+  }
+
+  getInspectorSnapshot(maxRows = 2000) {
+    const rows = this.rows.slice(0, Math.max(0, maxRows)).map(layoutRow => ({
+      hash: layoutRow.commit.hash,
+      subject: layoutRow.commit.subject || '',
+      lane: layoutRow.lane,
+      incoming: Boolean(layoutRow.incoming),
+      before: [...(layoutRow.before || [])],
+      parents: (layoutRow.parents || []).map(parent => ({
+        hash: parent.hash,
+        lane: parent.lane,
+        kind: parent.kind
+      })),
+      refs: (this.refsByHash.get(layoutRow.commit.hash) || []).map(ref => ({
+        shortName: ref.shortName,
+        type: ref.type
+      }))
+    }));
+    return {
+      revision: this.dataRevision,
+      laneCount: this.laneCount,
+      hasMore: this.hasMore,
+      selectedHash: this.selectedHash,
+      rows
+    };
   }
 
   updateVisibleSelection() {

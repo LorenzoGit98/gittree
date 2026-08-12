@@ -1,4 +1,4 @@
-/* global WorktreeAgentPanel */
+/* global WorktreeAgentPanel, InspectorWorkspace */
 class GitTreeApp {
   constructor() {
     this.state = { repo: null, activeRepoIndex: -1, currentBranch: null };
@@ -44,6 +44,23 @@ class GitTreeApp {
       this
     );
     this.components.diffViewer = new DiffViewer(document.getElementById('detail-body'), this);
+    this.components.inspectorWorkspace = new InspectorWorkspace({
+      container: document.getElementById('inspector-workspace'),
+      graphContainer: document.getElementById('inspector-graph-view'),
+      filesPanel: document.getElementById('inspector-files-panel'),
+      fileList: document.getElementById('inspector-file-list'),
+      filesToggle: document.getElementById('btn-toggle-inspector-files'),
+      diffContainer: document.getElementById('detail-body'),
+      translate: t,
+      storage: localStorage,
+      onGraphSelect: hash => this.components.graphView.select(hash),
+      onGraphRequestMore: () => this.components.graphView.loadNextPage(),
+      onFileSelect: path => {
+        if (this.components.diffViewer.scrollToFile(path)) this.pushInspectorPayload?.();
+      },
+      onFilesOpenChange: () => this.pushInspectorPayload?.()
+    });
+    this.components.inspectorWorkspace.mount();
     this.components.search = new GlobalSearch(this);
     this.components.compare = new BranchCompare(this);
     this.components.commitCompare = new CommitCompare(this);
@@ -522,7 +539,24 @@ class GitTreeApp {
     if (!this.state.repo) return;
     await this.components.diffViewer.showDiffForCommit(this.state.repo.path, hash);
     this.animateContentRefresh(document.getElementById('detail-body'));
-    this.pushInspectorPayload?.();
+    this.syncInspectorWorkspace();
+  }
+
+  syncInspectorWorkspace(options = {}) {
+    const graph = this.components.graphView?.getInspectorSnapshot?.() || {
+      revision: 0,
+      laneCount: 1,
+      hasMore: false,
+      selectedHash: null,
+      rows: []
+    };
+    this.components.inspectorWorkspace?.update({
+      graph,
+      selectedHash: graph.selectedHash,
+      files: this.components.diffViewer?.fileSummaries || [],
+      selectedFile: this.components.diffViewer?.selectedFilePath || null
+    });
+    if (options.push !== false) this.pushInspectorPayload?.();
   }
 
   async afterBranchCheckout(result = {}, repoPath = null) {
@@ -727,7 +761,11 @@ class GitTreeApp {
         mode,
         eyebrow: t('details.eyebrow'),
         modeLabel: t(mode === 'split' ? 'details.split' : 'details.unified'),
-        wordLevel: Boolean(this.components.diffViewer?.wordLevel)
+        wordLevel: Boolean(this.components.diffViewer?.wordLevel),
+        graph: this.components.graphView?.getInspectorSnapshot?.(),
+        files: this.components.diffViewer?.fileSummaries || [],
+        selectedFile: this.components.diffViewer?.selectedFilePath || null,
+        filesOpen: this.components.inspectorWorkspace?.filesOpen !== false
       };
       if (html.length > 2_000_000 && this.components.diffViewer?.currentDiff) {
         payload.diffText = this.components.diffViewer.currentDiff;
@@ -769,6 +807,7 @@ class GitTreeApp {
     this.setupShortcutHints();
     this.updateWindowChrome(this.windowState);
     this.setInspectorState(this.inspectorState, false);
+    this.components.inspectorWorkspace?.refreshTranslations();
     if (this.state.repo) {
       this.components.branchList.render();
       this.components.graphView.render();

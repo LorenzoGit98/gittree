@@ -19,6 +19,7 @@
   <link rel="stylesheet" href="styles/changes.css">
   <link rel="stylesheet" href="styles/pull-requests.css">
   <link rel="stylesheet" href="styles/diff-viewer.css">
+  <link rel="stylesheet" href="styles/inspector-workspace.css">
   <link rel="stylesheet" href="styles/search.css">
   <link rel="stylesheet" href="styles/merge.css">
   <link rel="stylesheet" href="styles/conflicts.css">
@@ -584,11 +585,36 @@
             </button>
           </div>
         </div>
-        <div id="detail-body" class="detail-panel-body">
-          <div class="diff-placeholder">
-            <i class="ph ph-cursor-click"></i>
-            <span data-i18n="details.placeholder">Select a commit to inspect its changes.</span>
+        <div id="inspector-workspace" class="inspector-workspace">
+          <aside id="inspector-graph-panel" class="inspector-graph-panel" aria-label="Commit graph" data-i18n-aria-label="details.graphTitle">
+            <header class="inspector-side-header">
+              <div class="inspector-side-heading">
+                <strong data-i18n="details.graphTitle">Commit graph</strong>
+                <small data-i18n="details.graphHint">Hover a node for details</small>
+              </div>
+            </header>
+            <div id="inspector-graph-view" class="inspector-graph-view" role="list"></div>
+          </aside>
+          <div class="inspector-diff-pane">
+            <div id="detail-body" class="detail-panel-body">
+              <div class="diff-placeholder">
+                <i class="ph ph-cursor-click"></i>
+                <span data-i18n="details.placeholder">Select a commit to inspect its changes.</span>
+              </div>
+            </div>
           </div>
+          <aside id="inspector-files-panel" class="inspector-files-panel" aria-label="Changed files" data-i18n-aria-label="details.fileListTitle">
+            <header class="inspector-side-header">
+              <div class="inspector-side-heading">
+                <strong data-i18n="details.fileListTitle">Changed files</strong>
+                <small data-inspector-file-count>0 files</small>
+              </div>
+              <button id="btn-toggle-inspector-files" class="btn-icon" type="button" aria-controls="inspector-file-list" aria-expanded="true" title="Hide changed files" data-i18n-title="details.filesClose">
+                <i class="ph ph-caret-right" aria-hidden="true"></i>
+              </button>
+            </header>
+            <div id="inspector-file-list" class="inspector-file-list" role="listbox"></div>
+          </aside>
         </div>
       </aside>
     </div>
@@ -652,6 +678,8 @@
 <script src="localized-date-formatter.js"></script>
 <script src="components/graph-layout.js"></script>
 <script src="components/graph-view.js"></script>
+<script src="components/inspector-graph.js"></script>
+<script src="components/inspector-workspace.js"></script>
 <script src="components/changes-view.js"></script>
 <script src="components/pull-request-view.js"></script>
 <script src="components/diff-viewer.js"></script>

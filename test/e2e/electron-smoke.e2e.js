@@ -149,11 +149,42 @@ test('Electron opens a deep-linked repository and renders its deterministic hist
     const maximizedInspector = await page.evaluate(() => ({
       titleSize: getComputedStyle(document.getElementById('detail-title')).fontSize,
       bodyPadding: getComputedStyle(document.getElementById('detail-body')).paddingTop,
-      splitActive: document.getElementById('btn-diff-split').classList.contains('active')
+      splitActive: document.getElementById('btn-diff-split').classList.contains('active'),
+      graphDisplay: getComputedStyle(document.getElementById('inspector-graph-panel')).display,
+      filesDisplay: getComputedStyle(document.getElementById('inspector-files-panel')).display,
+      graphRows: document.querySelectorAll('.inspector-graph-row').length,
+      fileItems: document.querySelectorAll('.inspector-file-item').length,
+      graphText: document.querySelector('.inspector-graph-row')?.innerText || ''
     }));
     assert.equal(maximizedInspector.titleSize, '20px');
     assert.equal(maximizedInspector.bodyPadding, '20px');
     assert.equal(maximizedInspector.splitActive, true);
+    assert.equal(maximizedInspector.graphDisplay, 'flex');
+    assert.equal(maximizedInspector.filesDisplay, 'flex');
+    assert.ok(maximizedInspector.graphRows >= 1);
+    assert.ok(maximizedInspector.fileItems >= 1);
+    assert.equal(maximizedInspector.graphText, '');
+
+    await page.locator('.inspector-graph-row').first().hover();
+    await page.locator('.inspector-commit-tooltip.is-visible').waitFor();
+    assert.match(
+      await page.locator('.inspector-commit-tooltip').innerText(),
+      /main|Initial fixture commit/i
+    );
+    await page.locator('.inspector-file-item').first().click();
+    await page.locator('.diff-file-block.is-file-target').waitFor();
+    assert.equal(
+      await page.locator('.inspector-file-item').first().getAttribute('aria-selected'),
+      'true'
+    );
+    await page.locator('#btn-toggle-inspector-files').click();
+    assert.equal(
+      await page.locator('#inspector-workspace').evaluate(element => (
+        element.classList.contains('files-collapsed')
+      )),
+      true
+    );
+    await page.locator('#btn-toggle-inspector-files').click();
     await page.locator('#btn-maximize-inspector').click();
     await page.waitForFunction(() => (
       !document.getElementById('workspace-body').classList.contains('inspector-maximized')
@@ -163,16 +194,26 @@ test('Electron opens a deep-linked repository and renders its deterministic hist
     await page.locator('#btn-popout-inspector').click();
     const detachedInspector = await detachedWindowPromise;
     await detachedInspector.locator('.inspector-window-header').waitFor();
+    await detachedInspector.locator('.inspector-graph-row').first().waitFor();
+    await detachedInspector.locator('.inspector-file-item').first().waitFor();
     const detachedLayout = await detachedInspector.evaluate(() => ({
       width: window.innerWidth,
       title: document.getElementById('inspector-title').textContent,
       meta: document.getElementById('inspector-meta').textContent,
-      contentPadding: getComputedStyle(document.getElementById('inspector-body')).paddingTop
+      contentPadding: getComputedStyle(document.getElementById('inspector-body')).paddingTop,
+      graphRows: document.querySelectorAll('.inspector-graph-row').length,
+      fileItems: document.querySelectorAll('.inspector-file-item').length,
+      graphDisplay: getComputedStyle(document.getElementById('inspector-graph-panel')).display,
+      filesDisplay: getComputedStyle(document.getElementById('inspector-files-panel')).display
     }));
     assert.ok(detachedLayout.width >= 900);
     assert.match(detachedLayout.title, /Initial fixture commit/);
     assert.match(detachedLayout.meta, /file/);
     assert.equal(detachedLayout.contentPadding, '20px');
+    assert.ok(detachedLayout.graphRows >= 1);
+    assert.ok(detachedLayout.fileItems >= 1);
+    assert.equal(detachedLayout.graphDisplay, 'flex');
+    assert.equal(detachedLayout.filesDisplay, 'flex');
     await detachedInspector.close();
 
     const branchSearch = page.locator('#branch-search');

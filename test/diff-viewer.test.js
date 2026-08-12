@@ -92,3 +92,31 @@ test('split diff pairs deletions and additions on the same visual rows', () => {
   assert.equal(pairs[2].left.oldLine, 3);
   assert.equal(pairs[2].right.newLine, 2);
 });
+
+test('commit diff summaries expose file status and line counts for inspector navigation', () => {
+  const DiffViewer = loadDiffViewer();
+  const viewer = new DiffViewer({ innerHTML: '' }, {});
+  const summaries = viewer.extractFileSummaries([
+    'diff --git a/src/old.js b/src/new.js',
+    'similarity index 80%',
+    'rename from src/old.js',
+    'rename to src/new.js',
+    '@@ -1 +1,2 @@',
+    '-old',
+    '+new',
+    '+next',
+    'diff --git a/README.md b/README.md',
+    'new file mode 100644',
+    '@@ -0,0 +1 @@',
+    '+hello'
+  ].join('\n'));
+
+  assert.deepEqual(summaries, [
+    {
+      path: 'src/new.js', oldPath: 'src/old.js', status: 'R', additions: 2, deletions: 1
+    },
+    {
+      path: 'README.md', oldPath: null, status: 'A', additions: 1, deletions: 0
+    }
+  ]);
+});
