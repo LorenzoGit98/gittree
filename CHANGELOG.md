@@ -1,3 +1,10 @@
+## [0.11.2](https://github.com/giannoccarol/gittree/compare/v0.11.1...v0.11.2) (2026-08-12)
+
+
+### Bug Fixes
+
+* allow cloning repositories from tabs ([f786fac](https://github.com/giannoccarol/gittree/commit/f786facb564e06a7ef8e1506fcbc4ac061514e49))
+
 ## [0.11.1](https://github.com/giannoccarol/gittree/compare/v0.11.0...v0.11.1) (2026-08-12)
 
 
