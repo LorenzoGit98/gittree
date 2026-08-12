@@ -247,7 +247,7 @@ class SettingsView {
             </label>
             <div class="agent-adapter-settings">
               ${(Array.isArray(agentAdapters) ? agentAdapters : []).map(adapter => `<label class="settings-toolbar-row">
-                <div class="settings-toolbar-copy"><strong>${this.esc(adapter.label)}</strong><small>${this.esc(adapter.version || t('agents.cliNotFound'))}</small></div>
+                <div class="settings-toolbar-copy"><strong>${this.esc(adapter.label)}</strong><small>${this.esc(adapter.version || t(adapter.available ? 'agents.detected' : 'agents.cliNotFound'))}</small></div>
                 <span class="agent-adapter-state ${adapter.available ? 'is-available' : ''}">${this.esc(t(adapter.available ? 'agents.detected' : 'agents.unavailable'))}</span>
                 <span class="settings-switch"><input type="checkbox" data-agent-adapter="${this.esc(adapter.id)}"${agentSettings?.enabledAdapters?.includes(adapter.id) ? ' checked' : ''}><span aria-hidden="true"></span></span>
               </label>`).join('')}

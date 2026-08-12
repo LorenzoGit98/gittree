@@ -23,6 +23,44 @@ function getAdapter(id) {
   return adapter;
 }
 
+function accessibleFile(candidate, fileSystem, mode) {
+  if (!candidate) return false;
+  try {
+    fileSystem.accessSync(candidate, mode);
+    return fileSystem.statSync(candidate).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function windowsAdapterFallbacks(command, environment, fileSystem, pathModule) {
+  const candidates = [];
+  if (command === 'opencode' && environment.APPDATA) {
+    candidates.push(pathModule.join(
+      environment.APPDATA,
+      'npm',
+      'node_modules',
+      'opencode-ai',
+      'bin',
+      'opencode.exe'
+    ));
+  }
+  if (command === 'codex' && environment.LOCALAPPDATA) {
+    const runtimeRoot = pathModule.join(environment.LOCALAPPDATA, 'OpenAI', 'Codex', 'bin');
+    try {
+      const runtimeCandidates = fileSystem.readdirSync(runtimeRoot, { withFileTypes: true })
+        .filter(entry => entry.isDirectory())
+        .map(entry => pathModule.join(runtimeRoot, entry.name, 'codex.exe'))
+        .filter(candidate => accessibleFile(candidate, fileSystem, fileSystem.constants.F_OK))
+        .sort((left, right) => (
+          fileSystem.statSync(right).mtimeMs - fileSystem.statSync(left).mtimeMs
+        ));
+      candidates.push(...runtimeCandidates);
+    } catch { /* Codex Desktop is not installed */ }
+  }
+  return candidates;
+}
+
 function resolveAgentExecutable(command, {
   environment = process.env,
   platform = process.platform,
@@ -31,16 +69,26 @@ function resolveAgentExecutable(command, {
 } = {}) {
   const searchPath = environment.PATH || environment.Path || '';
   const extensions = platform === 'win32' ? ['.exe', '.com'] : [''];
+  const directCandidates = [];
   for (const directory of searchPath.split(pathModule.delimiter).filter(Boolean)) {
     for (const extension of extensions) {
-      const candidate = pathModule.join(directory.replace(/^"|"$/g, ''), `${command}${extension}`);
-      try {
-        fileSystem.accessSync(candidate, platform === 'win32' ? fileSystem.constants.F_OK : fileSystem.constants.X_OK);
-        return candidate;
-      } catch { /* continue searching PATH */ }
+      directCandidates.push(pathModule.join(
+        directory.replace(/^"|"$/g, ''),
+        `${command}${extension}`
+      ));
     }
   }
-  return null;
+  const mode = platform === 'win32' ? fileSystem.constants.F_OK : fileSystem.constants.X_OK;
+  const availableDirect = directCandidates.filter(candidate => accessibleFile(
+    candidate, fileSystem, mode
+  ));
+  if (platform !== 'win32') return availableDirect[0] || null;
+
+  const unrestricted = availableDirect.filter(candidate => (
+    !candidate.toLowerCase().includes('\\program files\\windowsapps\\')
+  ));
+  const fallbacks = windowsAdapterFallbacks(command, environment, fileSystem, pathModule);
+  return unrestricted[0] || fallbacks[0] || availableDirect[0] || null;
 }
 
 function detectAgentAdapters({ execute = execFile, resolveExecutable = resolveAgentExecutable } = {}) {
@@ -50,10 +98,24 @@ function detectAgentAdapters({ execute = execFile, resolveExecutable = resolveAg
       resolve({ id: adapter.id, label: adapter.label, available: false, version: '' });
       return;
     }
-    execute(executable, ['--version'], { windowsHide: true, timeout: 3000 }, (error, stdout, stderr) => {
-      const version = String(stdout || stderr || '').trim().split(/\r?\n/, 1)[0].slice(0, 120);
-      resolve({ id: adapter.id, label: adapter.label, available: !error, version: error ? '' : version });
-    });
+    try {
+      execute(executable, ['--version'], { windowsHide: true, timeout: 3000 }, (
+        error, stdout, stderr
+      ) => {
+        const started = !error || typeof error.code === 'number';
+        const version = error
+          ? ''
+          : String(stdout || stderr || '').trim().split(/\r?\n/, 1)[0].slice(0, 120);
+        resolve({
+          id: adapter.id,
+          label: adapter.label,
+          available: started,
+          version
+        });
+      });
+    } catch {
+      resolve({ id: adapter.id, label: adapter.label, available: false, version: '' });
+    }
   })));
 }
 
