@@ -1,3 +1,10 @@
+# [0.12.0](https://github.com/giannoccarol/gittree/compare/v0.11.2...v0.12.0) (2026-08-12)
+
+
+### Features
+
+* redesign inspector workspace ([c99cb75](https://github.com/giannoccarol/gittree/commit/c99cb75a63d3bcc51315f43cbac4efad58747005))
+
 ## [0.11.2](https://github.com/giannoccarol/gittree/compare/v0.11.1...v0.11.2) (2026-08-12)
 
 
