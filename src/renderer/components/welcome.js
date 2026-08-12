@@ -83,6 +83,11 @@ class WelcomeScreen {
             <span><strong>${t('discovery.single')}</strong><small>${t('discovery.singleHelp')}</small></span>
             <i class="ph ph-caret-right" aria-hidden="true"></i>
           </button>
+          <button class="repository-picker-option" type="button" data-mode="clone">
+            <i class="ph ph-download-simple" aria-hidden="true"></i>
+            <span><strong>${t('discovery.clone')}</strong><small>${t('discovery.cloneHelp')}</small></span>
+            <i class="ph ph-caret-right" aria-hidden="true"></i>
+          </button>
           <button class="repository-picker-option" type="button" data-mode="scan">
             <i class="ph ph-folders" aria-hidden="true"></i>
             <span><strong>${t('discovery.scan')}</strong><small>${t('discovery.scanHelp')}</small></span>
@@ -99,6 +104,10 @@ class WelcomeScreen {
     overlay.querySelector('[data-mode="single"]').onclick = async () => {
       this.closeRepositoryPicker();
       await this.openRepo();
+    };
+    overlay.querySelector('[data-mode="clone"]').onclick = async () => {
+      this.closeRepositoryPicker();
+      await this.cloneRepo();
     };
     overlay.querySelector('[data-mode="scan"]').onclick = async () => {
       const rootPath = await window.gitTree.selectDirectory();

@@ -2,7 +2,7 @@ const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-function loadWelcomeScreen(gitTree) {
+function loadWelcomeScreen(gitTree, documentOverride) {
   const filename = path.join(
     __dirname,
     '..',
@@ -13,7 +13,7 @@ function loadWelcomeScreen(gitTree) {
   );
   const elements = new Map();
   global.window = { gitTree };
-  global.document = {
+  global.document = documentOverride || {
     getElementById(id) {
       if (!elements.has(id)) {
         elements.set(id, {
@@ -29,6 +29,45 @@ function loadWelcomeScreen(gitTree) {
   };
   global.t = key => key;
   return require(filename);
+}
+
+function createPickerDocument() {
+  class FakeElement {
+    constructor() {
+      this.innerHTML = '';
+      this.onclick = null;
+      this.removed = false;
+      this.controls = new Map();
+      this.classList = { add() {}, remove() {} };
+    }
+
+    addEventListener() {}
+
+    remove() {
+      this.removed = true;
+    }
+
+    focus() {}
+
+    querySelector(selector) {
+      if (!this.controls.has(selector)) this.controls.set(selector, new FakeElement());
+      return this.controls.get(selector);
+    }
+  }
+
+  const elements = new Map();
+  const body = new FakeElement();
+  body.appendChild = element => { body.child = element; };
+  return {
+    getElementById(id) {
+      if (!elements.has(id)) elements.set(id, new FakeElement());
+      return elements.get(id);
+    },
+    createElement: () => new FakeElement(),
+    addEventListener() {},
+    removeEventListener() {},
+    body
+  };
 }
 
 test('a fresh install adds the first repository through the registered tabs component', async () => {
@@ -53,6 +92,24 @@ test('a fresh install adds the first repository through the registered tabs comp
 
   assert.deepEqual(added, [selectedPath]);
   assert.deepEqual(errors, []);
+});
+
+test('the repository picker opened from the tabs can start a clone', async () => {
+  const pickerDocument = createPickerDocument();
+  const WelcomeScreen = loadWelcomeScreen({}, pickerDocument);
+  const welcome = new WelcomeScreen();
+  let cloneStarted = false;
+  welcome.cloneRepo = async () => { cloneStarted = true; };
+
+  welcome.openRepositoryPicker();
+  const overlay = pickerDocument.body.child;
+
+  assert.match(overlay.innerHTML, /data-mode="clone"/);
+  await overlay.querySelector('[data-mode="clone"]').onclick();
+
+  assert.equal(cloneStarted, true);
+  assert.equal(overlay.removed, true);
+  assert.equal(welcome.repositoryPicker, null);
 });
 
 test('bulk repository import persists once and selects the first newly added repository', () => {
