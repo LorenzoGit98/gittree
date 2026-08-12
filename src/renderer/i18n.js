@@ -71,6 +71,9 @@ const I18n = {
             },
             tabs: {
               add: 'Add repository',
+              list: 'Open repositories',
+              pin: 'Pin repository tab',
+              unpin: 'Unpin repository tab',
               sync: 'Sync',
               syncState: '{{branch}}: {{ahead}} ahead, {{behind}} behind',
               syncedState: '{{branch}} is synchronized',
@@ -830,6 +833,9 @@ const I18n = {
             },
             tabs: {
               add: 'Aggiungi repository',
+              list: 'Repository aperti',
+              pin: 'Fissa tab repository',
+              unpin: 'Sblocca tab repository',
               sync: 'Sync',
               syncState: '{{branch}}: {{ahead}} avanti, {{behind}} indietro',
               syncedState: '{{branch}} è sincronizzato',

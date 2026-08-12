@@ -73,6 +73,16 @@ test('Electron opens a deep-linked repository and renders its deterministic hist
     assert.ok(await page.locator('.graph-row').count() < 100);
     assert.match(await page.locator('.graph-row').first().innerText(), /Initial fixture commit/);
 
+    const activeRepoTab = page.locator('.repo-tab.active');
+    const pinTab = activeRepoTab.locator('.repo-tab-pin');
+    await pinTab.click();
+    assert.equal(await activeRepoTab.getAttribute('class'), 'repo-tab active is-pinned');
+    assert.equal(await pinTab.getAttribute('aria-pressed'), 'true');
+    assert.match(
+      await page.evaluate(() => localStorage.getItem('gittree.repo-tabs.layout') || ''),
+      /pinned/
+    );
+
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     assert.equal(await page.evaluate(() => (
       window.matchMedia('(prefers-reduced-motion: reduce)').matches

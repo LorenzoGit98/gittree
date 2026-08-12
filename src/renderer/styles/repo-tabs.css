@@ -15,6 +15,7 @@
 }
 
 .repo-tab {
+  position: relative;
   min-width: 112px;
   max-width: 220px;
   height: 34px;
@@ -26,10 +27,40 @@
   border-radius: var(--radius-pill);
   background: var(--surface-secondary);
   color: var(--text-secondary);
-  cursor: pointer;
+  cursor: grab;
   flex-shrink: 0;
   font-size: var(--text-sm);
   transition: background var(--duration-fast) var(--ease-smooth), border-color var(--duration-fast) var(--ease-smooth), color var(--duration-fast) var(--ease-smooth), transform var(--duration-fast) var(--spring-gentle), box-shadow var(--duration-fast) var(--ease-smooth);
+}
+
+.repo-tab.is-pinned {
+  background: var(--surface-primary);
+}
+
+.repo-tab.is-dragging {
+  opacity: 0.45;
+  cursor: grabbing;
+  transform: scale(0.98);
+}
+
+.repo-tab.is-drag-over-before::after,
+.repo-tab.is-drag-over-after::after {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  width: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--primary);
+  content: '';
+  opacity: 1;
+}
+
+.repo-tab.is-drag-over-before::after {
+  left: -4px;
+}
+
+.repo-tab.is-drag-over-after::after {
+  right: -4px;
 }
 
 .repo-tab::before {
@@ -74,23 +105,51 @@
   height: 18px;
 }
 
-.repo-tab-close {
+.repo-tab-control {
   width: 18px;
   height: 18px;
+  flex: 0 0 18px;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: var(--surface-primary);
   border-radius: 50%;
   color: var(--text-tertiary);
+  cursor: pointer;
+  font: inherit;
   font-size: 12px;
   opacity: 0;
-  transition: opacity var(--duration-fast) var(--ease-smooth), background var(--duration-fast) var(--ease-smooth), color var(--duration-fast) var(--ease-smooth), transform var(--duration-fast) var(--spring-gentle);
+  transition: opacity var(--duration-fast) var(--ease-smooth), transform var(--duration-fast) var(--spring-gentle);
 }
 
-.repo-tab:hover .repo-tab-close,
-.repo-tab.active .repo-tab-close {
+.repo-tab:hover .repo-tab-control,
+.repo-tab.active .repo-tab-control,
+.repo-tab-control.is-pinned,
+.repo-tab-control:focus-visible {
   opacity: 1;
+}
+
+.repo-tab-control:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.repo-tab-pin {
+  margin-left: 0;
+}
+
+.repo-tab-pin.is-pinned {
+  color: var(--primary);
+  transform: rotate(-18deg);
+}
+
+.repo-tab-pin:hover {
+  background: var(--primary-soft);
+  color: var(--primary);
+  transform: rotate(-18deg) scale(1.1);
 }
 
 .repo-tab-close:hover {

@@ -27,7 +27,10 @@ class GitTreeApp {
 
   async init() {
     this.components.welcome = new WelcomeScreen();
-    this.components.repoTabs = new RepoTabs(document.getElementById('repo-tab-list'), this);
+    this.components.repoTabs = new RepoTabs(document.getElementById('repo-tab-list'), this, {
+      storage: localStorage,
+      platform: window.gitTree.platform
+    });
     this.components.settings = new SettingsView(this);
     this.components.branchContextMenu = new BranchContextMenu(this);
     this.components.commitContextMenu = new CommitContextMenu(this);
@@ -170,7 +173,7 @@ class GitTreeApp {
     if (repos && repos.length > 0) {
       const active = await window.gitTree.getActiveRepo();
       if (active) {
-        this.state.activeRepoIndex = repos.findIndex(r => r.path === active.path);
+        this.components.repoTabs.syncActiveIndex(active.path);
         this.components.repoTabs.render();
         await this.openRepo(active);
         return;
@@ -808,6 +811,7 @@ class GitTreeApp {
     this.updateWindowChrome(this.windowState);
     this.setInspectorState(this.inspectorState, false);
     this.components.inspectorWorkspace?.refreshTranslations();
+    this.components.repoTabs?.render();
     if (this.state.repo) {
       this.components.branchList.render();
       this.components.graphView.render();
