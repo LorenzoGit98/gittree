@@ -1,3 +1,10 @@
+## [0.11.1](https://github.com/giannoccarol/gittree/compare/v0.11.0...v0.11.1) (2026-08-12)
+
+
+### Bug Fixes
+
+* detect Windows agent CLI installations ([d4420c2](https://github.com/giannoccarol/gittree/commit/d4420c2663a99d6d28257f1d8d2309411d4e8f1c))
+
 # [0.11.0](https://github.com/giannoccarol/gittree/compare/v0.10.0...v0.11.0) (2026-08-11)
 
 
