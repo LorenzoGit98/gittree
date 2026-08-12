@@ -1,3 +1,10 @@
+# [0.13.0](https://github.com/giannoccarol/gittree/compare/v0.12.0...v0.13.0) (2026-08-12)
+
+
+### Features
+
+* reorder and pin repository tabs ([07d72b7](https://github.com/giannoccarol/gittree/commit/07d72b7ed54fb1a49a205e0458e6bf6adf8bc2db))
+
 # [0.12.0](https://github.com/giannoccarol/gittree/compare/v0.11.2...v0.12.0) (2026-08-12)
 
 
