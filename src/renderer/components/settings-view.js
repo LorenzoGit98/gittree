@@ -9,6 +9,8 @@ class SettingsView {
     this.assignmentsStorageKey = 'gittree.settings.profileAssignments';
     this.inFlight = new Set();
     this.timer = null;
+    this.updateState = null;
+    this.unsubscribeUpdates = window.gitTree.onUpdateState(state => this.handleUpdateState(state));
     document.addEventListener('keydown', event => {
       if (event.key === 'Escape' && this.dialog.classList.contains('settings-dialog')) {
         event.preventDefault();
@@ -902,69 +904,71 @@ class SettingsView {
 
     const checkUpdateBtn = this.dialog.querySelector('#btn-check-update');
     const checkUpdateStatus = this.dialog.querySelector('#check-update-status');
-    let unsubscribeState = null;
-    
+
     if (checkUpdateBtn) {
       checkUpdateBtn.onclick = async () => {
-        // Rimuovi vecchio listener se esiste
-        if (unsubscribeState) { unsubscribeState(); unsubscribeState = null; }
-        
+        const status = this.updateState?.status;
+        if (status === 'downloaded') {
+          await window.gitTree.installUpdate();
+          return;
+        }
+        if (status === 'available') {
+          const result = await window.gitTree.downloadUpdate();
+          this.handleUpdateState(result?.state || { status: 'error', error: result?.error });
+          return;
+        }
         checkUpdateBtn.disabled = true;
         checkUpdateStatus.textContent = t('settings.checking');
-        
-        try {
-          const result = await window.gitTree.checkForUpdates();
-          
-          if (result?.error) {
-            checkUpdateStatus.textContent = result.error;
-            checkUpdateBtn.disabled = false;
-            return;
-          }
-          
-          // Usa onUpdateState per ricevere aggiornamenti asincroni
-          unsubscribeState = window.gitTree.onUpdateState(state => {
-            if (!checkUpdateStatus) return;
-            
-            switch (state.status) {
-              case 'checking':
-                checkUpdateStatus.textContent = t('settings.checking');
-                break;
-              case 'available':
-                checkUpdateStatus.textContent = `${t('settings.updateAvailable')} (${state.availableVersion})`;
-                checkUpdateBtn.textContent = t('settings.downloadUpdate');
-                break;
-              case 'downloaded':
-                checkUpdateStatus.textContent = t('settings.updateReady');
-                checkUpdateBtn.textContent = t('settings.installUpdate');
-                break;
-              case 'downloading':
-                checkUpdateStatus.textContent = `${t('settings.downloading')} ${state.progress}%`;
-                break;
-              case 'idle':
-              case 'error':
-              default:
-                checkUpdateStatus.textContent = t('settings.upToDate');
-                checkUpdateBtn.textContent = t('settings.checkUpdate');
-                this.app.showToast(t('settings.upToDate'), 'success');
-                break;
-            }
-            
-            checkUpdateBtn.disabled = false;
-            
-            // Rimuovi listener dopo che abbiamo ricevuto lo stato finale
-            if (['idle', 'available', 'downloaded', 'error'].includes(state.status)) {
-              if (unsubscribeState) { unsubscribeState(); unsubscribeState = null; }
-            }
-          });
-          
-        } catch (err) {
-          if (checkUpdateStatus) {
-            checkUpdateStatus.textContent = err.message || t('common.error');
-            checkUpdateBtn.disabled = false;
-          }
-          if (unsubscribeState) { unsubscribeState(); unsubscribeState = null; }
-        }
+        const result = await window.gitTree.checkForUpdates();
+        this.handleUpdateState(result?.state || { status: 'error', error: result?.error });
       };
+    }
+    this.refreshUpdateState();
+  }
+
+  async refreshUpdateState() {
+    const state = await window.gitTree.getUpdateState();
+    if (state) this.handleUpdateState(state);
+  }
+
+  handleUpdateState(state) {
+    if (!state) return;
+    this.updateState = state;
+    const button = this.dialog.querySelector('#btn-check-update');
+    const status = this.dialog.querySelector('#check-update-status');
+    this.applyUpdateState(status, button, state);
+  }
+
+  applyUpdateState(statusEl, button, state) {
+    if (!statusEl || !button) return;
+    const status = state?.status;
+    const label = button.querySelector('span');
+    button.disabled = ['checking', 'downloading', 'disabled'].includes(status);
+    switch (status) {
+      case 'checking':
+        statusEl.textContent = t('settings.checking');
+        break;
+      case 'available':
+        statusEl.textContent = `${t('settings.updateAvailable')} (${state.availableVersion})`;
+        if (label) label.textContent = t('settings.downloadUpdate');
+        break;
+      case 'downloading':
+        statusEl.textContent = `${t('settings.downloading')} ${state.progress}%`;
+        break;
+      case 'downloaded':
+        statusEl.textContent = t('settings.updateReady');
+        if (label) label.textContent = t('settings.installUpdate');
+        break;
+      case 'error':
+        statusEl.textContent = state.error || t('common.error');
+        if (label) label.textContent = t('settings.checkUpdate');
+        break;
+      case 'disabled':
+        statusEl.textContent = t('settings.updateUnavailable');
+        break;
+      default:
+        statusEl.textContent = t('settings.upToDate');
+        if (label) label.textContent = t('settings.checkUpdate');
     }
   }
 
