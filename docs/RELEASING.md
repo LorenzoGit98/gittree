@@ -84,7 +84,8 @@ Il push del tag attiva `.github/workflows/release.yml` che:
 
 1. verifica che il tag `vX.Y.Z` coincida con `package.json`;
 2. verifica la presenza dei client ID OAuth pubblici;
-3. esegue test e audit;
+3. esegue il gate di rilascio scoped (contract test, audit design, lint) —
+   la suite completa è già eseguita dal CI sullo stesso commit;
 4. crea una sola GitHub Release in stato draft;
 5. costruisce Windows, macOS e Linux sui rispettivi runner;
 6. valida separatamente installer, payload e manifest OTA;
