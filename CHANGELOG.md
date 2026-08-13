@@ -1,3 +1,10 @@
+## [0.15.1](https://github.com/giannoccarol/gittree/compare/v0.15.0...v0.15.1) (2026-08-13)
+
+
+### Performance Improvements
+
+* **quality:** scope local quality and benchmarks to touched areas ([872edf0](https://github.com/giannoccarol/gittree/commit/872edf078ac1ab6b2fdc30bb8ea52f721a3b8754))
+
 # [0.15.0](https://github.com/giannoccarol/gittree/compare/v0.14.1...v0.15.0) (2026-08-13)
 
 
