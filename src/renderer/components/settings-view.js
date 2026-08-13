@@ -49,6 +49,9 @@ class SettingsView {
       const agentSettings = scope === 'about'
         ? null
         : await window.gitTree.getAgentSettings?.().catch(() => null);
+      const aiSettings = scope === 'about'
+        ? null
+        : await window.gitTree.getAiSettings?.().catch(() => null);
     const schedules = this.readObject(this.autoFetchStorageKey);
     let profiles = this.readArray(this.profilesStorageKey);
     const assignments = this.readObject(this.assignmentsStorageKey);
@@ -96,6 +99,7 @@ class SettingsView {
           <div class="settings-nav-group">
             <span class="settings-nav-label">${this.esc(t('settings.automationGroup'))}</span>
             ${this.renderNavigationItem('agents', 'robot', t('agents.settingsTitle'))}
+            ${this.renderNavigationItem('ai', 'sparkle', t('ai.settingsTitle'))}
           </div>
           <div class="settings-nav-group settings-nav-group-system">
             <span class="settings-nav-label">${this.esc(t('settings.systemGroup'))}</span>
@@ -264,6 +268,82 @@ class SettingsView {
                 <span>${this.esc(t('common.loading'))}</span>
               </div>
             </div>
+          </div>
+        </section>
+
+        <section class="settings-section" data-settings-section="ai">
+          <div class="settings-section-heading">
+            <i class="ph ph-sparkle" aria-hidden="true"></i>
+            <div>
+              <h3>${this.esc(t('ai.settingsTitle'))}</h3>
+              <p>${this.esc(t('ai.settingsHelp'))}</p>
+            </div>
+          </div>
+          <div class="settings-toolbar-rows ai-settings-rows">
+            <label class="settings-toolbar-row">
+              <div class="settings-toolbar-copy">
+                <strong>${this.esc(t('ai.provider'))}</strong>
+                <small id="ai-opencode-status">${aiSettings?.provider === 'opencode' ? this.esc(t('ai.opencodeHelp')) : ''}</small>
+              </div>
+              <select id="settings-ai-provider" class="commit-input ai-settings-select">
+                <option value="opencode"${aiSettings?.provider === 'opencode' ? ' selected' : ''}>${this.esc(t('ai.providerOpencode'))}</option>
+                <option value="openai"${aiSettings?.provider === 'openai' ? ' selected' : ''}>${this.esc(t('ai.providerOpenai'))}</option>
+                <option value="anthropic"${aiSettings?.provider === 'anthropic' ? ' selected' : ''}>${this.esc(t('ai.providerAnthropic'))}</option>
+              </select>
+            </label>
+            <div class="settings-toolbar-row" data-ai-field="baseUrl">
+              <div class="settings-toolbar-copy">
+                <strong>${this.esc(t('ai.baseUrl'))}</strong>
+                <small>${this.esc(t('ai.baseUrlHelp'))}</small>
+              </div>
+              <input id="settings-ai-base-url" class="commit-input ai-settings-input" maxlength="2048"
+                value="${this.esc(aiSettings?.baseUrl || '')}" placeholder="https://api.deepseek.com/v1">
+            </div>
+            <div class="settings-toolbar-row" data-ai-field="model">
+              <div class="settings-toolbar-copy">
+                <strong>${this.esc(t('ai.model'))}</strong>
+                <small>${this.esc(t('ai.modelHelp'))}</small>
+              </div>
+              <input id="settings-ai-model" class="commit-input ai-settings-input" maxlength="200"
+                value="${this.esc(aiSettings?.model || '')}" placeholder="deepseek-chat">
+            </div>
+            <div class="settings-toolbar-row" data-ai-field="key">
+              <div class="settings-toolbar-copy">
+                <strong>${this.esc(t('ai.apiKey'))}</strong>
+                <small id="ai-key-status">${this.esc(aiSettings?.keyConfigured ? t('ai.apiKeySaved') : t('ai.apiKeyMissing'))}</small>
+              </div>
+              <div class="settings-ai-key">
+                <input id="settings-ai-key" class="commit-input ai-settings-input" type="password"
+                  maxlength="400" placeholder="sk-…" autocomplete="off">
+                <button id="btn-ai-key-save" class="btn btn-small" type="button">${this.esc(t('ai.apiKeySave'))}</button>
+                <button id="btn-ai-key-remove" class="btn btn-small" type="button"${aiSettings?.keyConfigured ? '' : ' disabled'}>${this.esc(t('ai.apiKeyRemove'))}</button>
+              </div>
+            </div>
+            <label class="settings-toolbar-row" data-ai-field="language">
+              <div class="settings-toolbar-copy">
+                <strong>${this.esc(t('ai.language'))}</strong>
+              </div>
+              <select id="settings-ai-language" class="commit-input ai-settings-select">
+                <option value="auto"${aiSettings?.language !== 'en' && aiSettings?.language !== 'it' ? ' selected' : ''}>${this.esc(t('ai.languageAuto'))}</option>
+                <option value="en"${aiSettings?.language === 'en' ? ' selected' : ''}>${this.esc(t('ai.languageEn'))}</option>
+                <option value="it"${aiSettings?.language === 'it' ? ' selected' : ''}>${this.esc(t('ai.languageIt'))}</option>
+              </select>
+            </label>
+            <div class="settings-toolbar-row" data-ai-field="test">
+              <div class="settings-toolbar-copy">
+                <strong>${this.esc(t('ai.testConnection'))}</strong>
+              </div>
+              <div class="settings-ai-key">
+                <button id="btn-ai-test" class="btn btn-small" type="button">${this.esc(t('ai.testConnection'))}</button>
+                <span id="ai-test-status" class="settings-update-status" aria-live="polite"></span>
+              </div>
+            </div>
+          </div>
+          <div class="settings-section-footer">
+            <button id="btn-ai-save" class="btn btn-primary" type="button">
+              <i class="ph ph-floppy-disk" aria-hidden="true"></i>
+              ${this.esc(t('ai.save'))}
+            </button>
           </div>
         </section>
 
@@ -928,6 +1008,107 @@ class SettingsView {
       };
     }
     this.refreshUpdateState();
+    this.bindAiSettings();
+  }
+
+  bindAiSettings() {
+    const provider = this.dialog.querySelector('#settings-ai-provider');
+    if (!provider) return;
+    const syncFields = () => this.syncAiFields();
+    provider.onchange = syncFields;
+    syncFields();
+
+    this.dialog.querySelector('#btn-ai-save').onclick = async () => {
+      const result = await window.gitTree.setAiSettings({
+        provider: provider.value,
+        baseUrl: this.dialog.querySelector('#settings-ai-base-url').value,
+        model: this.dialog.querySelector('#settings-ai-model').value,
+        language: this.dialog.querySelector('#settings-ai-language').value
+      });
+      if (result?.error) this.app.showToast(result.error, 'error');
+      else this.app.showToast(t('ai.saved'), 'success');
+    };
+
+    this.dialog.querySelector('#btn-ai-key-save').onclick = async () => {
+      const input = this.dialog.querySelector('#settings-ai-key');
+      const result = await window.gitTree.setAiKey(input.value);
+      if (result?.error) {
+        this.app.showToast(result.error, 'error');
+        return;
+      }
+      input.value = '';
+      this.syncAiKeyStatus(true);
+      this.app.showToast(t('ai.keySaved'), 'success');
+    };
+
+    this.dialog.querySelector('#btn-ai-key-remove').onclick = async () => {
+      await window.gitTree.clearAiKey();
+      this.syncAiKeyStatus(false);
+      this.app.showToast(t('ai.keyRemoved'), 'success');
+    };
+
+    this.dialog.querySelector('#btn-ai-test').onclick = async () => {
+      const button = this.dialog.querySelector('#btn-ai-test');
+      const status = this.dialog.querySelector('#ai-test-status');
+      button.disabled = true;
+      status.textContent = t('ai.testing');
+      const result = await window.gitTree.testAiConnection();
+      button.disabled = false;
+      if (result?.error) {
+        status.textContent = `${t('ai.testFailed')}: ${result.error}`;
+        return;
+      }
+      status.textContent = t('ai.testOk');
+    };
+
+    this.hydrateOpencodeStatus();
+  }
+
+  syncAiFields() {
+    const provider = this.dialog.querySelector('#settings-ai-provider')?.value;
+    const status = this.dialog.querySelector('#ai-opencode-status');
+    if (!provider) return;
+    const show = field => {
+      this.dialog.querySelectorAll(`[data-ai-field="${field}"]`)
+        .forEach(row => row.classList.toggle('is-hidden', false));
+    };
+    const hide = field => {
+      this.dialog.querySelectorAll(`[data-ai-field="${field}"]`)
+        .forEach(row => row.classList.toggle('is-hidden', true));
+    };
+    if (provider === 'opencode') {
+      ['baseUrl', 'model', 'key', 'test'].forEach(hide);
+      show('language');
+      if (status) status.textContent = t('ai.opencodeHelp');
+    } else if (provider === 'anthropic') {
+      show('model'); show('key'); show('test'); show('language');
+      hide('baseUrl');
+      if (status) status.textContent = '';
+    } else {
+      ['baseUrl', 'model', 'key', 'test', 'language'].forEach(show);
+      if (status) status.textContent = '';
+    }
+  }
+
+  syncAiKeyStatus(configured) {
+    const status = this.dialog.querySelector('#ai-key-status');
+    const remove = this.dialog.querySelector('#btn-ai-key-remove');
+    if (status) {
+      status.textContent = configured ? t('ai.apiKeySaved') : t('ai.apiKeyMissing');
+    }
+    if (remove) remove.disabled = !configured;
+  }
+
+  async hydrateOpencodeStatus() {
+    const status = this.dialog.querySelector('#ai-opencode-status');
+    if (!status) return;
+    const adapters = await window.gitTree.detectAgentAdapters?.().catch(() => []);
+    const opencode = (Array.isArray(adapters) ? adapters : [])
+      .find(adapter => adapter?.id === 'opencode');
+    if (this.dialog.querySelector('#settings-ai-provider')?.value !== 'opencode') return;
+    status.textContent = opencode?.available
+      ? t('ai.opencodeDetected', { version: opencode.version || '' })
+      : t('ai.opencodeMissing');
   }
 
   async refreshUpdateState() {

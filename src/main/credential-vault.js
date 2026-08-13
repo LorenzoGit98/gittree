@@ -32,8 +32,8 @@ class CredentialVault {
   }
 
   validateProvider(provider) {
-    if (!['github', 'gitlab', 'azure'].includes(provider)) {
-      throw new Error(`Unsupported hosting provider: ${provider}`);
+    if (!['github', 'gitlab', 'azure', 'ai'].includes(provider)) {
+      throw new Error(`Unsupported provider: ${provider}`);
     }
     return provider;
   }

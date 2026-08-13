@@ -42,6 +42,7 @@ globals or renderer state.
 | Repository path, Git Adapter and common-directory serialization | `src/main/git/repository-session.js` and `repository-queue.js` | Repository session and linked-worktree workspace tests |
 | Hosting credentials, auth, retry and error policy | `src/main/hosting-service.js` and the credential vault | hosting service and IPC contract tests |
 | Provider list, detail and diff behavior | `src/main/hosting/providers/` | `test/hosting-provider-adapters.test.js` and `test/hosting-provider-read-contracts.test.js` |
+| AI settings, keys, prompts and provider requests | `src/main/ai/ai-service.js` with provider adapters, output parsing and agent environment export | `test/ai-service.test.js`, provider contracts and the AI performance benchmark |
 | Repository activation, readiness and stale-load cancellation | `src/renderer/repository-workspace-controller.js`; `repository-load-session.js` deduplicates reads inside one activation | `test/repository-workspace-controller.test.js`, load-session tests and Electron E2E |
 | Remote operation feedback | `src/renderer/remote-operation-controller.js` | `test/remote-operation-controller.test.js` and Electron E2E |
 | Keyboard commands and platform-specific shortcut presentation | `src/renderer/shortcut-controller.js` | `test/shortcut-controller.test.js` and semantic Electron E2E |

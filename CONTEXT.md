@@ -54,6 +54,11 @@ Privacy-first: no accounts, no telemetry, no repository upload.
 - **Hosting provider adapter** — the provider-specific Implementation of the
   normalized pull-request Interface. GitHub, GitLab and Azure endpoint details,
   payloads and fallbacks stay behind this Seam.
+- **AI capability** — the main-process capability that generates commit
+  messages and pull-request descriptions through a user-configured provider
+  (OpenAI-compatible, Anthropic or the local OpenCode CLI). Keys live in the
+  encrypted vault, requests happen only on explicit user action, prompts are
+  diff-bounded and outputs are parsed from a strict `TITLE:`/`BODY:` format.
 
 ## Architecture
 
@@ -70,6 +75,9 @@ Privacy-first: no accounts, no telemetry, no repository upload.
 - **Hosting implementation** — `hosting-service.js` orchestrates credentials,
   authentication, retries and normalized errors. `src/main/hosting/providers/`
   owns provider-specific pull-request behavior.
+- **AI implementation** — `src/main/ai/` owns the AiService facade, provider
+  adapters, prompt building, output parsing and agent environment export;
+  `ai-service.js` is the stable public Interface.
 - **Preload** (`src/preload.js`) — the only bridge: an explicit, whitelisted
   `window.gitTree` API. The inspector window uses a dedicated minimal preload.
 - **Renderer** (`src/renderer/`) — bento workspace with components per surface

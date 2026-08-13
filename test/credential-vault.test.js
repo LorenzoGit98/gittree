@@ -68,3 +68,26 @@ test('Linux basic_text backend keeps credentials in memory only and reports a wa
   assert.equal(fs.existsSync(storagePath), false);
   assert.equal(vault.getSecurityState().memoryOnly, true);
 });
+
+test('AI provider accounts use the encrypted vault and reject unknown providers', async t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'gittree-vault-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const storagePath = path.join(directory, 'hosting-vault.bin');
+  const vault = new CredentialVault({
+    storagePath,
+    safeStorage: fakeSafeStorage(),
+    platform: 'win32'
+  });
+
+  await vault.setAccount('ai', { apiKey: 'sk-encrypted-secret' });
+  assert.equal((await vault.getAccount('ai')).apiKey, 'sk-encrypted-secret');
+  const bytes = fs.readFileSync(storagePath, 'utf8');
+  assert.doesNotMatch(bytes, /sk-encrypted-secret/);
+
+  await vault.removeAccount('ai');
+  assert.equal(await vault.getAccount('ai'), null);
+  await assert.rejects(
+    () => vault.setAccount('openrouter', { apiKey: 'x' }),
+    /Unsupported provider/
+  );
+});

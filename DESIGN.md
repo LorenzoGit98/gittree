@@ -155,6 +155,7 @@ The desktop window is frameless. The repository tabs are the first visible row o
 - Light and dark themes both preserve hierarchy and contrast.
 - English and Italian keys are present for new user-facing copy.
 - Buttons, fields, tabs, dialogs, lists, empty states, and error states use shared contracts.
+- AI generation controls disable during flight and show a spinner; results fill editable fields and never replace user text without confirmation.
 - Keyboard focus, overflow, narrow layouts, and long repository/branch names are tested.
 - `npm run audit:design` passes.
 - `npm run perf:renderer` launches an isolated Playwright Electron fixture and passes its deterministic renderer contracts.

@@ -1017,6 +1017,13 @@ class PullRequestView {
           <label>${this.esc(t('pullRequests.createBodyField'))}
             <textarea name="body" class="pr-create-body" maxlength="65536" rows="5" placeholder="${this.esc(t('pullRequests.createBodyPlaceholder'))}"></textarea>
           </label>
+          <div class="pr-create-ai-row">
+            <button type="button" class="btn btn-small" id="pr-ai-generate">
+              <i class="ph ph-sparkle" aria-hidden="true"></i>
+              <span>${this.esc(t('pullRequests.aiGenerate'))}</span>
+            </button>
+            <span id="pr-ai-status" class="settings-update-status" aria-live="polite"></span>
+          </div>
           <div class="pr-create-grid">
             <label>${this.esc(t('pullRequests.createSource'))}
               <select name="source">${options}</select>
@@ -1056,6 +1063,38 @@ class PullRequestView {
       if (form.elements.workItems) {
         form.elements.workItems.value = workItems;
       }
+      const aiButton = dialog.querySelector('#pr-ai-generate');
+      if (aiButton) {
+        aiButton.onclick = async () => {
+          aiButton.disabled = true;
+          const aiIcon = aiButton.querySelector('i');
+          const aiLabel = aiButton.querySelector('span');
+          aiIcon.className = 'ph ph-circle-notch';
+          aiLabel.textContent = t('pullRequests.aiGenerating');
+          try {
+            const result = await window.gitTree.generatePrDescription(this.repoPath, {
+              source: form.elements.source.value,
+              target: form.elements.target.value,
+              language: await this.aiLanguage()
+            });
+            if (result?.error) {
+              this.app.showToast(result.error, 'error');
+              return;
+            }
+            if (!form.elements.title.value && result.summary) {
+              form.elements.title.value = result.summary;
+            }
+            if (!form.elements.body.value && result.body) {
+              form.elements.body.value = result.body;
+            }
+            this.app.showToast(t('pullRequests.aiGenerated'), 'success');
+          } finally {
+            aiButton.disabled = false;
+            aiIcon.className = 'ph ph-sparkle';
+            aiLabel.textContent = t('pullRequests.aiGenerate');
+          }
+        };
+      }
       const finish = value => {
         dialog.classList.remove('pr-create-dialog');
         overlay.classList.add('is-hidden');
@@ -1084,6 +1123,15 @@ class PullRequestView {
       };
       form.elements.title.focus();
     });
+  }
+
+  async aiLanguage() {
+    const settings = await window.gitTree.getAiSettings().catch(() => null);
+    if (settings?.language === 'en' || settings?.language === 'it') {
+      return settings.language;
+    }
+    const current = localStorage.getItem('gittree.language') || 'en';
+    return current.startsWith('it') ? 'it' : 'en';
   }
 
   esc(value) {

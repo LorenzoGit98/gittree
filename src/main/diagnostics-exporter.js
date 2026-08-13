@@ -19,7 +19,9 @@ function redactText(value, repositoryPaths = []) {
   return redacted
     .replace(/https?:\/\/[^\s"']+/gi, '[REDACTED_URL]')
     .replace(/\b(?:ghp|gho|glpat|pat)[-_A-Za-z0-9]{8,}\b/g, '[REDACTED_TOKEN]')
+    .replace(/\bsk-(?:ant-)?[A-Za-z0-9_-]{8,}\b/g, '[REDACTED_TOKEN]')
     .replace(/(authorization[=:]\s*)[^\s,;]+/gi, '$1[REDACTED_TOKEN]')
+    .replace(/(x-api-key[=:]\s*)[^\s,;]+/gi, '$1[REDACTED_TOKEN]')
     .replace(/(token[=:]\s*)[^\s,;]+/gi, '$1[REDACTED_TOKEN]')
     .replace(/\b[A-Za-z]:\\[^\r\n\t"']+/g, '[REDACTED_PATH]')
     .replace(/(^|[\s"'=])\/(?:Users|home|tmp|var|private|opt)\/[^\s,"']+/g, '$1[REDACTED_PATH]');

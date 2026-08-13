@@ -7,6 +7,8 @@ function sanitizeMessage(message) {
   return String(message)
     .replace(/(ghp|gho|glpat|pat)[-_A-Za-z0-9]{8,}/g, '$1***')
     .replace(/(authorization[=:]\s*)[^\s,;]+/gi, '$1***')
+    .replace(/(x-api-key[=:]\s*)[^\s,;]+/gi, '$1***')
+    .replace(/\bsk-(?:ant-)?[A-Za-z0-9_-]{8,}\b/g, 'sk-***')
     .replace(/(token[=:]\s*)[^\s,;]+/gi, '$1***');
 }
 

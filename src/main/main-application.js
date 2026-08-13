@@ -19,7 +19,11 @@ const { registerHostingHandlers } = require('./ipc/hosting-handlers');
 const { registerRepositoryHandlers } = require('./ipc/repository-handlers');
 const { registerWindowApplicationHandlers } = require('./ipc/window-application-handlers');
 const { registerAgentHandlers } = require('./ipc/agent-handlers');
+const { registerAiHandlers } = require('./ipc/ai-handlers');
 const AgentSessionService = require('./agents/agent-session-service');
+const { resolveAgentExecutable } = require('./agents/agent-adapters');
+const AiService = require('./ai/ai-service');
+const { execFile } = require('node:child_process');
 const { createPty } = require('./agents/pty-factory');
 const { createInspectorWindowController } = require('./inspector-window-controller');
 const { createApplicationRuntime } = require('./application-runtime');
@@ -71,6 +75,7 @@ function createModules(dependencies) {
     isWorkingTreeRepository: dependencies.isWorkingTreeRepository || isWorkingTreeRepository,
     convertWorkspaceProfile: dependencies.convertWorkspaceProfile || convertWorkspaceProfile,
     AgentSessionService: dependencies.AgentSessionService || AgentSessionService,
+    AiService: dependencies.AiService || AiService,
     createPty: dependencies.createPty || createPty
   };
 }
@@ -102,6 +107,7 @@ class MainApplication {
   this.updateService = null;
   this.hostingService = null;
   this.agentSessionService = null;
+  this.aiService = null;
   this.credentialVault = null;
   this.logger = null;
   this.inspectorController = null;
@@ -367,6 +373,11 @@ class MainApplication {
       showOpenDialog: (...args) => dialog.showOpenDialog(...args),
       getMainWindow: () => this.mainWindow
     });
+    registerAiHandlers({
+      registerHandler,
+      registerManagedRepoHandler,
+      aiService: this.aiService
+    });
   }
 
   handleDeepLink(url) {
@@ -417,6 +428,7 @@ class MainApplication {
       storagePath: path.join(app.getPath('userData'), 'agent-workspace.json'),
       repositoryWorkspace: this.repositoryWorkspace,
       createPty: this.modules.createPty,
+      extraEnv: () => (this.aiService ? this.aiService.getAgentEnvironment() : {}),
       emit: (channel, payload) => this.sendToRenderer(channel, payload)
     });
     this.credentialVault = new this.modules.CredentialVault({
@@ -424,6 +436,18 @@ class MainApplication {
       safeStorage,
       platform: this.platform
     });
+    this.aiService = new this.modules.AiService({
+      storagePath: path.join(app.getPath('userData'), 'ai-settings.json'),
+      vault: this.credentialVault,
+      fetch,
+      execute: execFile,
+      resolveExecutable: resolveAgentExecutable,
+      getStagedDiff: repoPath => this.getGitService(repoPath).getStagedDiff(),
+      getBranchComparison: (repoPath, base, compare) => (
+        this.getGitService(repoPath).getBranchComparison(base, compare)
+      )
+    });
+    await this.aiService.initialize();
     this.hostingService = new this.modules.HostingService({
       vault: this.credentialVault,
       oauthConfig: this.modules.loadOAuthConfig(app),
@@ -449,6 +473,7 @@ class MainApplication {
     this.hostingService = null;
     this.agentSessionService?.destroy?.();
     this.agentSessionService = null;
+    this.aiService = null;
     if (this.mainWindow && !this.mainWindow.isDestroyed()) this.mainWindow.destroy();
     this.mainWindow = null;
   }

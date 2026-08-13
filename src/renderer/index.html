@@ -460,10 +460,16 @@
                   <span class="eyebrow" data-i18n="changes.composerEyebrow">Create commit</span>
                   <h3 data-i18n="changes.composerTitle">Commit staged changes</h3>
                 </div>
-                <button id="btn-commit-identity" class="btn btn-quiet" type="button">
-                  <i class="ph ph-identification-card"></i>
-                  <span data-i18n="changes.identity">Identity</span>
-                </button>
+                <div class="commit-composer-actions">
+                  <button id="btn-ai-commit" class="btn btn-quiet" type="button">
+                    <i class="ph ph-sparkle"></i>
+                    <span data-i18n="changes.aiGenerate">Generate with AI</span>
+                  </button>
+                  <button id="btn-commit-identity" class="btn btn-quiet" type="button">
+                    <i class="ph ph-identification-card"></i>
+                    <span data-i18n="changes.identity">Identity</span>
+                  </button>
+                </div>
               </div>
               <input id="commit-summary" class="commit-input" maxlength="200" required data-i18n-placeholder="changes.summaryPlaceholder" placeholder="Commit summary">
               <textarea id="commit-body" class="commit-input commit-body" maxlength="100000" data-i18n-placeholder="changes.bodyPlaceholder" placeholder="Description (optional)"></textarea>

@@ -213,6 +213,30 @@ contextBridge.exposeInMainWorld('gitTree', {
   setEnabledAgentAdapters: adapterIds =>
     ipcRenderer.invoke('agent:adapters-set', adapterIds),
 
+  getAiSettings: () =>
+    ipcRenderer.invoke('ai:settings-get'),
+
+  setAiSettings: settings =>
+    ipcRenderer.invoke('ai:settings-set', settings),
+
+  setAiKey: key =>
+    ipcRenderer.invoke('ai:key-set', key),
+
+  clearAiKey: () =>
+    ipcRenderer.invoke('ai:key-clear'),
+
+  testAiConnection: () =>
+    ipcRenderer.invoke('ai:test-connection'),
+
+  generateCommitMessage: (repoPath, options) =>
+    ipcRenderer.invoke('ai:commit-message', repoPath, options),
+
+  generatePrDescription: (repoPath, options) =>
+    ipcRenderer.invoke('ai:pr-description', repoPath, options),
+
+  getStagedDiff: repoPath =>
+    ipcRenderer.invoke('git:staged-diff', repoPath),
+
   listAgentTasks: repoPath =>
     ipcRenderer.invoke('agent:tasks', repoPath),
 

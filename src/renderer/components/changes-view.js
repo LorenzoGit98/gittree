@@ -10,6 +10,7 @@ class ChangesView {
     this.pollTimer = null;
     this.selected = null;
     this.diffRequest = 0;
+    this.generatingCommit = false;
     this.rowHeight = 38;
     this.overscan = 8;
     this.fileLists = {
@@ -49,6 +50,7 @@ class ChangesView {
       authorEmail: document.getElementById('commit-author-email'),
       identityStatus: document.getElementById('commit-identity-status'),
       identityButton: document.getElementById('btn-commit-identity'),
+      aiCommit: document.getElementById('btn-ai-commit'),
       commitButton: document.getElementById('btn-commit')
     };
     this.bind();
@@ -65,6 +67,7 @@ class ChangesView {
       this.commit();
     };
     this.elements.identityButton.onclick = () => this.editIdentity();
+    this.elements.aiCommit.onclick = () => this.generateCommitMessage();
     this.elements.authorToggle.onchange = () => {
       this.elements.authorFields.classList.toggle(
         'is-hidden',
@@ -167,6 +170,7 @@ class ChangesView {
     this.elements.discardAll.disabled = unstaged.length === 0;
     this.elements.commitButton.disabled =
       staged.length === 0 && !this.elements.amend.checked;
+    this.elements.aiCommit.disabled = this.generatingCommit || staged.length === 0;
     const fileCount = this.snapshot?.files?.length || 0;
     this.elements.modeCount.textContent = String(fileCount);
     this.elements.modeCount.classList.toggle('is-hidden', fileCount === 0);
@@ -241,6 +245,69 @@ class ChangesView {
     }
     row.append(status, main, action);
     return row;
+  }
+
+  async generateCommitMessage() {
+    if (this.generatingCommit) return;
+    if (!this.repoPath || this.stagedFiles().length === 0) {
+      this.app.showToast(t('changes.aiNoStaged'), 'warning');
+      return;
+    }
+    const hasText = Boolean(
+      this.elements.summary.value.trim() || this.elements.body.value.trim()
+    );
+    if (hasText && !await this.confirmAiReplace()) return;
+    this.generatingCommit = true;
+    this.setAiGenerating(true);
+    try {
+      const result = await window.gitTree.generateCommitMessage(this.repoPath, {
+        language: await this.aiLanguage()
+      });
+      if (result?.error) {
+        this.app.showToast(result.error, 'error');
+        return;
+      }
+      this.elements.summary.value = result.summary || '';
+      this.elements.body.value = result.body || '';
+      this.persistComposer();
+      this.app.showToast(t('changes.aiGenerated'), 'success');
+    } finally {
+      this.generatingCommit = false;
+      this.setAiGenerating(false);
+    }
+  }
+
+  confirmAiReplace() {
+    return this.app.dialogs.confirm({
+      title: t('changes.aiReplaceTitle'),
+      message: t('changes.aiReplaceConfirm'),
+      cancelLabel: t('common.cancel'),
+      actionLabel: t('common.continue')
+    });
+  }
+
+  async aiLanguage() {
+    const settings = await window.gitTree.getAiSettings().catch(() => null);
+    if (settings?.language === 'en' || settings?.language === 'it') {
+      return settings.language;
+    }
+    const current = localStorage.getItem('gittree.language') || 'en';
+    return current.startsWith('it') ? 'it' : 'en';
+  }
+
+  setAiGenerating(generating) {
+    const button = this.elements.aiCommit;
+    const icon = button.querySelector('i');
+    const label = button.querySelector('span');
+    button.disabled = generating;
+    if (generating) {
+      icon.className = 'ph ph-circle-notch';
+      label.textContent = t('changes.aiGenerating');
+      return;
+    }
+    icon.className = 'ph ph-sparkle';
+    label.textContent = t('changes.aiGenerate');
+    button.disabled = this.stagedFiles().length === 0;
   }
 
   async runSubmoduleAction(action) {

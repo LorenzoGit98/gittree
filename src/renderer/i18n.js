@@ -173,6 +173,22 @@ const I18n = {
                 archived: 'Task archived'
               }
             },
+            ai: {
+              settingsTitle: 'AI assistant',
+              settingsHelp: 'Generate commit messages and pull-request descriptions with a provider you control.',
+              provider: 'Provider', providerOpencode: 'OpenCode (CLI)', providerOpenai: 'OpenAI-compatible (DeepSeek, OpenAI, OpenRouter)',
+              providerAnthropic: 'Anthropic', baseUrl: 'Base URL', baseUrlHelp: 'HTTPS endpoint of the provider API.',
+              model: 'Model', modelHelp: 'Model identifier used for generation.',
+              language: 'Output language', languageAuto: 'Follow app language', languageEn: 'English', languageIt: 'Italian',
+              apiKey: 'API key', apiKeyHelp: 'Stored encrypted on this device and sent only to the configured provider.',
+              apiKeySave: 'Save key', apiKeySaved: 'API key configured', apiKeyRemove: 'Remove key',
+              apiKeyMissing: 'No API key configured', keySaved: 'API key saved', keyRemoved: 'API key removed',
+              opencodeDetected: 'OpenCode {{version}} detected', opencodeMissing: 'OpenCode CLI not found',
+              opencodeHelp: 'Uses the model and credentials configured in OpenCode itself. No key is stored in GitTree.',
+              testConnection: 'Test connection', testing: 'Testing…', testOk: 'Connection works', testFailed: 'Connection failed',
+              notConfigured: 'Configure the AI provider in Settings first.',
+              save: 'Save settings', saved: 'AI settings saved'
+            },
             settings: {
               eyebrow: 'Application preferences',
               title: 'Settings',
@@ -342,6 +358,12 @@ const I18n = {
               composerTitle: 'Commit staged changes',
               summaryPlaceholder: 'Commit summary',
               bodyPlaceholder: 'Description (optional)',
+              aiGenerate: 'Generate with AI',
+              aiGenerating: 'Generating…',
+              aiGenerated: 'Commit message generated',
+              aiNoStaged: 'Stage changes before generating a commit message.',
+              aiReplaceTitle: 'Replace commit message?',
+              aiReplaceConfirm: 'The composer already has text. Replace it with the generated message?',
               amend: 'Amend HEAD',
               signoff: 'Add sign-off',
               signing: 'Sign commit',
@@ -435,7 +457,10 @@ const I18n = {
               createMaintainer: 'Allow maintainers to edit',
               createRemoveSource: 'Delete source branch when merged',
               createSubmit: 'Create pull request',
-              createSuccess: 'Pull request #{{number}} created'
+              createSuccess: 'Pull request #{{number}} created',
+              aiGenerate: 'Generate with AI',
+              aiGenerating: 'Generating…',
+              aiGenerated: 'Pull request description generated'
             },
             search: {
               trigger: 'Search commits, branches and files',
@@ -936,6 +961,22 @@ const I18n = {
                 archived: 'Task archiviato'
               }
             },
+            ai: {
+              settingsTitle: 'Assistente AI',
+              settingsHelp: 'Genera messaggi di commit e descrizioni di pull request con un provider che controlli tu.',
+              provider: 'Provider', providerOpencode: 'OpenCode (CLI)', providerOpenai: 'Compatibile OpenAI (DeepSeek, OpenAI, OpenRouter)',
+              providerAnthropic: 'Anthropic', baseUrl: 'URL di base', baseUrlHelp: 'Endpoint HTTPS dell\'API del provider.',
+              model: 'Modello', modelHelp: 'Identificativo del modello usato per la generazione.',
+              language: 'Lingua di output', languageAuto: 'Segui la lingua dell\'app', languageEn: 'Inglese', languageIt: 'Italiano',
+              apiKey: 'Chiave API', apiKeyHelp: 'Salvata criptata su questo dispositivo e inviata solo al provider configurato.',
+              apiKeySave: 'Salva chiave', apiKeySaved: 'Chiave API configurata', apiKeyRemove: 'Rimuovi chiave',
+              apiKeyMissing: 'Nessuna chiave API configurata', keySaved: 'Chiave API salvata', keyRemoved: 'Chiave API rimossa',
+              opencodeDetected: 'OpenCode {{version}} rilevato', opencodeMissing: 'CLI OpenCode non trovata',
+              opencodeHelp: 'Usa il modello e le credenziali configurati in OpenCode. Nessuna chiave viene salvata in GitTree.',
+              testConnection: 'Testa connessione', testing: 'Verifica…', testOk: 'Connessione funzionante', testFailed: 'Connessione fallita',
+              notConfigured: 'Configura il provider AI nelle Impostazioni.',
+              save: 'Salva impostazioni', saved: 'Impostazioni AI salvate'
+            },
             settings: {
               eyebrow: 'Preferenze applicazione',
               title: 'Impostazioni',
@@ -1105,6 +1146,12 @@ const I18n = {
               composerTitle: 'Commit delle modifiche in stage',
               summaryPlaceholder: 'Titolo del commit',
               bodyPlaceholder: 'Descrizione (facoltativa)',
+              aiGenerate: 'Genera con AI',
+              aiGenerating: 'Generazione…',
+              aiGenerated: 'Messaggio di commit generato',
+              aiNoStaged: 'Prepara le modifiche prima di generare un messaggio di commit.',
+              aiReplaceTitle: 'Sostituire il messaggio di commit?',
+              aiReplaceConfirm: 'Il composer contiene già del testo. Sostituirlo con il messaggio generato?',
               amend: 'Modifica HEAD',
               signoff: 'Aggiungi sign-off',
               signing: 'Firma commit',
@@ -1198,7 +1245,10 @@ const I18n = {
               createMaintainer: 'Consenti modifica ai maintainer',
               createRemoveSource: 'Elimina il branch sorgente al merge',
               createSubmit: 'Crea pull request',
-              createSuccess: 'Pull request #{{number}} creata'
+              createSuccess: 'Pull request #{{number}} creata',
+              aiGenerate: 'Genera con AI',
+              aiGenerating: 'Generazione…',
+              aiGenerated: 'Descrizione della pull request generata'
             },
             search: {
               trigger: 'Cerca commit, branch e file',

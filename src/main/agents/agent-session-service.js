@@ -49,6 +49,7 @@ class AgentSessionService {
     fileSystem = fs,
     pathModule = path,
     execute,
+    extraEnv = () => ({}),
     resolveExecutable = resolveAgentExecutable
   } = {}) {
     if (!repositoryWorkspace) throw new Error('Repository workspace is required');
@@ -64,6 +65,7 @@ class AgentSessionService {
     this.fs = fileSystem;
     this.path = pathModule;
     this.execute = execute;
+    this.extraEnv = extraEnv;
     this.resolveExecutable = resolveExecutable;
     this.store = new AgentSessionStore({ storagePath, fileSystem });
     const restored = this.store.load();
@@ -356,7 +358,7 @@ class AgentSessionService {
       cwd,
       cols: 100,
       rows: 30,
-      env: { ...process.env },
+      env: { ...process.env, ...this.extraEnv() },
       name: process.platform === 'win32' ? 'xterm-256color' : 'xterm-256color'
     };
   }

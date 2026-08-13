@@ -32,6 +32,7 @@ function registerGitHandlers({
     ['git:commit-file-diff', 'getCommitFileDiff'],
     ['git:status', 'getStatus'],
     ['git:working-tree', 'getWorkingTree'],
+    ['git:staged-diff', 'getStagedDiff'],
     ['git:working-diff', 'getWorkingDiff'],
     ['git:stage-paths', 'stagePaths'],
     ['git:unstage-paths', 'unstagePaths'],

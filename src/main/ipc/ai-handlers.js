@@ -1,0 +1,15 @@
+function registerAiHandlers({ registerHandler, registerManagedRepoHandler, aiService }) {
+  registerHandler('ai:settings-get', () => aiService.getSettings());
+  registerHandler('ai:settings-set', input => aiService.setSettings(input));
+  registerHandler('ai:key-set', key => aiService.setKey(key));
+  registerHandler('ai:key-clear', () => aiService.clearKey());
+  registerHandler('ai:test-connection', () => aiService.testConnection());
+  registerManagedRepoHandler('ai:commit-message', (repoPath, options = {}) => (
+    aiService.generateCommitMessage(repoPath, options)
+  ));
+  registerManagedRepoHandler('ai:pr-description', (repoPath, options = {}) => (
+    aiService.generatePrDescription(repoPath, options)
+  ));
+}
+
+module.exports = { registerAiHandlers };

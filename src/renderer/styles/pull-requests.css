@@ -371,3 +371,14 @@
   background: var(--surface-input);
   color: var(--text-primary);
 }
+
+.pr-create-ai-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.pr-create-ai-row .btn i.ph-circle-notch {
+  animation: toast-spin var(--duration-slow) linear infinite;
+}

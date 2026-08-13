@@ -350,3 +350,13 @@
     row-gap: var(--space-1);
   }
 }
+
+.commit-composer-heading .btn-quiet i.ph-circle-notch {
+  animation: toast-spin var(--duration-slow) linear infinite;
+}
+
+.commit-composer-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}

@@ -10,7 +10,7 @@ const {
   isSafeExternalUrl
 } = require('../src/main/main-application');
 
-function createHarness(t) {
+function createHarness(t, { realAiService = false } = {}) {
   const calls = [];
   const handlers = new Map();
   const removedHandlers = [];
@@ -91,7 +91,9 @@ function createHarness(t) {
     assertManaged() {}
     getGitService() {
       return {
-        getStatus: async () => ({ clean: true })
+        getStatus: async () => ({ clean: true }),
+        getStagedDiff: async () => '',
+        getBranchComparison: async () => ({ commits: [], diff: '' })
       };
     }
     list() { return [...this.repositories]; }
@@ -127,6 +129,26 @@ function createHarness(t) {
 
   class FakeCredentialVault {
     constructor() { calls.push('vault'); }
+    async getAccount() { return null; }
+    async setAccount() {}
+    async removeAccount() {}
+  }
+
+  class FakeAiService {
+    constructor() { calls.push('ai'); }
+    async initialize() { calls.push('ai-initialize'); }
+    async getSettings() {
+      return {
+        provider: 'opencode', baseUrl: '', model: '', language: 'auto',
+        keyConfigured: false, opencode: { available: false, version: '' }
+      };
+    }
+    async setSettings(input) { return { ...input, keyConfigured: false }; }
+    async setKey() { return { keyConfigured: true }; }
+    async clearKey() { return { keyConfigured: false }; }
+    async generateCommitMessage() { return { summary: 'feat: test', body: '' }; }
+    async generatePrDescription() { return { summary: 'Pull request', body: '' }; }
+    async testConnection() { return { ok: true, reply: 'OK' }; }
   }
 
   class FakeHostingService {
@@ -204,6 +226,7 @@ function createHarness(t) {
       RepositoryWorkspace: FakeRepositoryWorkspace,
       UpdateService: FakeUpdateService,
       CredentialVault: FakeCredentialVault,
+      ...(realAiService ? {} : { AiService: FakeAiService }),
       HostingService: FakeHostingService,
       Logger: FakeLogger,
       DiagnosticsExporter: FakeDiagnosticsExporter,
@@ -247,7 +270,7 @@ test('Main application composes Electron once and tears down every owned resourc
   assert.deepEqual(harness.getRepoManagerOptions(), {
     configPath: path.join(harness.userDataPath, 'repos.json')
   });
-  assert.equal(harness.handlers.size, 133);
+  assert.equal(harness.handlers.size, 141);
   assert.equal(harness.processHost.listenerCount('unhandledRejection'), 1);
   assert.equal(harness.app.listenerCount('activate'), 1);
   assert.equal(
@@ -282,6 +305,21 @@ test('Main application composes Electron once and tears down every owned resourc
   assert.deepEqual(await harness.handlers.get('agent:tasks')({}, 'C:\\repo'), []);
   assert.match((await harness.handlers.get('agent:task-stop')({}, 'missing')).error, /Unknown agent task/);
   assert.equal(await harness.handlers.get('agent:root-select')({}), null);
+  assert.equal((await harness.handlers.get('ai:settings-get')({})).provider, 'opencode');
+  assert.equal((await harness.handlers.get('ai:key-set')({}, 'sk-test')).keyConfigured, true);
+  assert.equal((await harness.handlers.get('ai:key-clear')({})).keyConfigured, false);
+  assert.equal(
+    (await harness.handlers.get('ai:commit-message')({}, 'C:\\repo', { language: 'en' })).summary,
+    'feat: test'
+  );
+  assert.equal(
+    (await harness.handlers.get('ai:pr-description')({}, 'C:\\repo', {
+      source: 'feature', target: 'main'
+    })).summary,
+    'Pull request'
+  );
+  assert.deepEqual(await harness.handlers.get('ai:test-connection')({}), { ok: true, reply: 'OK' });
+  assert.ok(harness.calls.includes('ai-initialize'));
   assert.equal(await harness.handlers.get('dialog:select-directory')({}), null);
   assert.deepEqual(await harness.handlers.get('window:open-inspector')({}, {}), {
     success: true
@@ -328,7 +366,7 @@ test('Main application composes Electron once and tears down every owned resourc
   await harness.application.stop();
 
   assert.equal(harness.handlers.size, 0);
-  assert.equal(new Set(harness.removedHandlers).size, 133);
+  assert.equal(new Set(harness.removedHandlers).size, 141);
   assert.equal(harness.windows[0].isDestroyed(), true);
   assert.equal(harness.processHost.listenerCount('unhandledRejection'), 0);
   assert.equal(harness.app.listenerCount('activate'), 0);
@@ -343,4 +381,34 @@ test('external navigation accepts only the explicit HTTPS host allowlist', () =>
   assert.equal(isSafeExternalUrl('http://github.com/open/repo'), false);
   assert.equal(isSafeExternalUrl('https://github.com.evil.example/repo'), false);
   assert.equal(isSafeExternalUrl('not a URL'), false);
+});
+
+test('Main application composes the real AI service over the credential vault', async t => {
+  const harness = createHarness(t, { realAiService: true });
+
+  assert.equal(await harness.application.start(), true);
+  const initial = await harness.handlers.get('ai:settings-get')({});
+  assert.equal(initial.provider, 'opencode');
+  assert.equal(initial.keyConfigured, false);
+
+  await harness.handlers.get('ai:key-set')({}, 'sk-test-key');
+  assert.equal((await harness.handlers.get('ai:settings-get')({})).keyConfigured, true);
+  await harness.handlers.get('ai:key-clear')({});
+  assert.equal((await harness.handlers.get('ai:settings-get')({})).keyConfigured, false);
+
+  assert.equal((await harness.handlers.get('ai:settings-set')({}, {
+    provider: 'openai', baseUrl: 'https://api.example.test', model: 'bench', language: 'en'
+  })).provider, 'openai');
+  assert.match(
+    (await harness.handlers.get('ai:commit-message')({}, 'C:\\repo')).error,
+    /Stage changes/
+  );
+  assert.match(
+    (await harness.handlers.get('ai:pr-description')({}, 'C:\\repo', {
+      source: 'feature', target: 'main'
+    })).error,
+    /API key in Settings/
+  );
+
+  await harness.application.stop();
 });

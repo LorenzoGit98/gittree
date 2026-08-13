@@ -55,7 +55,7 @@ function createWorkspace(root) {
   };
 }
 
-function harness(t, { maxConcurrent = 1 } = {}) {
+function harness(t, { maxConcurrent = 1, extraEnv = () => ({}) } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gittree-agents-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const repo = path.join(root, 'repo');
@@ -79,6 +79,7 @@ function harness(t, { maxConcurrent = 1 } = {}) {
     idFactory: () => `00000000-0000-4000-8000-${String(++id).padStart(12, '0')}`,
     setInterval: () => 1,
     clearInterval: () => {},
+    extraEnv,
     resolveExecutable: command => command
   });
   service.setWorktreeRoot(worktreeRoot);
@@ -248,4 +249,15 @@ test('adapter detection reuses a cached result within its TTL', async t => {
   clock = 61_000;
   await service.detectAdapters();
   assert.equal(executions, 6);
+});
+
+test('agent CLIs inherit the configured AI environment', async t => {
+  const { service, repo, ptys } = harness(t, {
+    extraEnv: () => ({ OPENAI_API_KEY: 'sk-injected', OPENAI_BASE_URL: 'https://api.deepseek.com/v1' })
+  });
+  await service.createTask(repo, {
+    title: 'AI task', prompt: 'Do the thing', baseRef: 'main', adapterId: 'codex'
+  });
+  assert.equal(ptys[0].options.env.OPENAI_API_KEY, 'sk-injected');
+  assert.equal(ptys[0].options.env.OPENAI_BASE_URL, 'https://api.deepseek.com/v1');
 });

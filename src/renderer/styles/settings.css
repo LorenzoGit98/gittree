@@ -1128,3 +1128,18 @@
   padding: var(--space-3) var(--space-4);
   color: var(--text-tertiary);
 }
+
+.settings-ai-key {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.ai-settings-input {
+  max-width: 340px;
+}
+
+.ai-settings-select {
+  min-width: 240px;
+}

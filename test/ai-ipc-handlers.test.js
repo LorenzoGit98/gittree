@@ -1,0 +1,55 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+const { registerAiHandlers } = require('../src/main/ipc/ai-handlers');
+
+test('AI handlers validate managed repositories and normalize errors', async () => {
+  const registered = new Map();
+  const managedCalls = [];
+  const wrap = implementation => async (...args) => {
+    try {
+      return await implementation(...args);
+    } catch (error) {
+      return { error: error?.message || String(error) };
+    }
+  };
+  const registerHandler = (channel, implementation) => {
+    registered.set(channel, wrap(implementation));
+  };
+  const registerManagedRepoHandler = (channel, implementation) => {
+    registered.set(channel, wrap(implementation));
+    managedCalls.push(channel);
+  };
+  const aiService = {
+    getSettings: async () => ({ provider: 'opencode' }),
+    setSettings: async input => input,
+    setKey: async key => ({ keyConfigured: Boolean(key) }),
+    clearKey: async () => ({ keyConfigured: false }),
+    generateCommitMessage: async (repoPath) => {
+      if (repoPath === 'C:\\fail') throw new Error('Provider rejected the request');
+      return { summary: 'feat: ai', body: '' };
+    },
+    generatePrDescription: async (repoPath, options) => ({
+      summary: options.title || 'PR', body: ''
+    })
+  };
+
+  registerAiHandlers({ registerHandler, registerManagedRepoHandler, aiService });
+
+  assert.deepEqual(managedCalls, ['ai:commit-message', 'ai:pr-description']);
+  assert.equal((await registered.get('ai:settings-get')()).provider, 'opencode');
+  assert.equal((await registered.get('ai:key-set')('sk-x')).keyConfigured, true);
+  assert.equal((await registered.get('ai:key-clear')()).keyConfigured, false);
+  assert.equal(
+    (await registered.get('ai:commit-message')('C:\\repo', { language: 'en' })).summary,
+    'feat: ai'
+  );
+  assert.equal(
+    (await registered.get('ai:pr-description')('C:\\repo', { source: 'a', target: 'b', title: 'T' })).summary,
+    'T'
+  );
+
+  const errorResult = await registered.get('ai:commit-message')('C:\\fail');
+  assert.match(errorResult.error, /Provider rejected the request/);
+  assert.equal('summary' in errorResult, false);
+});
