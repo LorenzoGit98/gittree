@@ -1,3 +1,11 @@
+# [0.20.0](https://github.com/giannoccarol/gittree/compare/v0.19.0...v0.20.0) (2026-08-13)
+
+
+### Features
+
+* **ai:** blame-based file history narration ([a2dbfaa](https://github.com/giannoccarol/gittree/commit/a2dbfaa7baf4c24253e7c0e0cf6de79370d6e02b))
+* **ai:** semantic history search with AI ([4ec3df7](https://github.com/giannoccarol/gittree/commit/4ec3df7aa87232e466f708444489aaa59b613adf))
+
 # [0.19.0](https://github.com/giannoccarol/gittree/compare/v0.18.0...v0.19.0) (2026-08-13)
 
 
