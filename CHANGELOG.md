@@ -1,3 +1,12 @@
+## [0.13.5](https://github.com/giannoccarol/gittree/compare/v0.13.4...v0.13.5) (2026-08-13)
+
+
+### Bug Fixes
+
+* **changes:** rebuild the file lists with a correct windowed renderer ([5f3780a](https://github.com/giannoccarol/gittree/commit/5f3780aaa552da057d9cc7dbf66119f14aea7a71))
+* **perf:** open every modal instantly and hydrate slow data after ([380dc5d](https://github.com/giannoccarol/gittree/commit/380dc5d3fb76dc51c6679f25ddd9c8ff7eb608a2))
+* **resize:** keep branch content visible while resizing panels ([12e3904](https://github.com/giannoccarol/gittree/commit/12e39046dcf73fcea7fd08cdbb979f8c75e7cb52))
+
 ## [0.13.4](https://github.com/giannoccarol/gittree/compare/v0.13.3...v0.13.4) (2026-08-13)
 
 
