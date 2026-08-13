@@ -1,3 +1,10 @@
+## [0.13.4](https://github.com/giannoccarol/gittree/compare/v0.13.3...v0.13.4) (2026-08-13)
+
+
+### Bug Fixes
+
+* **modals:** resizable dialogs over a translucent backdrop ([687e6c0](https://github.com/giannoccarol/gittree/commit/687e6c01ec484f6b976d004f2bbfe689091e68cf))
+
 ## [0.13.3](https://github.com/giannoccarol/gittree/compare/v0.13.2...v0.13.3) (2026-08-13)
 
 

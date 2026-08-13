@@ -1,6 +1,6 @@
 {
   "name": "gittree",
-  "version": "0.13.3",
+  "version": "0.13.4",
   "description": "A fast, open-source Git desktop client for visual history and local-first repository management.",
   "main": "src/main/main.js",
   "scripts": {
