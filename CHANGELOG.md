@@ -1,3 +1,10 @@
+## [0.13.3](https://github.com/giannoccarol/gittree/compare/v0.13.2...v0.13.3) (2026-08-13)
+
+
+### Bug Fixes
+
+* **settings:** render update state from check result and act on it ([2c9b910](https://github.com/giannoccarol/gittree/commit/2c9b91001c01c1a59b0e23321c05c00d7f565480))
+
 ## [0.13.2](https://github.com/giannoccarol/gittree/compare/v0.13.1...v0.13.2) (2026-08-13)
 
 
