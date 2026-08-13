@@ -1,3 +1,10 @@
+# [0.16.0](https://github.com/giannoccarol/gittree/compare/v0.15.1...v0.16.0) (2026-08-13)
+
+
+### Features
+
+* **ai:** explain working tree changes with AI ([acb6bca](https://github.com/giannoccarol/gittree/commit/acb6bca5ff665439aa42755801fd39c80b4f862f))
+
 ## [0.15.1](https://github.com/giannoccarol/gittree/compare/v0.15.0...v0.15.1) (2026-08-13)
 
 
