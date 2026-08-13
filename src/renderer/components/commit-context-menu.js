@@ -28,32 +28,74 @@ class CommitContextMenu {
     this.element.classList.remove('is-hidden');
     this.place(event.clientX, event.clientY);
     requestAnimationFrame(() => this.focusFirst());
-    Promise.all([
-      hashes.length === 1
-        ? window.gitTree.previewCommitAction(
-            this.app.state.repo.path,
-            'rebase',
-            hashes
-          )
-        : Promise.resolve({
-            allowed: false,
-            reason: t('commitMenu.singleRebase')
-          }),
-      window.gitTree.previewCommitAction(
-        this.app.state.repo.path,
-        'cherry-pick',
-        hashes
-      )
-    ]).then(([rebase, cherryPick]) => {
-      if (generation !== this.generation || this.element.classList.contains('is-hidden')) return;
-      this.previews = { rebase, 'cherry-pick': cherryPick };
-      this.render();
-      this.place(event.clientX, event.clientY);
+    this.loadPreviews(generation, this.app.state.repo.path, hashes, {
+      x: event.clientX,
+      y: event.clientY
     });
   }
 
+  loadPreviews(generation, repoPath, hashes, position) {
+    const settle = (action, request) => Promise.resolve(request)
+      .then(result => this.normalizePreview(action, result))
+      .catch(error => this.normalizePreview(action, { error: error?.message || String(error) }))
+      .then(preview => {
+        if (generation !== this.generation || this.element.classList.contains('is-hidden')) return;
+        this.previews[action] = preview;
+        this.render();
+        this.place(position.x, position.y);
+      });
+
+    const requests = [];
+    try {
+      requests.push(settle(
+        'cherry-pick',
+        window.gitTree.previewCommitAction(repoPath, 'cherry-pick', hashes)
+      ));
+    } catch (error) {
+      requests.push(settle('cherry-pick', Promise.reject(error)));
+    }
+    if (hashes.length === 1) {
+      try {
+        requests.push(settle(
+          'rebase',
+          window.gitTree.previewCommitAction(repoPath, 'rebase', hashes)
+        ));
+      } catch (error) {
+        requests.push(settle('rebase', Promise.reject(error)));
+      }
+    } else {
+      requests.push(settle('rebase', {
+        action: 'rebase',
+        allowed: false,
+        reason: t('commitMenu.singleRebase'),
+        commits: [],
+        files: []
+      }));
+    }
+    return Promise.all(requests);
+  }
+
+  normalizePreview(action, preview) {
+    if (preview && typeof preview.allowed === 'boolean') {
+      return {
+        ...preview,
+        action,
+        commits: Array.isArray(preview.commits) ? preview.commits : [],
+        files: Array.isArray(preview.files) ? preview.files : []
+      };
+    }
+    return {
+      action,
+      allowed: false,
+      reason: preview?.error || t('common.error'),
+      commits: [],
+      files: []
+    };
+  }
+
   render() {
-    const loading = Object.keys(this.previews).length === 0;
+    const rebaseLoading = !Object.hasOwn(this.previews, 'rebase');
+    const cherryPickLoading = !Object.hasOwn(this.previews, 'cherry-pick');
     const rebase = this.previews.rebase;
     const cherryPick = this.previews['cherry-pick'];
     const actions = [
@@ -89,17 +131,17 @@ class CommitContextMenu {
         action: 'rebase',
         icon: 'ph-git-branch',
         label: t('commitMenu.rebase'),
-        disabled: loading || this.hashes.length !== 1 || rebase?.allowed === false,
+        disabled: rebaseLoading || this.hashes.length !== 1 || rebase?.allowed !== true,
         reason: this.hashes.length !== 1
           ? t('commitMenu.singleRebase')
-          : (rebase?.reason || (loading ? t('common.loading') : ''))
+          : (rebase?.reason || (rebaseLoading ? t('common.loading') : ''))
       },
       {
         action: 'cherry-pick',
         icon: 'ph-copy',
         label: t('commitMenu.cherryPick', { count: this.hashes.length }),
-        disabled: loading || cherryPick?.allowed === false,
-        reason: cherryPick?.reason || (loading ? t('common.loading') : '')
+        disabled: cherryPickLoading || cherryPick?.allowed !== true,
+        reason: cherryPick?.reason || (cherryPickLoading ? t('common.loading') : '')
       }
     ];
     this.element.innerHTML = actions.map(item => `
@@ -146,12 +188,14 @@ class CommitContextMenu {
       return;
     }
     const preview = this.previews[action];
-    if (!repo || !preview) return;
+    if (!repo || preview?.allowed !== true) return;
+    const hashes = [...this.hashes];
+    const repoPath = repo.path;
     this.close();
     if (!await this.previewDialog(preview)) return;
     const result = action === 'rebase'
-      ? await window.gitTree.rebaseOntoCommit(repo.path, this.hashes[0])
-      : await window.gitTree.cherryPick(repo.path, this.hashes);
+      ? await window.gitTree.rebaseOntoCommit(repoPath, hashes[0])
+      : await window.gitTree.cherryPick(repoPath, hashes);
     if (result?.error) {
       this.app.showToast(result.error, 'error');
       if (result.conflictState?.type) {
@@ -576,4 +620,5 @@ class CommitContextMenu {
   }
 }
 
-window.CommitContextMenu = CommitContextMenu;
+if (typeof window !== 'undefined') window.CommitContextMenu = CommitContextMenu;
+if (typeof module !== 'undefined') module.exports = CommitContextMenu;

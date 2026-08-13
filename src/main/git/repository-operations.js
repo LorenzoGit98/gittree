@@ -349,11 +349,19 @@ class RepositoryOperations {
   }
 
   async getOperationState() {
-    const mergePath = await this.resolveGitPath('MERGE_HEAD');
-    const rebaseMergePath = await this.resolveGitPath('rebase-merge');
-    const rebaseApplyPath = await this.resolveGitPath('rebase-apply');
-    const cherryPickPath = await this.resolveGitPath('CHERRY_PICK_HEAD');
-    const sequencerPath = await this.resolveGitPath('sequencer');
+    const [
+      mergePath,
+      rebaseMergePath,
+      rebaseApplyPath,
+      cherryPickPath,
+      sequencerPath
+    ] = await Promise.all([
+      'MERGE_HEAD',
+      'rebase-merge',
+      'rebase-apply',
+      'CHERRY_PICK_HEAD',
+      'sequencer'
+    ].map(name => this.resolveGitPath(name)));
     let type = null;
     if (fs.existsSync(mergePath)) type = 'merge';
     else if (fs.existsSync(rebaseMergePath) || fs.existsSync(rebaseApplyPath)) type = 'rebase';

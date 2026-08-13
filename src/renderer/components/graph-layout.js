@@ -83,5 +83,38 @@
     };
   }
 
-  return { layoutGraph };
+  function createGraphSegments(row, rowHeight) {
+    const x = lane => 12 + lane * 18;
+    const midpoint = rowHeight / 2;
+    const top = -1;
+    const bottom = rowHeight + 1;
+    const segments = [];
+
+    (row.before || []).forEach((hash, lane) => {
+      if (!hash || lane === row.lane) return;
+      segments.push({
+        lane,
+        path: `M ${x(lane)} ${top} L ${x(lane)} ${bottom}`
+      });
+    });
+    if (row.incoming) {
+      segments.push({
+        lane: row.lane,
+        path: `M ${x(row.lane)} ${top} L ${x(row.lane)} ${midpoint}`
+      });
+    }
+    for (const parent of row.parents || []) {
+      const from = x(row.lane);
+      const to = x(parent.lane);
+      segments.push({
+        lane: parent.lane,
+        path: from === to
+          ? `M ${from} ${midpoint} L ${to} ${bottom}`
+          : `M ${from} ${midpoint} C ${from} ${midpoint + 10}, ${to} ${bottom - 10}, ${to} ${bottom}`
+      });
+    }
+    return segments;
+  }
+
+  return { layoutGraph, createGraphSegments };
 });

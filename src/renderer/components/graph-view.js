@@ -360,20 +360,8 @@ class GraphView {
     svg.setAttribute('aria-hidden', 'true');
     svg.style.width = `${width}px`;
 
-    row.before.forEach((hash, lane) => {
-      if (!hash || lane === row.lane) return;
-      svg.appendChild(this.svgPath(`M ${x(lane)} 0 L ${x(lane)} ${this.rowHeight}`, lane));
-    });
-    if (row.incoming) {
-      svg.appendChild(this.svgPath(`M ${x(row.lane)} 0 L ${x(row.lane)} 19`, row.lane));
-    }
-    for (const parent of row.parents) {
-      const from = x(row.lane);
-      const to = x(parent.lane);
-      const path = from === to
-        ? `M ${from} 19 L ${to} ${this.rowHeight}`
-        : `M ${from} 19 C ${from} 29, ${to} 28, ${to} ${this.rowHeight}`;
-      svg.appendChild(this.svgPath(path, parent.lane));
+    for (const segment of window.GraphLayout.createGraphSegments(row, this.rowHeight)) {
+      svg.appendChild(this.svgPath(segment.path, segment.lane));
     }
 
     const circle = document.createElementNS(namespace, 'circle');

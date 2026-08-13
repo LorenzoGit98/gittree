@@ -217,23 +217,8 @@ class InspectorGraph {
     svg.setAttribute('aria-hidden', 'true');
     svg.style.width = `${width}px`;
 
-    for (const [lane, hash] of (row.before || []).entries()) {
-      if (!hash || lane === row.lane) continue;
-      svg.appendChild(this.svgPath(
-        `M ${x(lane)} 0 L ${x(lane)} ${this.rowHeight}`,
-        lane
-      ));
-    }
-    if (row.incoming) {
-      svg.appendChild(this.svgPath(`M ${x(row.lane)} 0 L ${x(row.lane)} ${midpoint}`, row.lane));
-    }
-    for (const parent of row.parents || []) {
-      const from = x(row.lane);
-      const to = x(parent.lane);
-      const path = from === to
-        ? `M ${from} ${midpoint} L ${to} ${this.rowHeight}`
-        : `M ${from} ${midpoint} C ${from} 30, ${to} 29, ${to} ${this.rowHeight}`;
-      svg.appendChild(this.svgPath(path, parent.lane));
+    for (const segment of window.GraphLayout.createGraphSegments(row, this.rowHeight)) {
+      svg.appendChild(this.svgPath(segment.path, segment.lane));
     }
 
     const circle = document.createElementNS(namespace, 'circle');

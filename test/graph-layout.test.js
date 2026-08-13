@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { layoutGraph } = require('../src/renderer/components/graph-layout');
+const { layoutGraph, createGraphSegments } = require('../src/renderer/components/graph-layout');
 
 const commit = (hash, parents = []) => ({ hash, parents });
 
@@ -66,4 +66,28 @@ test('lane state continues across progressively loaded pages', () => {
   assert.equal(secondPage.rows[0].parents[0].lane, 0);
   assert.deepEqual(secondPage.nextState.lanes, []);
   assert.equal(Math.max(firstPage.laneCount, secondPage.laneCount), 2);
+});
+
+test('graph segments cross row boundaries so connected lanes cannot be clipped apart', () => {
+  const [row] = layoutGraph([
+    commit('merge', ['main-1', 'topic-1'])
+  ]).rows;
+
+  const segments = createGraphSegments(row, 38);
+
+  assert.ok(segments.every(segment => segment.path.includes('39')));
+  assert.ok(segments.some(segment => segment.path.startsWith('M 12 19')));
+  assert.ok(segments.some(segment => segment.path.endsWith('12 39')));
+  assert.ok(segments.some(segment => segment.path.endsWith('30 39')));
+});
+
+test('incoming graph segments start above the visible row boundary', () => {
+  const [row] = layoutGraph([
+    commit('child', ['parent']),
+    commit('parent')
+  ]).rows.slice(1);
+
+  const segments = createGraphSegments(row, 38);
+
+  assert.ok(segments.some(segment => segment.path === 'M 12 -1 L 12 19'));
 });

@@ -31,6 +31,7 @@ function harness(t) {
     element({ dataset: { sidebarMode: 'agents' } })
   ];
   const elements = {
+    'sidebar-mode-switch': element(),
     'sidebar-branches-area': element(),
     'agent-sidebar': element(),
     'btn-new-branch': element(),
@@ -122,8 +123,16 @@ test('disabling agent sessions hides the mode and removes launch controls', t =>
   panel.setMode('agents');
   panel.applyEnabledState(false);
   assert.equal(panel.mode, 'repository');
+  assert.equal(elements['sidebar-mode-switch'].classList.contains('is-hidden'), true);
+  assert.equal(elements['sidebar-mode-switch'].attributes['aria-hidden'], 'true');
   assert.equal(modeButtons[1].classList.contains('is-hidden'), true);
   assert.equal(modeButtons[1].attributes['aria-disabled'], 'true');
   assert.equal(elements['agent-drawer'].classList.contains('is-hidden'), true);
   assert.doesNotMatch(elements['worktree-list'].innerHTML, /data-action="agent"/);
+
+  panel.applyEnabledState(true);
+  assert.equal(elements['sidebar-mode-switch'].classList.contains('is-hidden'), false);
+  assert.equal(elements['sidebar-mode-switch'].attributes['aria-hidden'], 'false');
+  assert.equal(modeButtons[1].classList.contains('is-hidden'), false);
+  assert.equal(modeButtons[1].attributes['aria-disabled'], 'false');
 });

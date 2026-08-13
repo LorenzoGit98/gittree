@@ -83,6 +83,9 @@ class WorktreeAgentPanel {
 
   applyEnabledState(enabled) {
     this.enabled = Boolean(enabled);
+    const modeSwitch = document.getElementById('sidebar-mode-switch');
+    modeSwitch?.classList.toggle('is-hidden', !this.enabled);
+    modeSwitch?.setAttribute('aria-hidden', String(!this.enabled));
     const agentsButton = document.querySelector('[data-sidebar-mode="agents"]');
     agentsButton?.classList.toggle('is-hidden', !this.enabled);
     agentsButton?.setAttribute('aria-disabled', String(!this.enabled));
