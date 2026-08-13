@@ -11,6 +11,7 @@ class ChangesView {
     this.selected = null;
     this.diffRequest = 0;
     this.generatingCommit = false;
+    this.generatingExplain = false;
     this.rowHeight = 38;
     this.overscan = 8;
     this.fileLists = {
@@ -51,6 +52,11 @@ class ChangesView {
       identityStatus: document.getElementById('commit-identity-status'),
       identityButton: document.getElementById('btn-commit-identity'),
       aiCommit: document.getElementById('btn-ai-commit'),
+      aiExplain: document.getElementById('btn-ai-explain'),
+      explanation: document.getElementById('ai-explanation'),
+      explanationTitle: document.getElementById('ai-explanation-title'),
+      explanationBody: document.getElementById('ai-explanation-body'),
+      explanationClose: document.getElementById('btn-ai-explanation-close'),
       commitButton: document.getElementById('btn-commit')
     };
     this.bind();
@@ -68,6 +74,8 @@ class ChangesView {
     };
     this.elements.identityButton.onclick = () => this.editIdentity();
     this.elements.aiCommit.onclick = () => this.generateCommitMessage();
+    this.elements.aiExplain.onclick = () => this.generateExplain();
+    this.elements.explanationClose.onclick = () => this.hideExplanation();
     this.elements.authorToggle.onchange = () => {
       this.elements.authorFields.classList.toggle(
         'is-hidden',
@@ -97,6 +105,7 @@ class ChangesView {
       this.snapshot = null;
       this.identity = null;
       this.selected = null;
+      this.hideExplanation();
       this.restoreComposer();
     }
     const tasks = [this.refresh(true)];
@@ -172,6 +181,11 @@ class ChangesView {
       staged.length === 0 && !this.elements.amend.checked;
     this.elements.aiCommit.disabled = this.generatingCommit
       || (staged.length === 0 && unstaged.length === 0);
+    this.elements.aiExplain.disabled = this.generatingExplain
+      || (staged.length === 0 && unstaged.length === 0);
+    if (staged.length === 0 && unstaged.length === 0) {
+      this.hideExplanation();
+    }
     const fileCount = this.snapshot?.files?.length || 0;
     this.elements.modeCount.textContent = String(fileCount);
     this.elements.modeCount.classList.toggle('is-hidden', fileCount === 0);
@@ -307,6 +321,51 @@ class ChangesView {
     label.textContent = t('changes.aiGenerate');
     button.disabled =
       this.stagedFiles().length === 0 && this.unstagedFiles().length === 0;
+  }
+
+  async generateExplain() {
+    if (this.generatingExplain) return;
+    if (!this.repoPath) return;
+    this.generatingExplain = true;
+    this.setExplainGenerating(true);
+    try {
+      const result = await window.gitTree.explainChanges(this.repoPath, {
+        language: await this.aiLanguage()
+      });
+      if (result?.error) {
+        this.app.showToast(result.error, 'error');
+        return;
+      }
+      this.elements.explanationTitle.textContent = result.summary || '';
+      this.elements.explanationBody.textContent = result.body || '';
+      this.elements.explanation.classList.remove('is-hidden');
+      this.app.showToast(t('changes.aiExplained'), 'success');
+    } finally {
+      this.generatingExplain = false;
+      this.setExplainGenerating(false);
+    }
+  }
+
+  setExplainGenerating(generating) {
+    const button = this.elements.aiExplain;
+    const icon = button.querySelector('i');
+    const label = button.querySelector('span');
+    button.disabled = generating;
+    if (generating) {
+      icon.className = 'ph ph-circle-notch';
+      label.textContent = t('changes.aiExplaining');
+      return;
+    }
+    icon.className = 'ph ph-sparkle';
+    label.textContent = t('changes.aiExplain');
+    button.disabled =
+      this.stagedFiles().length === 0 && this.unstagedFiles().length === 0;
+  }
+
+  hideExplanation() {
+    this.elements.explanation.classList.add('is-hidden');
+    this.elements.explanationTitle.textContent = '';
+    this.elements.explanationBody.textContent = '';
   }
 
   async runSubmoduleAction(action) {

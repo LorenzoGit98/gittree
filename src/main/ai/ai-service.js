@@ -1,5 +1,10 @@
 const AiSettingsStore = require('./ai-store');
-const { parseAiOutput, buildCommitPrompt, buildPrPrompt } = require('./ai-output');
+const {
+  parseAiOutput,
+  buildCommitPrompt,
+  buildPrPrompt,
+  buildExplainPrompt
+} = require('./ai-output');
 const { requestOpenAiCompatible, requestAnthropic } = require('./ai-providers');
 const { generateWithOpencode } = require('./ai-opencode');
 const { environmentForAi } = require('./ai-env');
@@ -177,6 +182,24 @@ class AiService {
     });
     const raw = await this.runProvider(prompt);
     return parseAiOutput(raw);
+  }
+
+  async explainChanges(repoPath, options = {}) {
+    const staged = await this.getStagedDiff(repoPath);
+    let diff = String(staged || '');
+    if (!diff.trim()) {
+      diff = String(await this.getUnstagedDiff(repoPath) || '');
+    }
+    if (!diff.trim()) {
+      throw new Error('No changes to explain');
+    }
+    const language = this.normalizeLanguage(options.language);
+    const prompt = buildExplainPrompt({
+      diff: truncateDiff(diff),
+      language
+    });
+    const raw = await this.runProvider(prompt);
+    return parseAiOutput(raw, { maxTitleLength: 140 });
   }
 
   async generatePrDescription(repoPath, options = {}) {

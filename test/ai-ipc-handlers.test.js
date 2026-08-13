@@ -29,6 +29,7 @@ test('AI handlers validate managed repositories and normalize errors', async () 
       if (repoPath === 'C:\\fail') throw new Error('Provider rejected the request');
       return { summary: 'feat: ai', body: '' };
     },
+    explainChanges: async () => ({ summary: 'Auth refactor', body: 'Tokens move behind a service.' }),
     generatePrDescription: async (repoPath, options) => ({
       summary: options.title || 'PR', body: ''
     })
@@ -36,13 +37,20 @@ test('AI handlers validate managed repositories and normalize errors', async () 
 
   registerAiHandlers({ registerHandler, registerManagedRepoHandler, aiService });
 
-  assert.deepEqual(managedCalls, ['ai:commit-message', 'ai:pr-description']);
+  assert.deepEqual(
+    managedCalls,
+    ['ai:commit-message', 'ai:explain-changes', 'ai:pr-description']
+  );
   assert.equal((await registered.get('ai:settings-get')()).provider, 'opencode');
   assert.equal((await registered.get('ai:key-set')('sk-x')).keyConfigured, true);
   assert.equal((await registered.get('ai:key-clear')()).keyConfigured, false);
   assert.equal(
     (await registered.get('ai:commit-message')('C:\\repo', { language: 'en' })).summary,
     'feat: ai'
+  );
+  assert.equal(
+    (await registered.get('ai:explain-changes')('C:\\repo', { language: 'en' })).summary,
+    'Auth refactor'
   );
   assert.equal(
     (await registered.get('ai:pr-description')('C:\\repo', { source: 'a', target: 'b', title: 'T' })).summary,

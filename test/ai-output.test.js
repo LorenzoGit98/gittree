@@ -1,7 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { parseAiOutput, buildCommitPrompt, buildPrPrompt } = require('../src/main/ai/ai-output');
+const {
+  parseAiOutput,
+  buildCommitPrompt,
+  buildPrPrompt,
+  buildExplainPrompt
+} = require('../src/main/ai/ai-output');
 
 test('parses the strict TITLE/BODY format from provider output', () => {
   const result = parseAiOutput(
@@ -54,4 +59,16 @@ test('pull request prompt carries commits, diff and language', () => {
   assert.match(prompt, /Write the pull-request title and description in English/);
   assert.match(prompt, /- feat: first\s*\n- fix: second/);
   assert.match(prompt, /--- diff ---/);
+});
+
+test('explain prompt carries the diff, language and the strict format contract', () => {
+  const prompt = buildExplainPrompt({
+    diff: '--- a/auth.js\n+++ b/auth.js',
+    language: 'it'
+  });
+  assert.match(prompt, /Write the explanation in Italian/);
+  assert.match(prompt, /what should be tested/);
+  assert.match(prompt, /TITLE: <short heading>\s*\nBODY: <explanation>/);
+  assert.match(prompt, /--- changes diff ---/);
+  assert.match(prompt, /\+{3} b\/auth\.js/);
 });

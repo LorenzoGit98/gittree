@@ -7,6 +7,9 @@ function registerAiHandlers({ registerHandler, registerManagedRepoHandler, aiSer
   registerManagedRepoHandler('ai:commit-message', (repoPath, options = {}) => (
     aiService.generateCommitMessage(repoPath, options)
   ));
+  registerManagedRepoHandler('ai:explain-changes', (repoPath, options = {}) => (
+    aiService.explainChanges(repoPath, options)
+  ));
   registerManagedRepoHandler('ai:pr-description', (repoPath, options = {}) => (
     aiService.generatePrDescription(repoPath, options)
   ));

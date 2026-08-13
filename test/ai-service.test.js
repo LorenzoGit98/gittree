@@ -196,6 +196,82 @@ test('service falls back to the unstaged diff when nothing is staged', async t =
   assert.match(diffs[0], /diff --git a\/working/);
 });
 
+test('service explains changes through the configured provider', async t => {
+  const prompts = [];
+  const fetch = async (_url, options) => {
+    prompts.push(JSON.parse(options.body).messages[0].content);
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: 'TITLE: Auth refactor\nBODY: Moves token issuance behind a service.\n- Risk: session format change\n- Test: login and refresh flows'
+          }
+        }]
+      })
+    };
+  };
+  const { service } = createService(t, {
+    fetch,
+    getStagedDiff: async () => 'diff --git a/auth.js b/auth.js'
+  });
+  await service.initialize();
+  await service.setKey('sk-test');
+  await service.setSettings({
+    provider: 'openai', baseUrl: 'https://api.deepseek.com/v1', model: 'm'
+  });
+
+  const result = await service.explainChanges('C:\\repo', { language: 'en' });
+  assert.equal(result.summary, 'Auth refactor');
+  assert.match(result.body, /token issuance/);
+  assert.equal(prompts.length, 1);
+  assert.match(prompts[0], /--- changes diff ---/);
+  assert.match(prompts[0], /diff --git a\/auth\.js/);
+});
+
+test('service explains the unstaged diff when nothing is staged', async t => {
+  const prompts = [];
+  const fetch = async (_url, options) => {
+    prompts.push(JSON.parse(options.body).messages[0].content);
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: 'TITLE: working tree\nBODY: unstaged' } }]
+      })
+    };
+  };
+  const { service } = createService(t, {
+    fetch,
+    getStagedDiff: async () => '',
+    getUnstagedDiff: async () => 'diff --git a/working b/working'
+  });
+  await service.initialize();
+  await service.setKey('sk-test');
+  await service.setSettings({
+    provider: 'openai', baseUrl: 'https://api.deepseek.com/v1', model: 'm'
+  });
+
+  const result = await service.explainChanges('C:\\repo');
+  assert.equal(result.summary, 'working tree');
+  assert.match(prompts[0], /diff --git a\/working/);
+});
+
+test('service rejects explaining an empty working tree', async t => {
+  const { service } = createService(t, {
+    getStagedDiff: async () => '',
+    getUnstagedDiff: async () => ''
+  });
+  await service.initialize();
+  await service.setKey('sk-test');
+  await service.setSettings({
+    provider: 'openai', baseUrl: 'https://api.deepseek.com/v1', model: 'm'
+  });
+  await assert.rejects(
+    () => service.explainChanges('C:\\repo'),
+    /No changes to explain/
+  );
+});
+
 test('service prefers the staged diff over the unstaged one', async t => {
   let prompt = '';
   const fetch = async (_url, options) => {

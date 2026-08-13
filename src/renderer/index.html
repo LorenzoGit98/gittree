@@ -465,11 +465,27 @@
                     <i class="ph ph-sparkle"></i>
                     <span data-i18n="changes.aiGenerate">Generate with AI</span>
                   </button>
+                  <button id="btn-ai-explain" class="btn btn-quiet" type="button">
+                    <i class="ph ph-sparkle"></i>
+                    <span data-i18n="changes.aiExplain">Explain changes</span>
+                  </button>
                   <button id="btn-commit-identity" class="btn btn-quiet" type="button">
                     <i class="ph ph-identification-card"></i>
                     <span data-i18n="changes.identity">Identity</span>
                   </button>
                 </div>
+              </div>
+              <div id="ai-explanation" class="ai-explanation is-hidden">
+                <div class="ai-explanation-header">
+                  <div class="ai-explanation-heading">
+                    <i class="ph ph-sparkle" aria-hidden="true"></i>
+                    <span id="ai-explanation-title"></span>
+                  </div>
+                  <button id="btn-ai-explanation-close" class="btn-icon" type="button" data-i18n-aria-label="changes.aiExplainClose" aria-label="Close explanation">
+                    <i class="ph ph-x" aria-hidden="true"></i>
+                  </button>
+                </div>
+                <div id="ai-explanation-body" class="ai-explanation-body"></div>
               </div>
               <input id="commit-summary" class="commit-input" maxlength="200" required data-i18n-placeholder="changes.summaryPlaceholder" placeholder="Commit summary">
               <textarea id="commit-body" class="commit-input commit-body" maxlength="100000" data-i18n-placeholder="changes.bodyPlaceholder" placeholder="Description (optional)"></textarea>

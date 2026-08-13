@@ -53,6 +53,22 @@ function buildCommitPrompt({ diff, hint, language }) {
   ].filter(Boolean).join('\n');
 }
 
+function buildExplainPrompt({ diff, language }) {
+  const targetLanguage = language === 'it' ? 'Italian' : 'English';
+  return [
+    'You are the changes-explainer assistant of a Git desktop client.',
+    'Explain the uncommitted changes below to the developer who wrote them.',
+    `Write the explanation in ${targetLanguage}.`,
+    'Keep it under 12 markdown lines and cover: what the change does,',
+    'which risks or side effects it may introduce, and what should be tested.',
+    'Answer with exactly this format and nothing else:',
+    'TITLE: <short heading>',
+    'BODY: <explanation>',
+    '--- changes diff ---',
+    diff
+  ].filter(Boolean).join('\n');
+}
+
 function buildPrPrompt({ diff, commits, hint, language }) {
   const targetLanguage = language === 'it' ? 'Italian' : 'English';
   const commitLines = (commits || [])
@@ -77,4 +93,9 @@ function buildPrPrompt({ diff, commits, hint, language }) {
   ].filter(Boolean).join('\n');
 }
 
-module.exports = { parseAiOutput, buildCommitPrompt, buildPrPrompt };
+module.exports = {
+  parseAiOutput,
+  buildCommitPrompt,
+  buildPrPrompt,
+  buildExplainPrompt
+};

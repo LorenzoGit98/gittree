@@ -54,10 +54,10 @@ test('every preload invoke has exactly one registered main-process handler', () 
     )
   ];
 
-  assert.equal(invoked.length, 142);
-  assert.equal(new Set(invoked).size, 142);
-  assert.equal(registered.length, 142);
-  assert.equal(new Set(registered).size, 142);
+  assert.equal(invoked.length, 143);
+  assert.equal(new Set(invoked).size, 143);
+  assert.equal(registered.length, 143);
+  assert.equal(new Set(registered).size, 143);
   assert.deepEqual([...registered].sort(), [...invoked].sort());
 });
 
