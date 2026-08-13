@@ -106,50 +106,128 @@ test('anthropic request surfaces error body messages', async () => {
   );
 });
 
-test('opencode generation collects text parts from JSON events', async () => {
-  const execute = (executable, args, options, callback) => {
+function createFakePty(outputText, exitCode = 0) {
+  const handlers = { data: [], exit: [] };
+  const pty = {
+    killed: false,
+    onData(listener) { handlers.data.push(listener); return { dispose() {} }; },
+    onExit(listener) { handlers.exit.push(listener); return { dispose() {} }; },
+    kill() { this.killed = true; },
+    emit() {
+      for (const listener of handlers.data) listener(outputText);
+      for (const listener of handlers.exit) listener({ exitCode });
+    }
+  };
+  return pty;
+}
+
+function events(...lines) {
+  return lines.map(text => JSON.stringify({
+    type: 'text', part: { type: 'text', text }
+  })).join('\n');
+}
+
+test('opencode generation collects text parts from JSON events over a PTY', async () => {
+  const spawn = (executable, args, options) => {
     assert.equal(executable, 'opencode.exe');
     assert.deepEqual(args, ['run', 'write a message', '--format', 'json']);
-    const events = [
-      JSON.stringify({ type: 'message', part: { type: 'text', text: 'TITLE: feat: x' } }),
-      JSON.stringify({ type: 'message', part: { type: 'text', text: 'BODY: y' } }),
-      JSON.stringify({ type: 'done' })
-    ].join('\n');
-    callback(null, events);
+    assert.ok(options.cols > 0 && options.rows > 0);
+    const pty = createFakePty([
+      '\u001b[?9001h\u001b[?25l',
+      JSON.stringify({ type: 'step_start' }),
+      JSON.stringify({ type: 'text', part: { type: 'text', text: 'TITLE: feat: x' } }),
+      JSON.stringify({ type: 'text', part: { type: 'text', text: 'BODY: y' } }),
+      '\u001b]0;opencode\u0007'
+    ].join('\r\n'));
+    setImmediate(() => pty.emit());
+    return pty;
   };
   const content = await generateWithOpencode({
-    execute, executable: 'opencode.exe', prompt: 'write a message', timeoutMs: 5000
+    spawn, executable: 'opencode.exe', prompt: 'write a message', timeoutMs: 5000
   });
   assert.equal(content, 'TITLE: feat: x\nBODY: y');
 });
 
-test('opencode generation surfaces provider API errors', async () => {
-  const execute = (_executable, _args, _options, callback) => {
-    callback(null, JSON.stringify({
+test('opencode generation forwards an explicit model override', async () => {
+  let receivedArgs = null;
+  const spawn = (_executable, args) => {
+    receivedArgs = args;
+    const pty = createFakePty(events('OK'));
+    setImmediate(() => pty.emit());
+    return pty;
+  };
+  await generateWithOpencode({
+    spawn,
+    executable: 'opencode',
+    prompt: 'write',
+    model: 'opencode-go/deepseek-v4-pro',
+    timeoutMs: 5000
+  });
+  assert.deepEqual(receivedArgs, [
+    'run', '--model', 'opencode-go/deepseek-v4-pro', 'write', '--format', 'json'
+  ]);
+});
+
+test('opencode generation still accepts legacy message-part events', async () => {
+  const spawn = () => {
+    const pty = createFakePty(JSON.stringify({
+      type: 'message', part: { type: 'text', text: 'legacy text' }
+    }));
+    setImmediate(() => pty.emit());
+    return pty;
+  };
+  const content = await generateWithOpencode({
+    spawn, executable: 'opencode', prompt: 'write', timeoutMs: 5000
+  });
+  assert.equal(content, 'legacy text');
+});
+
+test('opencode generation surfaces provider API errors from error events', async () => {
+  const spawn = () => {
+    const pty = createFakePty(JSON.stringify({
       type: 'error',
       error: { name: 'APIError', data: { message: 'Model unavailable' } }
-    }));
+    }), 1);
+    setImmediate(() => pty.emit());
+    return pty;
   };
   await assert.rejects(
-    () => generateWithOpencode({ execute, executable: 'opencode', prompt: 'p', timeoutMs: 5000 }),
+    () => generateWithOpencode({ spawn, executable: 'opencode', prompt: 'p', timeoutMs: 5000 }),
     /Model unavailable/
   );
 });
 
 test('opencode generation normalizes timeouts and missing text', async () => {
-  const timeoutExecute = (_e, _a, _o, callback) => {
-    const error = new Error('killed');
-    error.code = 'ETIMEDOUT';
-    callback(error);
-  };
+  const hangingSpawn = () => createFakePty('');
   await assert.rejects(
-    () => generateWithOpencode({ execute: timeoutExecute, executable: 'opencode', prompt: 'p' }),
+    () => generateWithOpencode({ spawn: hangingSpawn, executable: 'opencode', prompt: 'p', timeoutMs: 50 }),
     /timed out/
   );
-  const emptyExecute = (_e, _a, _o, callback) => callback(null, 'not json at all');
+  const emptySpawn = () => {
+    const pty = createFakePty('not json at all');
+    setImmediate(() => pty.emit());
+    return pty;
+  };
   await assert.rejects(
-    () => generateWithOpencode({ execute: emptyExecute, executable: 'opencode', prompt: 'p' }),
+    () => generateWithOpencode({ spawn: emptySpawn, executable: 'opencode', prompt: 'p', timeoutMs: 5000 }),
     /did not return any text/
+  );
+  const failingSpawn = () => {
+    const pty = createFakePty('', 1);
+    setImmediate(() => pty.emit());
+    return pty;
+  };
+  await assert.rejects(
+    () => generateWithOpencode({ spawn: failingSpawn, executable: 'opencode', prompt: 'p', timeoutMs: 5000 }),
+    /exited with code 1/
+  );
+});
+
+test('opencode generation kills the PTY when the spawn throws', async () => {
+  const spawn = () => { throw new Error('cannot spawn'); };
+  await assert.rejects(
+    () => generateWithOpencode({ spawn, executable: 'opencode', prompt: 'p', timeoutMs: 5000 }),
+    /cannot spawn/
   );
 });
 

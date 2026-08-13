@@ -23,7 +23,6 @@ const { registerAiHandlers } = require('./ipc/ai-handlers');
 const AgentSessionService = require('./agents/agent-session-service');
 const { resolveAgentExecutable } = require('./agents/agent-adapters');
 const AiService = require('./ai/ai-service');
-const { execFile } = require('node:child_process');
 const { createPty } = require('./agents/pty-factory');
 const { createInspectorWindowController } = require('./inspector-window-controller');
 const { createApplicationRuntime } = require('./application-runtime');
@@ -440,7 +439,7 @@ class MainApplication {
       storagePath: path.join(app.getPath('userData'), 'ai-settings.json'),
       vault: this.credentialVault,
       fetch,
-      execute: execFile,
+      spawn: this.modules.createPty,
       resolveExecutable: resolveAgentExecutable,
       getStagedDiff: repoPath => this.getGitService(repoPath).getStagedDiff(),
       getBranchComparison: (repoPath, base, compare) => (

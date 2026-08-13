@@ -302,7 +302,7 @@ class SettingsView {
             <div class="settings-toolbar-row" data-ai-field="model">
               <div class="settings-toolbar-copy">
                 <strong>${this.esc(t('ai.model'))}</strong>
-                <small>${this.esc(t('ai.modelHelp'))}</small>
+                <small id="ai-model-help">${this.esc(t('ai.modelHelp'))}</small>
               </div>
               <input id="settings-ai-model" class="commit-input ai-settings-input" maxlength="200"
                 value="${this.esc(aiSettings?.model || '')}" placeholder="deepseek-chat">
@@ -1067,6 +1067,7 @@ class SettingsView {
   syncAiFields() {
     const provider = this.dialog.querySelector('#settings-ai-provider')?.value;
     const status = this.dialog.querySelector('#ai-opencode-status');
+    const modelHelp = this.dialog.querySelector('#ai-model-help');
     if (!provider) return;
     const show = field => {
       this.dialog.querySelectorAll(`[data-ai-field="${field}"]`)
@@ -1076,9 +1077,14 @@ class SettingsView {
       this.dialog.querySelectorAll(`[data-ai-field="${field}"]`)
         .forEach(row => row.classList.toggle('is-hidden', true));
     };
+    if (modelHelp) {
+      modelHelp.textContent = provider === 'opencode'
+        ? t('ai.modelOpencodeHelp')
+        : t('ai.modelHelp');
+    }
     if (provider === 'opencode') {
-      ['baseUrl', 'model', 'key', 'test'].forEach(hide);
-      show('language');
+      ['baseUrl', 'key', 'test'].forEach(hide);
+      show('model'); show('language');
       if (status) status.textContent = t('ai.opencodeHelp');
     } else if (provider === 'anthropic') {
       show('model'); show('key'); show('test'); show('language');

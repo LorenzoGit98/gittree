@@ -63,7 +63,7 @@ class AiService {
     storagePath,
     vault,
     fetch,
-    execute,
+    spawn,
     resolveExecutable,
     getStagedDiff = async () => '',
     getBranchComparison = async () => ({ commits: [], diff: '' }),
@@ -72,10 +72,11 @@ class AiService {
     if (!storagePath) throw new Error('AI settings storage path is required');
     if (!vault) throw new Error('Credential vault is required');
     if (!fetch) throw new Error('Fetch is required');
+    if (!spawn) throw new Error('PTY spawn is required');
     this.store = new AiSettingsStore({ storagePath });
     this.vault = vault;
     this.fetch = fetch;
-    this.execute = execute;
+    this.spawn = spawn;
     this.resolveExecutable = resolveExecutable || (command => command);
     this.getStagedDiff = getStagedDiff;
     this.getBranchComparison = getBranchComparison;
@@ -203,9 +204,10 @@ class AiService {
       const executable = this.resolveExecutable('opencode');
       if (!executable) throw new Error('OpenCode CLI not found');
       return generateWithOpencode({
-        execute: this.execute,
+        spawn: this.spawn,
         executable,
         prompt,
+        model: this.settings.model || '',
         timeoutMs: this.timeouts.opencode
       });
     }

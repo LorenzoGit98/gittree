@@ -84,9 +84,11 @@ function resolveAgentExecutable(command, {
   ));
   if (platform !== 'win32') return availableDirect[0] || null;
 
-  const unrestricted = availableDirect.filter(candidate => (
-    !candidate.toLowerCase().includes('\\program files\\windowsapps\\')
-  ));
+  const unrestricted = availableDirect.filter(candidate => {
+    const normalized = candidate.toLowerCase();
+    return !normalized.includes('\\program files\\windowsapps\\')
+      && !normalized.includes('\\resources\\');
+  });
   const fallbacks = windowsAdapterFallbacks(command, environment, fileSystem, pathModule);
   return unrestricted[0] || fallbacks[0] || availableDirect[0] || null;
 }

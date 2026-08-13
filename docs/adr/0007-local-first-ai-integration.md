@@ -25,9 +25,12 @@ the local OpenCode CLI.
   - **OpenAI-compatible**: base URL + model + key, `POST /chat/completions`.
   - **Anthropic**: model + key, `POST /v1/messages`.
   - **OpenCode CLI**: no key in GitTree; invokes `opencode run <prompt>
-    --format json` headless and uses OpenCode's own configuration and active
-    model. Text is collected from JSON message parts; error events become
-    normalized errors.
+    --format json` headless through a pseudo-terminal (node-pty, the same
+    seam agent sessions use — plain pipes make the CLI hang on Windows) and
+    uses OpenCode's own configuration and active model. An optional model
+    override (`--model provider/model`) lets users pick a working model when
+    the active one is unavailable. Text is collected from JSON message parts;
+    error events become normalized errors.
 - Provider output is parsed from a strict `TITLE:` / `BODY:` format so every
   mode shares one parser and one prompt contract.
 - Base URLs must be `https://`, with an explicit loopback exception

@@ -1,5 +1,16 @@
+const ESCAPE = String.fromCharCode(27);
+const BELL = String.fromCharCode(7);
+const OSC_PATTERN = new RegExp(`${ESCAPE}\\][^${BELL}${ESCAPE}]*(?:${BELL}|${ESCAPE}\\\\)`, 'g');
+const CSI_PATTERN = new RegExp(`${ESCAPE}\\[[0-9;?]*[A-Za-z]`, 'g');
+
+function stripAnsi(value) {
+  return String(value || '')
+    .replace(OSC_PATTERN, '')
+    .replace(CSI_PATTERN, '');
+}
+
 function collectOpencodeText(stdout) {
-  const lines = String(stdout || '')
+  const lines = stripAnsi(stdout)
     .split(/\r?\n/)
     .map(line => line.trim())
     .filter(Boolean);
@@ -19,10 +30,9 @@ function collectOpencodeText(stdout) {
         || 'OpenCode error';
       if (!errorMessage) errorMessage = String(message);
     }
-    if (event.type === 'message' && event.part?.type === 'text') {
-      const text = String(event.part.text || '').trim();
-      if (text) parts.push(text);
-    }
+    const isTextEvent = event.type === 'text' || event.type === 'message';
+    const text = typeof event?.part?.text === 'string' ? event.part.text : '';
+    if (isTextEvent && text.trim()) parts.push(text.trim());
   }
   if (errorMessage && !parts.length) throw new Error(errorMessage);
   const output = parts.join('\n').trim();
@@ -30,29 +40,58 @@ function collectOpencodeText(stdout) {
   return output;
 }
 
-function generateWithOpencode({ execute, executable, prompt, timeoutMs, maxBuffer }) {
+function generateWithOpencode({
+  spawn,
+  executable,
+  prompt,
+  model = '',
+  timeoutMs = 120000,
+  maxOutput = 262144
+}) {
+  const args = ['run'];
+  if (model) args.push('--model', model);
+  args.push(prompt, '--format', 'json');
   return new Promise((resolve, reject) => {
+    let output = '';
+    let settled = false;
+    let pty = null;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      try {
+        pty?.kill?.();
+      } catch { /* process already gone */ }
+      reject(new Error('OpenCode timed out'));
+    }, timeoutMs);
     try {
-      execute(executable, ['run', prompt, '--format', 'json'], {
-        windowsHide: true,
-        timeout: timeoutMs,
-        maxBuffer: maxBuffer || 1024 * 1024
-      }, (error, stdout) => {
-        if (error) {
-          reject(new Error(
-            error.code === 'ETIMEDOUT' ? 'OpenCode timed out' : (error.message || 'OpenCode failed')
-          ));
-          return;
-        }
-        try {
-          resolve(collectOpencodeText(stdout));
-        } catch (parseError) {
-          reject(parseError);
-        }
+      pty = spawn(executable, args, {
+        cols: 120,
+        rows: 30,
+        name: 'xterm-256color'
       });
     } catch (error) {
+      clearTimeout(timer);
+      settled = true;
       reject(new Error(error.message || 'OpenCode failed'));
+      return;
     }
+    pty.onData(data => {
+      output += data;
+      if (output.length > maxOutput) output = output.slice(-maxOutput);
+    });
+    pty.onExit(({ exitCode }) => {
+      clearTimeout(timer);
+      if (settled) return;
+      settled = true;
+      try {
+        resolve(collectOpencodeText(output));
+      } catch (parseError) {
+        const message = exitCode !== 0 && /did not return any text/.test(parseError.message)
+          ? `OpenCode exited with code ${exitCode}`
+          : parseError.message;
+        reject(new Error(message));
+      }
+    });
   });
 }
 

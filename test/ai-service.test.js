@@ -21,6 +21,35 @@ function createVault() {
   };
 }
 
+function createFakePty(outputText) {
+  const handlers = { data: [], exit: [] };
+  const emit = () => {
+    for (const listener of handlers.data) listener(outputText);
+    for (const listener of handlers.exit) listener({ exitCode: 0 });
+  };
+  return {
+    onData(listener) { handlers.data.push(listener); return { dispose() {} }; },
+    onExit(listener) { handlers.exit.push(listener); return { dispose() {} }; },
+    kill() {},
+    emit
+  };
+}
+
+function openCodeEvents(lines) {
+  return lines.map(text => JSON.stringify({
+    type: 'text', part: { type: 'text', text }
+  })).join('\n');
+}
+
+function spawnOpenCode(received, lines) {
+  return (_executable, args) => {
+    received.args = args;
+    const pty = createFakePty(openCodeEvents(lines));
+    setImmediate(() => pty.emit());
+    return pty;
+  };
+}
+
 function createService(t, overrides = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'gittree-ai-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
@@ -31,7 +60,7 @@ function createService(t, overrides = {}) {
     fetch: overrides.fetch || (async () => {
       throw new Error('fetch should not be called');
     }),
-    execute: overrides.execute || (() => { throw new Error('execute should not be called'); }),
+    spawn: overrides.spawn || (() => { throw new Error('spawn should not be called'); }),
     resolveExecutable: overrides.resolveExecutable || (command => `${command}.exe`),
     getStagedDiff: overrides.getStagedDiff || (async () => 'diff --git a/x b/x'),
     getBranchComparison: overrides.getBranchComparison
@@ -137,18 +166,34 @@ test('service rejects generation without staged changes', async t => {
 });
 
 test('service generates through the opencode CLI and uses its own config', async t => {
+  const received = {};
   const { service } = createService(t, {
-    execute: (_executable, _args, _options, callback) => {
-      callback(null, JSON.stringify({
-        type: 'message', part: { type: 'text', text: 'TITLE: feat: cli\nBODY: from opencode' }
-      }));
-    }
+    spawn: spawnOpenCode(received, ['TITLE: feat: cli', 'BODY: from opencode'])
   });
   await service.initialize();
   assert.equal((await service.getSettings()).provider, 'opencode');
 
   const result = await service.generateCommitMessage('C:\\repo');
   assert.equal(result.summary, 'feat: cli');
+  assert.equal(received.args.includes('--model'), false);
+});
+
+test('service passes an explicit model override to the opencode CLI', async t => {
+  const received = {};
+  const { service } = createService(t, {
+    spawn: spawnOpenCode(received, ['TITLE: feat: model', 'BODY: done'])
+  });
+  await service.initialize();
+  await service.setSettings({
+    provider: 'opencode', baseUrl: '', model: 'opencode-go/deepseek-v4-pro', language: 'auto'
+  });
+
+  await service.generateCommitMessage('C:\\repo');
+  assert.equal(received.args.includes('--model'), true);
+  assert.equal(
+    received.args[received.args.indexOf('--model') + 1],
+    'opencode-go/deepseek-v4-pro'
+  );
 });
 
 test('service reports missing opencode executable', async t => {
