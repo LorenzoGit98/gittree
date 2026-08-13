@@ -1,3 +1,10 @@
+# [0.19.0](https://github.com/giannoccarol/gittree/compare/v0.18.0...v0.19.0) (2026-08-13)
+
+
+### Features
+
+* **ai:** explain commits from the history context menu ([c268555](https://github.com/giannoccarol/gittree/commit/c2685554787fdf18de75040724530df7a7f6b3c2))
+
 # [0.18.0](https://github.com/giannoccarol/gittree/compare/v0.17.0...v0.18.0) (2026-08-13)
 
 
