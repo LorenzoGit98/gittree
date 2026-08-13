@@ -324,6 +324,7 @@ async function measureRenderer(page) {
       const resizeRowsBefore = [...graphView.layer.querySelectorAll('.graph-row')];
       const resizeFrameSamples = [];
       const resizeOpacitySamples = [];
+      const resizeBranchSamples = [];
       leftHandle.dispatchEvent(new PointerEvent('pointerdown', {
         bubbles: true,
         clientX: pointerX,
@@ -351,6 +352,12 @@ async function measureRenderer(page) {
         ].filter(panel => getComputedStyle(panel).display !== 'none').every(panel => (
           getComputedStyle(panel).opacity === '1'
         )));
+        const branchListElement = document.getElementById('branch-list');
+        const firstBranch = branchListElement?.querySelector('.branch-item');
+        resizeBranchSamples.push(Boolean(
+          branchListElement && branchListElement.getBoundingClientRect().height > 0
+          && firstBranch && firstBranch.getBoundingClientRect().height > 0
+        ));
       }
       const widthDuringMove = workspace.style.getPropertyValue('--left-panel');
       const storedWidthDuringMove = localStorage.getItem('gittree.panel.left');
@@ -498,6 +505,7 @@ async function measureRenderer(page) {
             widthAfterRelease === `${Math.round(expectedWidth)}px` &&
             storedWidth === Math.round(expectedWidth),
           resizeKeepsContentOpaque: resizeOpacitySamples.every(Boolean),
+          resizeKeepsBranchContentVisible: resizeBranchSamples.every(Boolean),
           resizePreservesGraphRows:
             resizeRowsBefore.length === resizeRowsDuring.length &&
             resizeRowsBefore.every((row, index) => resizeRowsDuring[index] === row),

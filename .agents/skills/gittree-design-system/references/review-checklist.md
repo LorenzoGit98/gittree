@@ -18,6 +18,7 @@
 
 - Verify both resize handles follow the pointer in realtime, coalesce movement to one grid write per frame, and persist once on release.
 - Verify visible workspace content remains fully opaque and mounted during resize; reject fades, dimming layers, overlays, and view refreshes.
+- Verify the branch navigator and history content stay visible (non-zero size) during resize; resize isolation may add layout/paint containment but never `contain: size`.
 - Verify handle hover/drag feedback uses `transform` only and the handle remains in its grid track.
 - Verify the inspector hides before the branch navigator at narrow widths.
 - Verify the commit history keeps a usable minimum width.

@@ -23,6 +23,10 @@ feel disconnected because content snapped to its final width only on release.
 - During resize, visible panels remain at `opacity: 1`, mounted view nodes are
   preserved, and no data refresh is triggered. The width is persisted exactly
   once on `pointerup`.
+- Resize-time isolation uses layout/paint containment only. `contain: size`
+  collapsed content-sized panels (the branch navigator) during drags, so size
+  containment is prohibited on resize; the renderer benchmark asserts branch
+  rows stay visible throughout the drag.
 - Resize handles use transform-only scale feedback and never translate away
   from their grid track; stagger delays are capped so dense lists never compose
   hundreds of layers.

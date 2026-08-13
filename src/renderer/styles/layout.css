@@ -444,8 +444,8 @@
 .workspace-body.is-resizing .graph-view,
 .workspace-body.is-resizing .branch-list,
 .workspace-body.is-resizing .pr-list,
-.workspace-body.is-resizing .changes-list {
-  contain: strict;
+.workspace-body.is-resizing .changes-file-list {
+  contain: layout paint style;
 }
 
 .resize-handle-v::after {

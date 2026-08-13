@@ -10,6 +10,7 @@ Motion in GitTree communicates continuity, state changes, and direct manipulatio
 
 - Keep functional surfaces opaque. During workspace resize, visible content remains at `opacity: 1`; there is no fade, dimming layer, or temporary overlay.
 - Preserve mounted views and their DOM nodes across panel motion and resize. A visual transition must not trigger a data refresh or rebuild the commit graph.
+- Resize-time isolation may add layout/paint containment, but `contain: size` is prohibited: it collapses content-sized panels such as the branch navigator and hides mounted content during the drag.
 - Use `140ms` for control feedback and `220ms` for panel/state changes.
 - CSS animations and transitions may change only `transform` and `opacity`.
 - Realtime resize is the deliberate exception to compositor-only movement: it updates a grid width CSS variable at most once per animation frame so the panel follows the pointer.
@@ -21,7 +22,7 @@ Motion in GitTree communicates continuity, state changes, and direct manipulatio
 | Interaction | Visual behavior | Performance invariant | Completion |
 | --- | --- | --- | --- |
 | Sidebar/inspector open and close | Short lateral `transform` with opacity transition | Workspace grid does not animate; mounted graph rows survive | State and focus are correct after animation or cancellation |
-| Workspace panel resize | Panels follow the pointer in realtime | Pointer events are coalesced to one grid CSS-variable write per `requestAnimationFrame`; content stays opaque; no view refresh | Final width is persisted exactly once on `pointerup` |
+| Workspace panel resize | Panels follow the pointer in realtime | Pointer events are coalesced to one grid CSS-variable write per `requestAnimationFrame`; content stays opaque and sized; no view refresh | Final width is persisted exactly once on `pointerup` |
 | Vertical resize handle | Solid bar stretches subtly on hover and drag | `transform` feedback only; no handle translation and no layout contribution | Drag class is removed on release or cancellation |
 | History column resize | Separator preview follows the pointer | Preview uses `transform`; column layout commits on release | Column widths persist once |
 | Dense-list selection | Immediate state change | Existing row nodes update in place | Selection and inspector agree |
