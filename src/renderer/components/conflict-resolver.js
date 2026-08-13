@@ -290,6 +290,7 @@ class ConflictResolver {
     document.getElementById('conflict-undo')?.addEventListener('click', () => this.undo());
     document.getElementById('conflict-mark-resolved')?.addEventListener('click', () => this.markResolved());
     document.getElementById('conflict-ai-explain')?.addEventListener('click', () => this.explainBlock());
+    document.getElementById('conflict-ai-delegate')?.addEventListener('click', () => this.delegateToAgent());
     const resultEditor = document.getElementById('conflict-result-editor');
     if (resultEditor) resultEditor.value = this.resultContent;
     this.bindTextEditor();
@@ -366,6 +367,28 @@ class ConflictResolver {
     return current.startsWith('it') ? 'it' : 'en';
   }
 
+  delegateToAgent() {
+    const panel = this.app.components?.worktreeAgents;
+    if (!panel) return;
+    const block = this.blocks[this.activeBlockIndex];
+    if (!block) return;
+    const prompt = [
+      `Resolve the merge conflict in ${this.currentPath} `
+        + `(block ${this.activeBlockIndex + 1} of ${this.blocks.length}) `
+        + `of the ${this.state?.type || 'git'} operation.`,
+      'Analyze the three versions below and produce the merged content',
+      'that keeps the intent of both sides.',
+      'Return only the merged code or file content; do not run git commands.',
+      '--- base version ---',
+      block.base || '(empty)',
+      '--- current version (ours) ---',
+      block.current || '(empty)',
+      '--- incoming version (theirs) ---',
+      block.incoming || '(empty)'
+    ].filter(Boolean).join('\n');
+    panel.openNewSession(null, { prefillPrompt: prompt });
+  }
+
   renderBinaryState() {
     return `
       <div class="conflict-binary-state">
@@ -406,6 +429,9 @@ class ConflictResolver {
             <button class="btn btn-small" data-choice="ignore">${this.esc(t('conflicts.ignore'))}</button>
             <button class="btn btn-small" id="conflict-ai-explain" type="button">
               <i class="ph ph-sparkle" aria-hidden="true"></i><span>${this.esc(t('conflicts.aiExplain'))}</span>
+            </button>
+            <button class="btn btn-small" id="conflict-ai-delegate" type="button">
+              <i class="ph ph-robot" aria-hidden="true"></i><span>${this.esc(t('conflicts.aiDelegateToAgent'))}</span>
             </button>
           </div>
         ` : `<span class="conflict-manual-note">${this.esc(

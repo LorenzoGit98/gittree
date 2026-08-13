@@ -254,7 +254,7 @@ class WorktreeAgentPanel {
     });
   }
 
-  async openNewSession(worktree = null) {
+  async openNewSession(worktree = null, prefill = {}) {
     if (!this.repo) return;
     if (!this.enabled) return this.app.showToast(t('agents.featureDisabled'), 'error');
     if (!worktree) {
@@ -278,7 +278,7 @@ class WorktreeAgentPanel {
     const form = await this.app.dialogs.form({
       title: t('agents.newSession'),
       fields: `<label>${this.esc(t('agents.title'))}<input name="title" maxlength="120" required autofocus></label>
-        <label>${this.esc(t('agents.prompt'))}<textarea name="prompt" maxlength="32768" required></textarea></label>
+        <label>${this.esc(t('agents.prompt'))}<textarea name="prompt" maxlength="32768" required>${this.esc(String(prefill.prompt || ''))}</textarea></label>
         ${worktree ? '' : `<label>${this.esc(t('agents.baseRef'))}<input name="baseRef" maxlength="512" value="${this.esc(this.app.state.currentBranch || 'HEAD')}" required></label>
         <label>${this.esc(t('agents.branch'))}<input name="branch" maxlength="255" placeholder="agent/task-shortId"></label>`}
         <label>${this.esc(t('agents.adapter'))}<select name="adapterId"><option value="codex">Codex</option><option value="claude">Claude Code</option><option value="opencode">OpenCode / DeepSeek</option></select></label>
