@@ -1,3 +1,11 @@
+# [0.17.0](https://github.com/giannoccarol/gittree/compare/v0.16.0...v0.17.0) (2026-08-13)
+
+
+### Features
+
+* **agents:** prefill conflict prompt into agent sessions ([ee568a9](https://github.com/giannoccarol/gittree/commit/ee568a9e6dd936c4d583ac809cbc3931f0905c3c))
+* **ai:** explain merge conflict blocks with AI ([fc69972](https://github.com/giannoccarol/gittree/commit/fc6997235e559644ee02ce9fcae0bfcfb0b8f1e6))
+
 # [0.16.0](https://github.com/giannoccarol/gittree/compare/v0.15.1...v0.16.0) (2026-08-13)
 
 
