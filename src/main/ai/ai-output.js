@@ -147,6 +147,27 @@ function buildHistorySearchPrompt({ query, commits, language }) {
   ].filter(Boolean).join('\n');
 }
 
+function buildBlamePrompt({ file, hash, rows, language }) {
+  const targetLanguage = language === 'it' ? 'Italian' : 'English';
+  const rowLines = (rows || [])
+    .slice(0, 200)
+    .map(row => `${row.hash} ${row.author} ${row.summary}`);
+  return [
+    'You are the history-narrator assistant of a Git desktop client.',
+    'Explain the history of the file below from its git blame data.',
+    `File: ${file}`,
+    `At commit: ${hash}`,
+    `Write the explanation in ${targetLanguage}.`,
+    'Keep it under 12 markdown lines: who touched the file, in which order,',
+    'and what each change was about according to the commit summaries.',
+    'Answer with exactly this format and nothing else:',
+    'TITLE: <short narrative title>',
+    'BODY: <explanation>',
+    '--- blame rows (hash author summary) ---',
+    ...rowLines
+  ].filter(Boolean).join('\n');
+}
+
 function buildPrPrompt({ diff, commits, hint, language }) {
   const targetLanguage = language === 'it' ? 'Italian' : 'English';
   const commitLines = (commits || [])
@@ -179,5 +200,6 @@ module.exports = {
   buildExplainPrompt,
   buildConflictPrompt,
   buildCommitExplainPrompt,
-  buildHistorySearchPrompt
+  buildHistorySearchPrompt,
+  buildBlamePrompt
 };

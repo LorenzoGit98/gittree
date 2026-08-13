@@ -96,6 +96,8 @@ class DiffViewer {
   }
 
   async showDiffForCommit(repoPath, hash) {
+    this.activeRepoPath = repoPath;
+    this.activeHash = hash;
     const title = document.getElementById('detail-title');
     const compactTitle = t('details.changesIn', { hash: hash.substring(0, 7) });
     title.textContent = compactTitle;
@@ -284,7 +286,105 @@ class DiffViewer {
     label.className = 'diff-file-path';
     label.textContent = path;
     header.appendChild(label);
+    if (this.activeRepoPath && this.activeHash) {
+      const blameButton = document.createElement('button');
+      blameButton.type = 'button';
+      blameButton.className = 'diff-file-blame';
+      blameButton.title = t('details.aiBlame');
+      blameButton.setAttribute('aria-label', t('details.aiBlame'));
+      const icon = document.createElement('i');
+      icon.className = 'ph ph-sparkle';
+      icon.setAttribute('aria-hidden', 'true');
+      blameButton.appendChild(icon);
+      blameButton.onclick = event => {
+        event.stopPropagation();
+        this.openBlameDialog(path);
+      };
+      header.appendChild(blameButton);
+    }
     return header;
+  }
+
+  async openBlameDialog(filePath) {
+    const repoPath = this.activeRepoPath;
+    const hash = this.activeHash;
+    if (!repoPath || !hash) return;
+    const overlay = document.getElementById('modal-overlay');
+    const dialog = document.getElementById('modal-dialog');
+    dialog.className = 'confirm-dialog ai-blame-dialog';
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    dialog.innerHTML = `
+      <div class="ai-explain-loading">
+        <i class="ph ph-circle-notch" aria-hidden="true"></i>
+        <span>${this.esc(t('details.aiExplaining'))}</span>
+      </div>`;
+    overlay.classList.remove('is-hidden');
+    const language = await this.aiLanguage().catch(() => 'en');
+    return new Promise(resolve => {
+      let settled = false;
+      const finish = value => {
+        if (settled) return;
+        settled = true;
+        document.removeEventListener('keydown', onKeydown);
+        overlay.classList.add('is-hidden');
+        dialog.className = 'confirm-dialog';
+        dialog.removeAttribute('role');
+        dialog.removeAttribute('aria-modal');
+        dialog.innerHTML = '';
+        resolve(value);
+      };
+      const onKeydown = event => {
+        if (event.key === 'Escape') finish(null);
+      };
+      document.addEventListener('keydown', onKeydown);
+      Promise.allSettled([
+        window.gitTree.getBlame(repoPath, filePath, hash),
+        window.gitTree.explainLines(repoPath, { file: filePath, hash, language })
+      ]).then(([blameResult, explainResult]) => {
+        if (settled) return;
+        const blame = blameResult.status === 'fulfilled' && !blameResult.value?.error
+          ? (blameResult.value?.rows || []).slice(0, 30)
+          : [];
+        const explanation = explainResult.status === 'fulfilled' ? explainResult.value : null;
+        if (explanation?.error) {
+          finish(null);
+          this.app.showToast(explanation.error, 'error');
+          return;
+        }
+        if (!explanation) {
+          finish(null);
+          this.app.showToast(t('common.error'), 'error');
+          return;
+        }
+        const rows = blame.map(row => `
+          <div class="ai-blame-row">
+            <code>${this.esc(String(row.hash || '').slice(0, 7))}</code>
+            <span class="ai-blame-author">${this.esc(row.author || '')}</span>
+            <span class="ai-blame-summary">${this.esc(row.summary || '')}</span>
+          </div>`).join('');
+        dialog.innerHTML = `
+          <div class="ai-explain-result">
+            <span class="eyebrow">${this.esc(filePath)} · ${this.esc(hash.slice(0, 7))}</span>
+            <h3>${this.esc(explanation.summary || '')}</h3>
+            <div class="ai-explain-body">${this.esc(explanation.body || '')}</div>
+            ${rows ? `<div class="ai-blame-list">${rows}</div>` : ''}
+            <div class="confirm-actions">
+              <button class="btn btn-primary" type="button" data-close>${this.esc(t('common.cancel'))}</button>
+            </div>
+          </div>`;
+        dialog.querySelector('[data-close]').onclick = () => finish(null);
+      });
+    });
+  }
+
+  async aiLanguage() {
+    const settings = await window.gitTree.getAiSettings().catch(() => null);
+    if (settings?.language === 'en' || settings?.language === 'it') {
+      return settings.language;
+    }
+    const current = localStorage.getItem('gittree.language') || 'en';
+    return current.startsWith('it') ? 'it' : 'en';
   }
 
   extractFileSummaries(diffText) {
@@ -345,6 +445,8 @@ class DiffViewer {
     this.currentDiff = null;
     this.fileSummaries = [];
     this.selectedFilePath = null;
+    this.activeRepoPath = null;
+    this.activeHash = null;
     this.body.innerHTML = `<div class="diff-placeholder"><i class="ph ph-cursor-click"></i>${t('details.placeholder')}</div>`;
     const title = document.getElementById('detail-title');
     title.textContent = t('details.title');

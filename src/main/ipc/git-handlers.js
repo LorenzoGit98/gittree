@@ -25,6 +25,7 @@ function registerGitHandlers({
     ['git:graph-page', 'getGraphPage'],
     ['git:diff', 'getDiff'],
     ['git:commit-detail', 'getCommitDetail'],
+    ['git:blame', 'getBlame'],
     ['git:branches', 'getBranches'],
     ['git:branch-metadata', 'getBranchMetadata'],
     ['git:branch-compare', 'getBranchComparison'],

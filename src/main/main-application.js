@@ -473,7 +473,10 @@ class MainApplication {
           hash: commit.hash,
           subject: String(commit.message || '').split('\n')[0]
         }));
-      }
+      },
+      getBlameRows: async (repoPath, file, hash) => (
+        (await this.getGitService(repoPath).getBlame(file, hash)).rows
+      )
     });
     await this.aiService.initialize();
     this.hostingService = new this.modules.HostingService({

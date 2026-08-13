@@ -1,4 +1,5 @@
 const { parseWorkingDiff } = require('./patch-parser');
+const { parseBlamePorcelain } = require('./blame-parser');
 
 class RepositoryHistory {
   constructor({
@@ -240,6 +241,23 @@ class RepositoryHistory {
       };
     } catch (error) {
       throw new Error(`Failed to get commit detail: ${error.message}`, { cause: error });
+    }
+  }
+
+  async getBlame(filePath, hash = 'HEAD') {
+    const relativePath = this.validateRepositoryPath(filePath);
+    this.assertSafeRef(hash);
+    try {
+      const output = await this.git.raw([
+        'blame',
+        '--line-porcelain',
+        hash,
+        '--',
+        relativePath
+      ]);
+      return { path: relativePath, hash, rows: parseBlamePorcelain(output) };
+    } catch (error) {
+      throw new Error(`Failed to get blame: ${error.message}`, { cause: error });
     }
   }
 }

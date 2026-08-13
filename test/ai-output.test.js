@@ -9,7 +9,8 @@ const {
   buildExplainPrompt,
   buildConflictPrompt,
   buildCommitExplainPrompt,
-  buildHistorySearchPrompt
+  buildHistorySearchPrompt,
+  buildBlamePrompt
 } = require('../src/main/ai/ai-output');
 
 test('parses the strict TITLE/BODY format from provider output', () => {
@@ -163,4 +164,23 @@ test('search output parser dedupes hashes and ignores NO MATCHES', () => {
     candidates
   );
   assert.deepEqual(matches, [{ hash: 'abc1234', reason: 'first' }]);
+});
+
+test('blame prompt carries the file, commit and bounded blame rows', () => {
+  const prompt = buildBlamePrompt({
+    file: 'src/auth.js',
+    hash: 'abc1234',
+    rows: [
+      { hash: 'abc1234', author: 'Ada', summary: 'feat: auth' },
+      { hash: 'def5678', author: 'Grace', summary: 'fix: tokens' }
+    ],
+    language: 'en'
+  });
+  assert.match(prompt, /File: src\/auth\.js/);
+  assert.match(prompt, /At commit: abc1234/);
+  assert.match(prompt, /Write the explanation in English/);
+  assert.match(prompt, /abc1234 Ada feat: auth/);
+  assert.match(prompt, /def5678 Grace fix: tokens/);
+  assert.match(prompt, /--- blame rows \(hash author summary\) ---/);
+  assert.match(prompt, /TITLE: <short narrative title>/);
 });

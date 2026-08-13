@@ -7,7 +7,8 @@ const {
   buildExplainPrompt,
   buildConflictPrompt,
   buildCommitExplainPrompt,
-  buildHistorySearchPrompt
+  buildHistorySearchPrompt,
+  buildBlamePrompt
 } = require('./ai-output');
 const { requestOpenAiCompatible, requestAnthropic } = require('./ai-providers');
 const { generateWithOpencode } = require('./ai-opencode');
@@ -80,6 +81,7 @@ class AiService {
     getConflictBlock = async () => null,
     getCommitContext = async () => null,
     getHistoryCandidates = async () => [],
+    getBlameRows = async () => [],
     timeouts = DEFAULT_TIMEouts
   }) {
     if (!storagePath) throw new Error('AI settings storage path is required');
@@ -97,6 +99,7 @@ class AiService {
     this.getConflictBlock = getConflictBlock;
     this.getCommitContext = getCommitContext;
     this.getHistoryCandidates = getHistoryCandidates;
+    this.getBlameRows = getBlameRows;
     this.timeouts = { ...DEFAULT_TIMEouts, ...(timeouts || {}) };
     const restored = this.store.load();
     this.settings = restored.settings;
@@ -281,6 +284,27 @@ class AiService {
         reason: match.reason
       }))
     };
+  }
+
+  async explainLines(repoPath, options = {}) {
+    const file = String(options.file || '').trim();
+    const hash = String(options.hash || '').trim();
+    if (!file || file.length > 500 || !/^[0-9a-f]{7,40}$/i.test(hash)) {
+      throw new Error('Invalid file or commit hash');
+    }
+    const rows = (await this.getBlameRows(repoPath, file, hash) || [])
+      .slice(0, 200)
+      .map(row => ({
+        hash: String(row.hash || '').slice(0, 12),
+        author: String(row.author || '').slice(0, 100),
+        summary: String(row.summary || '').slice(0, 300)
+      }))
+      .filter(row => row.hash);
+    if (!rows.length) throw new Error('No blame information for this file');
+    const language = this.normalizeLanguage(options.language);
+    const prompt = buildBlamePrompt({ file, hash, rows, language });
+    const raw = await this.runProvider(prompt);
+    return parseAiOutput(raw, { maxTitleLength: 200 });
   }
 
   async generatePrDescription(repoPath, options = {}) {

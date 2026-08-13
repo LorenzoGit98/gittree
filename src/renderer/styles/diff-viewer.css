@@ -51,6 +51,68 @@
   white-space: nowrap;
 }
 
+.diff-file-blame {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: 50%;
+  background: var(--surface-secondary);
+  color: var(--text-link);
+  cursor: pointer;
+}
+
+.diff-file-blame:hover,
+.diff-file-blame:focus-visible {
+  border-color: var(--border-strong);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+}
+
+.ai-blame-list {
+  display: grid;
+  gap: var(--space-1);
+  max-height: 30vh;
+  overflow: auto;
+  padding: var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-secondary);
+}
+
+.ai-blame-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.ai-blame-row code {
+  flex-shrink: 0;
+  color: var(--text-link);
+}
+
+.ai-blame-author {
+  flex-shrink: 0;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-blame-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .diff-file-stats {
   display: flex;
   gap: var(--space-2);

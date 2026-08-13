@@ -68,7 +68,8 @@ function createService(t, overrides = {}) {
       || (async () => ({ commits: [{ subject: 'feat: first' }], diff: 'diff body' })),
     getConflictBlock: overrides.getConflictBlock || (async () => null),
     getCommitContext: overrides.getCommitContext || (async () => null),
-    getHistoryCandidates: overrides.getHistoryCandidates || (async () => [])
+    getHistoryCandidates: overrides.getHistoryCandidates || (async () => []),
+    getBlameRows: overrides.getBlameRows || (async () => [])
   });
   return { directory, vault, service };
 }
@@ -600,5 +601,70 @@ test('service rejects too-short history search questions', async t => {
   await assert.rejects(
     () => service.searchHistory('C:\\repo', { query: 'ab' }),
     /longer search question/
+  );
+});
+
+test('service narrates file history from blame rows', async t => {
+  const prompts = [];
+  const fetch = async (_url, options) => {
+    prompts.push(JSON.parse(options.body).messages[0].content);
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: { content: 'TITLE: Auth file history\nBODY: Ada built the module, Grace fixed tokens.' }
+        }]
+      })
+    };
+  };
+  const { service } = createService(t, {
+    fetch,
+    getBlameRows: async (repoPath, file, hash) => {
+      assert.equal(repoPath, 'C:\\repo');
+      assert.equal(file, 'src/auth.js');
+      assert.equal(hash, 'abc1234');
+      return [
+        { hash: 'abc1234', author: 'Ada', summary: 'feat: auth' },
+        { hash: 'def5678', author: 'Grace', summary: 'fix: tokens' }
+      ];
+    }
+  });
+  await service.initialize();
+  await service.setKey('sk-test');
+  await service.setSettings({
+    provider: 'openai', baseUrl: 'https://api.deepseek.com/v1', model: 'm'
+  });
+
+  const result = await service.explainLines('C:\\repo', {
+    file: 'src/auth.js',
+    hash: 'abc1234',
+    language: 'it'
+  });
+  assert.equal(result.summary, 'Auth file history');
+  assert.match(result.body, /Grace fixed tokens/);
+  assert.equal(prompts.length, 1);
+  assert.match(prompts[0], /File: src\/auth\.js/);
+  assert.match(prompts[0], /abc1234 Ada feat: auth/);
+  assert.match(prompts[0], /Write the explanation in Italian/);
+});
+
+test('service rejects invalid blame requests and empty blame rows', async t => {
+  const { service } = createService(t);
+  await service.initialize();
+  await service.setKey('sk-test');
+  await service.setSettings({
+    provider: 'openai', baseUrl: 'https://api.deepseek.com/v1', model: 'm'
+  });
+  await assert.rejects(
+    () => service.explainLines('C:\\repo', { file: '', hash: 'abc1234' }),
+    /Invalid file or commit hash/
+  );
+  await assert.rejects(
+    () => service.explainLines('C:\\repo', { file: 'a.js', hash: 'bad;hash' }),
+    /Invalid file or commit hash/
+  );
+  await assert.rejects(
+    () => service.explainLines('C:\\repo', { file: 'a.js', hash: 'abc1234' }),
+    /No blame information for this file/
   );
 });

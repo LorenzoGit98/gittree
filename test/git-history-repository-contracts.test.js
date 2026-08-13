@@ -128,4 +128,28 @@ test('Git history queries preserve their public repository contract', async t =>
       /Invalid Git ref/
     );
   });
+
+  await t.test('blame exposes per-line hashes, authors and summaries', async () => {
+    const blame = await service.getBlame('main-two.txt', 'HEAD');
+
+    assert.equal(blame.path, 'main-two.txt');
+    assert.equal(blame.hash, 'HEAD');
+    assert.equal(blame.rows.length, 1);
+    assert.equal(blame.rows[0].finalLine, 1);
+    assert.equal(blame.rows[0].author, 'GitTree Tests');
+    assert.equal(blame.rows[0].summary, 'main two');
+
+    const atCommit = await service.getBlame('target.txt', root);
+    assert.equal(atCommit.rows.length, 1);
+    assert.equal(atCommit.rows[0].summary, 'root commit');
+
+    await assert.rejects(
+      service.getBlame('../outside.txt'),
+      /outside the repository/
+    );
+    await assert.rejects(
+      service.getBlame('target.txt', '--all'),
+      /Invalid Git ref/
+    );
+  });
 });

@@ -33,6 +33,7 @@ test('AI handlers validate managed repositories and normalize errors', async () 
     explainConflict: async () => ({ summary: 'Merge both validations', body: 'Keep both checks.' }),
     explainCommit: async () => ({ summary: 'Fixes pagination', body: 'Offset corrected.' }),
     searchHistory: async () => ({ matches: [{ hash: 'abc1234', subject: 'feat: login', reason: 'added login' }] }),
+    explainLines: async () => ({ summary: 'Auth history', body: 'Ada built it.' }),
     generatePrDescription: async (repoPath, options) => ({
       summary: options.title || 'PR', body: ''
     })
@@ -48,6 +49,7 @@ test('AI handlers validate managed repositories and normalize errors', async () 
       'ai:explain-conflict',
       'ai:explain-commit',
       'ai:history-search',
+      'ai:explain-lines',
       'ai:pr-description'
     ]
   );
@@ -73,6 +75,10 @@ test('AI handlers validate managed repositories and normalize errors', async () 
   assert.equal(
     (await registered.get('ai:history-search')('C:\\repo', { query: 'login' })).matches[0].hash,
     'abc1234'
+  );
+  assert.equal(
+    (await registered.get('ai:explain-lines')('C:\\repo', { file: 'a.js', hash: 'abc1234' })).summary,
+    'Auth history'
   );
   assert.equal(
     (await registered.get('ai:pr-description')('C:\\repo', { source: 'a', target: 'b', title: 'T' })).summary,

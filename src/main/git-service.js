@@ -99,6 +99,10 @@ class GitService {
     return this.history.getCommitDetail(hash);
   }
 
+  async getBlame(filePath, hash = 'HEAD') {
+    return this.history.getBlame(filePath, hash);
+  }
+
   async getBranches() {
     try {
       const result = await this.git.branch(['-a']);

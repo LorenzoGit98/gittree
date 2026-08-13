@@ -243,11 +243,17 @@ contextBridge.exposeInMainWorld('gitTree', {
   searchHistory: (repoPath, options) =>
     ipcRenderer.invoke('ai:history-search', repoPath, options),
 
+  explainLines: (repoPath, options) =>
+    ipcRenderer.invoke('ai:explain-lines', repoPath, options),
+
   generatePrDescription: (repoPath, options) =>
     ipcRenderer.invoke('ai:pr-description', repoPath, options),
 
   getStagedDiff: repoPath =>
     ipcRenderer.invoke('git:staged-diff', repoPath),
+
+  getBlame: (repoPath, filePath, hash) =>
+    ipcRenderer.invoke('git:blame', repoPath, filePath, hash),
 
   getUnstagedDiff: repoPath =>
     ipcRenderer.invoke('git:unstaged-diff', repoPath),
