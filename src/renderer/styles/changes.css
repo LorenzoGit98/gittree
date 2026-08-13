@@ -85,7 +85,7 @@
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  contain: strict;
+  contain: layout paint style;
 }
 
 .changes-file-spacer {
@@ -95,14 +95,14 @@
 
 .changes-file-row {
   position: absolute;
+  top: 0;
   left: 0;
   width: 100%;
   height: 38px;
-  display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) auto;
+  display: flex;
   align-items: center;
-  column-gap: var(--space-1);
-  padding: 0 var(--space-2);
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
   border: 0;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-primary);
@@ -120,8 +120,9 @@
 }
 
 .changes-file-status {
-  width: 22px;
+  width: 26px;
   height: 22px;
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -134,10 +135,12 @@
 }
 
 .changes-file-main {
+  flex: 1;
   min-width: 0;
   height: 100%;
   display: flex;
   align-items: center;
+  gap: var(--space-2);
   border: 0;
   background: var(--surface-primary);
   color: inherit;
@@ -162,6 +165,7 @@
 .changes-file-action {
   width: 28px;
   height: 28px;
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -217,7 +221,6 @@
 }
 
 .changes-submodule-badge {
-  margin-left: var(--space-2);
   flex-shrink: 0;
 }
 

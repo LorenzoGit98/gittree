@@ -12,6 +12,18 @@ class ChangesView {
     this.diffRequest = 0;
     this.rowHeight = 38;
     this.overscan = 8;
+    this.fileLists = {
+      unstaged: new ChangesFileList(
+        document.getElementById('unstaged-files'),
+        { rowHeight: this.rowHeight, overscan: this.overscan }
+      ),
+      staged: new ChangesFileList(
+        document.getElementById('staged-files'),
+        { rowHeight: this.rowHeight, overscan: this.overscan }
+      )
+    };
+    this.fileLists.unstaged.mount();
+    this.fileLists.staged.mount();
     this.elements = {
       unstaged: document.getElementById('unstaged-files'),
       staged: document.getElementById('staged-files'),
@@ -158,50 +170,21 @@ class ChangesView {
     const fileCount = this.snapshot?.files?.length || 0;
     this.elements.modeCount.textContent = String(fileCount);
     this.elements.modeCount.classList.toggle('is-hidden', fileCount === 0);
-    this.renderVirtualList(this.elements.unstaged, unstaged, false);
-    this.renderVirtualList(this.elements.staged, staged, true);
+    this.fileLists.unstaged.update(
+      unstaged,
+      file => this.createFileRow(file, false),
+      t('changes.noUnstaged')
+    );
+    this.fileLists.staged.update(
+      staged,
+      file => this.createFileRow(file, true),
+      t('changes.noStaged')
+    );
   }
 
-  renderVirtualList(container, files, staged) {
-    container.innerHTML = '';
-    if (!files.length) {
-      const empty = document.createElement('div');
-      empty.className = 'changes-empty';
-      empty.textContent = t(staged ? 'changes.noStaged' : 'changes.noUnstaged');
-      container.appendChild(empty);
-      container.onscroll = null;
-      return;
-    }
-    const spacer = document.createElement('div');
-    spacer.className = 'changes-file-spacer';
-    spacer.style.height = `${files.length * this.rowHeight}px`;
-    container.appendChild(spacer);
-    let frame = 0;
-    const paint = () => {
-      frame = 0;
-      const visible = Math.ceil(container.clientHeight / this.rowHeight);
-      const start = Math.max(
-        0,
-        Math.floor(container.scrollTop / this.rowHeight) - this.overscan
-      );
-      const end = Math.min(files.length, start + visible + this.overscan * 2);
-      spacer.replaceChildren();
-      const fragment = document.createDocumentFragment();
-      for (let index = start; index < end; index += 1) {
-        fragment.appendChild(this.createFileRow(files[index], staged, index));
-      }
-      spacer.appendChild(fragment);
-    };
-    container.onscroll = () => {
-      if (!frame) frame = requestAnimationFrame(paint);
-    };
-    paint();
-  }
-
-  createFileRow(file, staged, index) {
+  createFileRow(file, staged) {
     const row = document.createElement('div');
     row.className = 'changes-file-row';
-    row.style.transform = `translateY(${index * this.rowHeight}px)`;
     row.setAttribute('role', 'listitem');
     row.classList.toggle(
       'selected',

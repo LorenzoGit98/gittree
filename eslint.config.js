@@ -26,6 +26,7 @@ const appGlobals = {
   GraphView: 'readonly',
   ChangesView: 'readonly',
   PullRequestView: 'readonly',
+  ChangesFileList: 'readonly',
   DiffViewer: 'readonly',
   GlobalSearch: 'readonly',
   BranchCompare: 'readonly',
