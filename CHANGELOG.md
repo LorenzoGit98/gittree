@@ -1,3 +1,10 @@
+# [0.15.0](https://github.com/giannoccarol/gittree/compare/v0.14.1...v0.15.0) (2026-08-13)
+
+
+### Features
+
+* **ai:** generate commit messages from unstaged changes too ([44ec744](https://github.com/giannoccarol/gittree/commit/44ec74401e876046b83723d0d3d3e8a8ff09f304))
+
 ## [0.14.1](https://github.com/giannoccarol/gittree/compare/v0.14.0...v0.14.1) (2026-08-13)
 
 
