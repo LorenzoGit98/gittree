@@ -333,7 +333,7 @@ test('Azure adapter creates a draft with reviewers, work items and labels', asyn
     sourceRefName: 'refs/heads/feature',
     targetRefName: 'refs/heads/main',
     title: 'Azure feature',
-    description: 'Ship it',
+    description: 'Ship it\n\nAB#1001\nAB#1002',
     isDraft: true,
     reviewers: [{ id: 'reviewer-guid' }],
     workItemRefs: [{ id: '1001' }, { id: '1002' }]
@@ -343,6 +343,45 @@ test('Azure adapter creates a draft with reviewers, work items and labels', asyn
   assert.equal(result.pullRequest.number, 77);
   assert.match(result.url, /pullrequest\/77$/);
   assert.deepEqual(result.warnings, []);
+});
+
+test('Azure adapter keeps the description untouched without work items and dedupes existing mentions', async () => {
+  const calls = [];
+  const adapter = new AzureProviderAdapter({
+    identityMatches: () => false,
+    identitySearch: async () => [],
+    api: async (...args) => {
+      calls.push(args);
+      return response({ pullRequestId: 78, reviewers: [] });
+    }
+  });
+  const { value: context } = createContext();
+  const options = {
+    title: 'Azure feature',
+    source: 'feature',
+    target: 'main',
+    draft: false,
+    maintainerCanModify: true,
+    reviewers: [],
+    assignees: [],
+    labels: [],
+    removeSourceBranch: false
+  };
+
+  await adapter.createPullRequest(repositories.azure, {
+    ...options,
+    body: 'Plain body\n',
+    workItems: []
+  }, context);
+  assert.equal(calls[0][2].body.description, 'Plain body');
+
+  await adapter.createPullRequest(repositories.azure, {
+    ...options,
+    body: 'Mentions AB#1001 already\n',
+    workItems: [1001, 1002]
+  }, context);
+  assert.equal(calls[1][2].body.description, 'Mentions AB#1001 already\n\nAB#1002');
+  assert.deepEqual(calls[1][2].body.workItemRefs, [{ id: '1001' }, { id: '1002' }]);
 });
 
 function createServiceVault() {

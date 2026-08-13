@@ -14,6 +14,7 @@ const appGlobals = {
   WorkspaceStateController: 'readonly',
   WorkspaceResizeController: 'readonly',
   LocalizedDateFormatter: 'readonly',
+  PrCreatePrefill: 'readonly',
   DiffParser: 'readonly',
   ConflictHighlight: 'readonly',
   WelcomeScreen: 'readonly',

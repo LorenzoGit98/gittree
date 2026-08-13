@@ -897,11 +897,16 @@ class PullRequestView {
     const remote = (metadata.remotes || []).find(item => (
       item.provider?.provider === this.provider
     ));
+    const prefill = this.provider === 'azure'
+      ? await this.azureCreatePrefill(source, target)
+      : { title: '', body: '', workItems: '' };
     const values = await this.createPullRequestDialog({
       source,
       target,
       branches,
-      title: defaults.title || ''
+      title: defaults.title || prefill.title,
+      body: prefill.body,
+      workItems: prefill.workItems
     });
     if (!values) return;
     this.elements.create.disabled = true;
@@ -948,7 +953,26 @@ class PullRequestView {
     }
   }
 
-  createPullRequestDialog({ source, target, branches, title = '' }) {
+  async azureCreatePrefill(source, target) {
+    if (!source || !target || source === target) {
+      return { title: '', body: '', workItems: '' };
+    }
+    const comparison = await window.gitTree.compareBranches(this.repoPath, target, source);
+    if (comparison?.error) {
+      return { title: '', body: '', workItems: '' };
+    }
+    const draft = PrCreatePrefill.build({
+      source,
+      commits: comparison?.commits || []
+    });
+    return {
+      title: draft.title,
+      body: draft.body,
+      workItems: draft.workItems.join(', ')
+    };
+  }
+
+  createPullRequestDialog({ source, target, branches, title = '', body = '', workItems = '' }) {
     const overlay = document.getElementById('modal-overlay');
     const dialog = document.getElementById('modal-dialog');
     const options = branches.map(name => (
@@ -1004,6 +1028,10 @@ class PullRequestView {
       const form = dialog.querySelector('form');
       form.elements.source.value = source;
       form.elements.target.value = target;
+      form.elements.body.value = body;
+      if (form.elements.workItems) {
+        form.elements.workItems.value = workItems;
+      }
       const finish = value => {
         dialog.classList.remove('pr-create-dialog');
         overlay.classList.add('is-hidden');

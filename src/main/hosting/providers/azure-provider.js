@@ -275,12 +275,21 @@ class AzureProviderAdapter {
     return reviewers;
   }
 
+  buildDescription(body, workItems) {
+    const base = String(body || '').replace(/\s+$/, '');
+    const mentions = (workItems || [])
+      .filter(id => !new RegExp(`AB#${id}\\b`, 'i').test(base))
+      .map(id => `AB#${id}`);
+    if (!mentions.length) return base;
+    return [base, '', ...mentions].join('\n').slice(0, 65536);
+  }
+
   async createPullRequest(repo, options, { viewer }) {
     const body = {
       sourceRefName: `refs/heads/${options.source}`,
       targetRefName: `refs/heads/${options.target}`,
       title: options.title,
-      description: options.body,
+      description: this.buildDescription(options.body, options.workItems),
       isDraft: options.draft
     };
     if (options.reviewers.length) {
