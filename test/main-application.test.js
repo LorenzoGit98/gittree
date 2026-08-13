@@ -271,7 +271,7 @@ test('Main application composes Electron once and tears down every owned resourc
   assert.deepEqual(harness.getRepoManagerOptions(), {
     configPath: path.join(harness.userDataPath, 'repos.json')
   });
-  assert.equal(harness.handlers.size, 142);
+  assert.equal(harness.handlers.size, 148);
   assert.equal(harness.processHost.listenerCount('unhandledRejection'), 1);
   assert.equal(harness.app.listenerCount('activate'), 1);
   assert.equal(
@@ -367,7 +367,7 @@ test('Main application composes Electron once and tears down every owned resourc
   await harness.application.stop();
 
   assert.equal(harness.handlers.size, 0);
-  assert.equal(new Set(harness.removedHandlers).size, 142);
+  assert.equal(new Set(harness.removedHandlers).size, 148);
   assert.equal(harness.windows[0].isDestroyed(), true);
   assert.equal(harness.processHost.listenerCount('unhandledRejection'), 0);
   assert.equal(harness.app.listenerCount('activate'), 0);
