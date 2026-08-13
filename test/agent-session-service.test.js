@@ -215,3 +215,37 @@ test('feature toggle preserves state, blocks new work and cannot hide active or 
   assert.equal(ptys.length, 2);
   assert.equal(service.listTasks(repo).length, 2);
 });
+
+test('adapter detection reuses a cached result within its TTL', async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gittree-agent-detect-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const workspace = createWorkspace(root);
+  let clock = 0;
+  let executions = 0;
+  const service = new AgentSessionService({
+    storagePath: path.join(root, 'agent-workspace.json'),
+    repositoryWorkspace: workspace,
+    createPty: () => new FakePty('x', [], {}),
+    nowMs: () => clock,
+    adapterDetectionTtl: 60_000,
+    setInterval: () => 1,
+    clearInterval: () => {},
+    resolveExecutable: command => command,
+    execute: (command, args, options, callback) => {
+      executions += 1;
+      callback(null, command + ' 1.0', '');
+    }
+  });
+
+  const first = await service.detectAdapters();
+  assert.equal(first.length, 3);
+  assert.equal(executions, 3);
+
+  clock = 30_000;
+  await service.detectAdapters();
+  assert.equal(executions, 3);
+
+  clock = 61_000;
+  await service.detectAdapters();
+  assert.equal(executions, 6);
+});

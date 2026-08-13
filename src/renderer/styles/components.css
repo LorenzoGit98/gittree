@@ -681,6 +681,20 @@ kbd {
   gap: var(--space-2);
 }
 
+.modal-loading {
+  min-height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-6);
+  color: var(--text-tertiary);
+}
+
+.modal-loading i {
+  animation: toast-spin var(--duration-slow) linear infinite;
+}
+
 .system-alert {
   position: fixed;
   top: var(--space-3);

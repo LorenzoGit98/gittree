@@ -9,6 +9,7 @@ class SettingsView {
     this.assignmentsStorageKey = 'gittree.settings.profileAssignments';
     this.inFlight = new Set();
     this.timer = null;
+    this.renderGeneration = 0;
     this.updateState = null;
     this.unsubscribeUpdates = window.gitTree.onUpdateState(state => this.handleUpdateState(state));
     document.addEventListener('keydown', event => {
@@ -26,18 +27,28 @@ class SettingsView {
 
   async open(section = null, { scope = 'full' } = {}) {
     const repo = this.app.state.repo;
-    let metadata = this.app.components.branchList?.metadata;
-    if (repo && !metadata) {
-      const response = await window.gitTree.getBranchMetadata(repo.path);
-      metadata = response?.error ? null : response;
+    const generation = this.renderGeneration += 1;
+    const alreadyOpen = !this.overlay.classList.contains('is-hidden')
+      && this.dialog.classList.contains('settings-dialog');
+    if (!alreadyOpen) {
+      this.dialog.className = 'confirm-dialog settings-dialog';
+      this.dialog.innerHTML = `
+        <div class="settings-loading">
+          <i class="ph ph-circle-notch" aria-hidden="true"></i>
+          <span>${this.esc(t('common.loading'))}</span>
+        </div>`;
+      this.overlay.classList.remove('is-hidden');
     }
-    const remotes = repo ? await this.readRemotes(repo.path) : [];
-    const [agentSettings, agentAdapters] = scope === 'about'
-      ? [null, []]
-      : await Promise.all([
-          window.gitTree.getAgentSettings?.().catch(() => null),
-          window.gitTree.detectAgentAdapters?.().catch(() => [])
-        ]);
+    try {
+      let metadata = this.app.components.branchList?.metadata;
+      if (repo && !metadata) {
+        const response = await window.gitTree.getBranchMetadata(repo.path);
+        metadata = response?.error ? null : response;
+      }
+      const remotes = repo ? await this.readRemotes(repo.path) : [];
+      const agentSettings = scope === 'about'
+        ? null
+        : await window.gitTree.getAgentSettings?.().catch(() => null);
     const schedules = this.readObject(this.autoFetchStorageKey);
     let profiles = this.readArray(this.profilesStorageKey);
     const assignments = this.readObject(this.assignmentsStorageKey);
@@ -248,11 +259,10 @@ class SettingsView {
               <input id="settings-agent-concurrency" type="number" min="1" max="32" value="${Number(agentSettings?.maxConcurrent) || 4}">
             </label>
             <div class="agent-adapter-settings">
-              ${(Array.isArray(agentAdapters) ? agentAdapters : []).map(adapter => `<label class="settings-toolbar-row">
-                <div class="settings-toolbar-copy"><strong>${this.esc(adapter.label)}</strong><small>${this.esc(adapter.version || t(adapter.available ? 'agents.detected' : 'agents.cliNotFound'))}</small></div>
-                <span class="agent-adapter-state ${adapter.available ? 'is-available' : ''}">${this.esc(t(adapter.available ? 'agents.detected' : 'agents.unavailable'))}</span>
-                <span class="settings-switch"><input type="checkbox" data-agent-adapter="${this.esc(adapter.id)}"${agentSettings?.enabledAdapters?.includes(adapter.id) ? ' checked' : ''}><span aria-hidden="true"></span></span>
-              </label>`).join('')}
+              <div class="agent-adapter-placeholder">
+                <i class="ph ph-circle-notch" aria-hidden="true"></i>
+                <span>${this.esc(t('common.loading'))}</span>
+              </div>
             </div>
           </div>
         </section>
@@ -345,6 +355,11 @@ class SettingsView {
     this.populateVersion();
     this.selectSection(scope === 'about' ? 'about' : (section || this.activeSection || 'appearance'));
     this.dialog.querySelector('[data-settings-close]')?.focus();
+    if (scope !== 'about') this.hydrateAgentAdapters(agentSettings, generation);
+    } catch (error) {
+      if (this.dialog.classList.contains('settings-dialog')) this.close();
+      this.app.showToast(error?.message || t('common.error'), 'error');
+    }
   }
 
   renderNavigationItem(section, icon, label) {
@@ -855,18 +870,7 @@ class SettingsView {
         else concurrency.value = String(result.maxConcurrent);
       };
     }
-    this.dialog.querySelectorAll('[data-agent-adapter]').forEach(input => {
-      input.onchange = async () => {
-        const enabled = [...this.dialog.querySelectorAll('[data-agent-adapter]')]
-          .filter(item => item.checked)
-          .map(item => item.dataset.agentAdapter);
-        const result = await window.gitTree.setEnabledAgentAdapters(enabled);
-        if (result?.error) {
-          input.checked = !input.checked;
-          this.app.showToast(result.error, 'error');
-        }
-      };
-    });
+    this.bindAgentAdapters();
     this.dialog.querySelectorAll('[data-profile-apply]').forEach(button => {
       button.onclick = async () => {
         const profile = this.readArray(this.profilesStorageKey)
@@ -929,6 +933,40 @@ class SettingsView {
   async refreshUpdateState() {
     const state = await window.gitTree.getUpdateState();
     if (state) this.handleUpdateState(state);
+  }
+
+  renderAgentAdapterRow(adapter, agentSettings) {
+    return `<label class="settings-toolbar-row">
+      <div class="settings-toolbar-copy"><strong>${this.esc(adapter.label)}</strong><small>${this.esc(adapter.version || t(adapter.available ? 'agents.detected' : 'agents.cliNotFound'))}</small></div>
+      <span class="agent-adapter-state ${adapter.available ? 'is-available' : ''}">${this.esc(t(adapter.available ? 'agents.detected' : 'agents.unavailable'))}</span>
+      <span class="settings-switch"><input type="checkbox" data-agent-adapter="${this.esc(adapter.id)}"${agentSettings?.enabledAdapters?.includes(adapter.id) ? ' checked' : ''}><span aria-hidden="true"></span></span>
+    </label>`;
+  }
+
+  async hydrateAgentAdapters(agentSettings, generation) {
+    const adapters = await window.gitTree.detectAgentAdapters?.().catch(() => []);
+    if (generation !== this.renderGeneration) return;
+    const container = this.dialog.querySelector('.agent-adapter-settings');
+    if (!container) return;
+    container.innerHTML = (Array.isArray(adapters) ? adapters : [])
+      .map(adapter => this.renderAgentAdapterRow(adapter, agentSettings))
+      .join('');
+    this.bindAgentAdapters();
+  }
+
+  bindAgentAdapters() {
+    this.dialog.querySelectorAll('[data-agent-adapter]').forEach(input => {
+      input.onchange = async () => {
+        const enabled = [...this.dialog.querySelectorAll('[data-agent-adapter]')]
+          .filter(item => item.checked)
+          .map(item => item.dataset.agentAdapter);
+        const result = await window.gitTree.setEnabledAgentAdapters(enabled);
+        if (result?.error) {
+          input.checked = !input.checked;
+          this.app.showToast(result.error, 'error');
+        }
+      };
+    });
   }
 
   handleUpdateState(state) {

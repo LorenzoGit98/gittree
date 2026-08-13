@@ -873,48 +873,72 @@ class PullRequestView {
         return;
       }
     }
-    const metadata = await window.gitTree.getBranchMetadata(this.repoPath);
-    if (metadata?.error) {
-      this.app.showToast(metadata.error, 'error');
+    const overlay = document.getElementById('modal-overlay');
+    const dialog = document.getElementById('modal-dialog');
+    dialog.classList.add('pr-create-dialog');
+    dialog.innerHTML = `
+      <div class="modal-loading">
+        <i class="ph ph-circle-notch" aria-hidden="true"></i>
+        <span>${this.esc(t('common.loading'))}</span>
+      </div>`;
+    overlay.classList.remove('is-hidden');
+    let values;
+    let remoteName;
+    try {
+      const metadata = await window.gitTree.getBranchMetadata(this.repoPath);
+      if (metadata?.error) throw new Error(metadata.error);
+      const branches = this.branchOptions(metadata);
+      const preferredSource = defaults.source && branches.includes(defaults.source)
+        ? defaults.source
+        : null;
+      const source = preferredSource
+        || (metadata.current && branches.includes(metadata.current) ? metadata.current : null)
+        || branches[0]
+        || '';
+      const preferredTarget = defaults.target && branches.includes(defaults.target)
+        ? defaults.target
+        : null;
+      const target = preferredTarget
+        || (metadata.defaultBranch && branches.includes(metadata.defaultBranch)
+          ? metadata.defaultBranch
+          : null)
+        || (branches.find(name => name !== source) || branches[0] || '');
+      remoteName = (metadata.remotes || []).find(item => (
+        item.provider?.provider === this.provider
+      ))?.name || null;
+      values = await this.createPullRequestDialog({
+        source,
+        target,
+        branches,
+        title: defaults.title || '',
+        body: '',
+        workItems: ''
+      });
+      if (!values) return;
+      if (this.provider === 'azure') {
+        this.azureCreatePrefill(source, target).then(prefill => {
+          const form = dialog.querySelector('.pr-create-form');
+          if (!form) return;
+          if (!form.elements.title.value) form.elements.title.value = prefill.title;
+          if (!form.elements.body.value) form.elements.body.value = prefill.body;
+          if (form.elements.workItems && !form.elements.workItems.value) {
+            form.elements.workItems.value = prefill.workItems;
+          }
+        }).catch(() => {});
+      }
+    } catch (error) {
+      dialog.classList.remove('pr-create-dialog');
+      overlay.classList.add('is-hidden');
+      dialog.innerHTML = '';
+      this.app.showToast(error?.message || t('common.error'), 'error');
       return;
     }
-    const branches = this.branchOptions(metadata);
-    const preferredSource = defaults.source && branches.includes(defaults.source)
-      ? defaults.source
-      : null;
-    const source = preferredSource
-      || (metadata.current && branches.includes(metadata.current) ? metadata.current : null)
-      || branches[0]
-      || '';
-    const preferredTarget = defaults.target && branches.includes(defaults.target)
-      ? defaults.target
-      : null;
-    const target = preferredTarget
-      || (metadata.defaultBranch && branches.includes(metadata.defaultBranch)
-        ? metadata.defaultBranch
-        : null)
-      || (branches.find(name => name !== source) || branches[0] || '');
-    const remote = (metadata.remotes || []).find(item => (
-      item.provider?.provider === this.provider
-    ));
-    const prefill = this.provider === 'azure'
-      ? await this.azureCreatePrefill(source, target)
-      : { title: '', body: '', workItems: '' };
-    const values = await this.createPullRequestDialog({
-      source,
-      target,
-      branches,
-      title: defaults.title || prefill.title,
-      body: prefill.body,
-      workItems: prefill.workItems
-    });
-    if (!values) return;
     this.elements.create.disabled = true;
     try {
-      if (values.pushSource && remote?.name) {
+      if (values.pushSource && remoteName) {
         const pushed = await window.gitTree.push(
           this.repoPath,
-          remote.name,
+          remoteName,
           values.source,
           true
         );

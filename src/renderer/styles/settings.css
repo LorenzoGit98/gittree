@@ -1105,3 +1105,26 @@
   color: var(--text-primary);
   font-weight: var(--weight-medium);
 }
+
+.settings-loading {
+  height: 100%;
+  min-height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-6);
+  color: var(--text-tertiary);
+}
+
+.agent-adapter-placeholder i {
+  animation: toast-spin var(--duration-slow) linear infinite;
+}
+
+.agent-adapter-placeholder {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  color: var(--text-tertiary);
+}

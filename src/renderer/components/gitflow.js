@@ -25,20 +25,36 @@ class GitFlow {
       this.app.showToast(t('gitflow.openRepositoryFirst'), 'error');
       return;
     }
-    const [metadata, status] = await Promise.all([
-      window.gitTree.getBranchMetadata(repo.path),
-      window.gitTree.getStatus(repo.path)
-    ]);
-    this.localBranches = (metadata?.branches || [])
-      .filter(branch => branch.kind === 'local')
-      .map(branch => branch.name);
-    this.currentBranch = status?.current || '';
-    this.mode = 'start';
-    this.type = 'feature';
-    this.finishTarget = null;
-    this.render();
-    this.overlay.classList.remove('is-hidden');
-    this.dialog.querySelector('#gitflow-description')?.focus();
+    const alreadyOpen = !this.overlay.classList.contains('is-hidden')
+      && this.dialog.classList.contains('gitflow-dialog');
+    if (!alreadyOpen) {
+      this.dialog.className = 'confirm-dialog gitflow-dialog';
+      this.dialog.innerHTML = `
+        <div class="modal-loading">
+          <i class="ph ph-circle-notch" aria-hidden="true"></i>
+          <span>${this.esc(t('common.loading'))}</span>
+        </div>`;
+      this.overlay.classList.remove('is-hidden');
+    }
+    try {
+      const [metadata, status] = await Promise.all([
+        window.gitTree.getBranchMetadata(repo.path),
+        window.gitTree.getStatus(repo.path)
+      ]);
+      this.localBranches = (metadata?.branches || [])
+        .filter(branch => branch.kind === 'local')
+        .map(branch => branch.name);
+      this.currentBranch = status?.current || '';
+      this.mode = 'start';
+      this.type = 'feature';
+      this.finishTarget = null;
+      this.render();
+      this.overlay.classList.remove('is-hidden');
+      this.dialog.querySelector('#gitflow-description')?.focus();
+    } catch (error) {
+      if (this.dialog.classList.contains('gitflow-dialog')) this.close();
+      this.app.showToast(error?.message || t('common.error'), 'error');
+    }
   }
 
   close() {

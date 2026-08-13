@@ -42,6 +42,8 @@ class AgentSessionService {
     emit = () => {},
     idFactory = () => crypto.randomUUID(),
     now = () => new Date().toISOString(),
+    nowMs = () => Date.now(),
+    adapterDetectionTtl = 60_000,
     setInterval: setIntervalFn = setInterval,
     clearInterval: clearIntervalFn = clearInterval,
     fileSystem = fs,
@@ -56,6 +58,9 @@ class AgentSessionService {
     this.emit = emit;
     this.idFactory = idFactory;
     this.now = now;
+    this.nowMs = nowMs;
+    this.adapterDetectionTtl = adapterDetectionTtl;
+    this.adapterDetection = null;
     this.fs = fileSystem;
     this.path = pathModule;
     this.execute = execute;
@@ -119,7 +124,20 @@ class AgentSessionService {
   }
 
   async detectAdapters() {
-    return detectAgentAdapters({ execute: this.execute, resolveExecutable: this.resolveExecutable });
+    const timestamp = this.nowMs();
+    if (this.adapterDetection
+      && timestamp - this.adapterDetection.timestamp < this.adapterDetectionTtl) {
+      return this.adapterDetection.result;
+    }
+    const result = detectAgentAdapters({
+      execute: this.execute,
+      resolveExecutable: this.resolveExecutable
+    }).catch(error => {
+      this.adapterDetection = null;
+      throw error;
+    });
+    this.adapterDetection = { timestamp, result };
+    return result;
   }
 
   listTasks(repositoryPath) {
