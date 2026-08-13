@@ -1,3 +1,10 @@
+# [0.14.0](https://github.com/giannoccarol/gittree/compare/v0.13.5...v0.14.0) (2026-08-13)
+
+
+### Features
+
+* **ai:** generate commit messages and PR descriptions locally ([f6b2605](https://github.com/giannoccarol/gittree/commit/f6b260569b7f57b8158b4e3259376945a3b8a988))
+
 ## [0.13.5](https://github.com/giannoccarol/gittree/compare/v0.13.4...v0.13.5) (2026-08-13)
 
 
