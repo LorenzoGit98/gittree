@@ -660,6 +660,9 @@ const I18n = {
               commitsBy: 'Commits made by {{authors}}'
             },
             commitMenu: {
+              aiExplain: 'Explain with AI',
+              aiExplainSingle: 'Explanation requires exactly one selected commit',
+              aiExplaining: 'Explaining…',
               createTag: 'Create tag at this commit…',
               createTagSingle: 'Tag creation requires exactly one selected commit',
               createTagTitle: 'Create tag',
@@ -1460,6 +1463,9 @@ const I18n = {
               commitsBy: 'Commit creati da {{authors}}'
             },
             commitMenu: {
+              aiExplain: 'Spiega con AI',
+              aiExplainSingle: 'La spiegazione richiede un solo commit selezionato',
+              aiExplaining: 'Spiegazione…',
               createTag: 'Crea tag su questo commit…',
               createTagSingle: 'La creazione di un tag richiede un solo commit selezionato',
               createTagTitle: 'Crea tag',

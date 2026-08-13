@@ -4,7 +4,8 @@ const {
   buildCommitPrompt,
   buildPrPrompt,
   buildExplainPrompt,
-  buildConflictPrompt
+  buildConflictPrompt,
+  buildCommitExplainPrompt
 } = require('./ai-output');
 const { requestOpenAiCompatible, requestAnthropic } = require('./ai-providers');
 const { generateWithOpencode } = require('./ai-opencode');
@@ -75,6 +76,7 @@ class AiService {
     getUnstagedDiff = async () => '',
     getBranchComparison = async () => ({ commits: [], diff: '' }),
     getConflictBlock = async () => null,
+    getCommitContext = async () => null,
     timeouts = DEFAULT_TIMEouts
   }) {
     if (!storagePath) throw new Error('AI settings storage path is required');
@@ -90,6 +92,7 @@ class AiService {
     this.getUnstagedDiff = getUnstagedDiff;
     this.getBranchComparison = getBranchComparison;
     this.getConflictBlock = getConflictBlock;
+    this.getCommitContext = getCommitContext;
     this.timeouts = { ...DEFAULT_TIMEouts, ...(timeouts || {}) };
     const restored = this.store.load();
     this.settings = restored.settings;
@@ -225,6 +228,25 @@ class AiService {
       base: truncateDiff(block.base || ''),
       current: truncateDiff(block.current || ''),
       incoming: truncateDiff(block.incoming || ''),
+      language
+    });
+    const raw = await this.runProvider(prompt);
+    return parseAiOutput(raw, { maxTitleLength: 200 });
+  }
+
+  async explainCommit(repoPath, options = {}) {
+    const hash = String(options.hash || '').trim();
+    if (!/^[0-9a-f]{7,40}$/i.test(hash)) {
+      throw new Error('Invalid commit hash');
+    }
+    const context = await this.getCommitContext(repoPath, hash);
+    if (!context) throw new Error('Commit not found');
+    const language = this.normalizeLanguage(options.language);
+    const prompt = buildCommitExplainPrompt({
+      message: String(context.message || '').slice(0, 2000),
+      author: String(context.author || '').slice(0, 200),
+      date: String(context.date || '').slice(0, 100),
+      diff: truncateDiff(context.diff || ''),
       language
     });
     const raw = await this.runProvider(prompt);

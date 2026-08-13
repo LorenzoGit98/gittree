@@ -217,3 +217,47 @@
   border-color: var(--primary);
   background: var(--primary-soft);
 }
+
+.ai-explain-dialog {
+  min-width: 460px;
+  max-width: 640px;
+}
+
+.ai-explain-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  color: var(--text-secondary);
+}
+
+.ai-explain-loading i {
+  color: var(--primary);
+  font-size: var(--text-lg);
+  animation: project-loading-spin 0.8s linear infinite;
+}
+
+.ai-explain-result {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.ai-explain-result h3 {
+  margin: 0;
+}
+
+.ai-explain-body {
+  max-height: 55vh;
+  overflow: auto;
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  user-select: text;
+}

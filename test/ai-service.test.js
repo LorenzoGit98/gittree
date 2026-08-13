@@ -66,7 +66,8 @@ function createService(t, overrides = {}) {
     getUnstagedDiff: overrides.getUnstagedDiff || (async () => ''),
     getBranchComparison: overrides.getBranchComparison
       || (async () => ({ commits: [{ subject: 'feat: first' }], diff: 'diff body' })),
-    getConflictBlock: overrides.getConflictBlock || (async () => null)
+    getConflictBlock: overrides.getConflictBlock || (async () => null),
+    getCommitContext: overrides.getCommitContext || (async () => null)
   });
   return { directory, vault, service };
 }
@@ -471,5 +472,63 @@ test('service rejects explaining a missing conflict block', async t => {
   await assert.rejects(
     () => service.explainConflict('C:\\repo', { file: 'a.js', blockIndex: 0 }),
     /Conflict block not found/
+  );
+});
+
+test('service explains a commit through the configured provider', async t => {
+  const prompts = [];
+  const fetch = async (_url, options) => {
+    prompts.push(JSON.parse(options.body).messages[0].content);
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: { content: 'TITLE: Fixes list pagination\nBODY: Corrects the offset calculation.\n- Risk: none\n- Test: paging beyond 100 items' }
+        }]
+      })
+    };
+  };
+  const { service } = createService(t, {
+    fetch,
+    getCommitContext: async (repoPath, hash) => {
+      assert.equal(repoPath, 'C:\\repo');
+      assert.equal(hash, 'abc1234');
+      return {
+        message: 'fix: repair pagination',
+        author: 'Ada',
+        date: '2026-08-13',
+        diff: '--- a/list.js\n+++ b/list.js'
+      };
+    }
+  });
+  await service.initialize();
+  await service.setKey('sk-test');
+  await service.setSettings({
+    provider: 'openai', baseUrl: 'https://api.deepseek.com/v1', model: 'm'
+  });
+
+  const result = await service.explainCommit('C:\\repo', { hash: 'abc1234', language: 'it' });
+  assert.equal(result.summary, 'Fixes list pagination');
+  assert.match(result.body, /offset calculation/);
+  assert.equal(prompts.length, 1);
+  assert.match(prompts[0], /Commit: fix: repair pagination/);
+  assert.match(prompts[0], /--- commit diff ---/);
+  assert.match(prompts[0], /Write the explanation in Italian/);
+});
+
+test('service rejects invalid hashes and unknown commits before prompting', async t => {
+  const { service } = createService(t);
+  await service.initialize();
+  await service.setKey('sk-test');
+  await service.setSettings({
+    provider: 'openai', baseUrl: 'https://api.deepseek.com/v1', model: 'm'
+  });
+  await assert.rejects(
+    () => service.explainCommit('C:\\repo', { hash: 'not;safe' }),
+    /Invalid commit hash/
+  );
+  await assert.rejects(
+    () => service.explainCommit('C:\\repo', { hash: 'abcdef0' }),
+    /Commit not found/
   );
 });

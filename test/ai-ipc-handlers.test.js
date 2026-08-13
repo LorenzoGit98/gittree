@@ -31,6 +31,7 @@ test('AI handlers validate managed repositories and normalize errors', async () 
     },
     explainChanges: async () => ({ summary: 'Auth refactor', body: 'Tokens move behind a service.' }),
     explainConflict: async () => ({ summary: 'Merge both validations', body: 'Keep both checks.' }),
+    explainCommit: async () => ({ summary: 'Fixes pagination', body: 'Offset corrected.' }),
     generatePrDescription: async (repoPath, options) => ({
       summary: options.title || 'PR', body: ''
     })
@@ -40,7 +41,13 @@ test('AI handlers validate managed repositories and normalize errors', async () 
 
   assert.deepEqual(
     managedCalls,
-    ['ai:commit-message', 'ai:explain-changes', 'ai:explain-conflict', 'ai:pr-description']
+    [
+      'ai:commit-message',
+      'ai:explain-changes',
+      'ai:explain-conflict',
+      'ai:explain-commit',
+      'ai:pr-description'
+    ]
   );
   assert.equal((await registered.get('ai:settings-get')()).provider, 'opencode');
   assert.equal((await registered.get('ai:key-set')('sk-x')).keyConfigured, true);
@@ -56,6 +63,10 @@ test('AI handlers validate managed repositories and normalize errors', async () 
   assert.equal(
     (await registered.get('ai:explain-conflict')('C:\\repo', { file: 'a.js', blockIndex: 0 })).summary,
     'Merge both validations'
+  );
+  assert.equal(
+    (await registered.get('ai:explain-commit')('C:\\repo', { hash: 'abc1234' })).summary,
+    'Fixes pagination'
   );
   assert.equal(
     (await registered.get('ai:pr-description')('C:\\repo', { source: 'a', target: 'b', title: 'T' })).summary,

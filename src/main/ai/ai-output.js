@@ -91,6 +91,24 @@ function buildConflictPrompt({ file, base, current, incoming, language }) {
   ].filter(Boolean).join('\n');
 }
 
+function buildCommitExplainPrompt({ message, author, date, diff, language }) {
+  const targetLanguage = language === 'it' ? 'Italian' : 'English';
+  return [
+    'You are the history-explainer assistant of a Git desktop client.',
+    'Explain the commit below to a developer reading the repository history.',
+    `Write the explanation in ${targetLanguage}.`,
+    'Keep it under 12 markdown lines: what the commit changes, why,',
+    'and any risks or follow-up work the reader should know.',
+    'Answer with exactly this format and nothing else:',
+    'TITLE: <one-line explanation>',
+    'BODY: <explanation>',
+    `Commit: ${message}`,
+    `Author: ${author || 'unknown'} (${date || 'unknown date'})`,
+    '--- commit diff ---',
+    diff
+  ].filter(Boolean).join('\n');
+}
+
 function buildPrPrompt({ diff, commits, hint, language }) {
   const targetLanguage = language === 'it' ? 'Italian' : 'English';
   const commitLines = (commits || [])
@@ -120,5 +138,6 @@ module.exports = {
   buildCommitPrompt,
   buildPrPrompt,
   buildExplainPrompt,
-  buildConflictPrompt
+  buildConflictPrompt,
+  buildCommitExplainPrompt
 };

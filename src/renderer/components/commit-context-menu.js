@@ -107,6 +107,13 @@ class CommitContextMenu {
         reason: this.hashes.length !== 2 ? t('commitMenu.compareRequiresTwo') : ''
       },
       {
+        action: 'explain-commit',
+        icon: 'ph-sparkle',
+        label: t('commitMenu.aiExplain'),
+        disabled: this.hashes.length !== 1,
+        reason: this.hashes.length !== 1 ? t('commitMenu.aiExplainSingle') : ''
+      },
+      {
         action: 'create-tag',
         icon: 'ph-tag',
         label: t('commitMenu.createTag'),
@@ -169,6 +176,12 @@ class CommitContextMenu {
       this.app.components.commitCompare.open(this.hashes[0], this.hashes[1]);
       return;
     }
+    if (action === 'explain-commit') {
+      if (!repo || this.hashes.length !== 1) return;
+      this.close();
+      await this.explainCommitDialog(repo, this.hashes[0]);
+      return;
+    }
     if (action === 'create-tag') {
       if (!repo || this.hashes.length !== 1) return;
       this.close();
@@ -205,6 +218,71 @@ class CommitContextMenu {
     }
     this.app.showToast(t('commitMenu.completed'), 'success');
     await this.app.refresh({ selectHash: result.head, silent: true });
+  }
+
+  async explainCommitDialog(repo, hash) {
+    const overlay = document.getElementById('modal-overlay');
+    const dialog = document.getElementById('modal-dialog');
+    const language = await this.aiLanguage().catch(() => 'en');
+    return new Promise(resolve => {
+      dialog.className = 'confirm-dialog ai-explain-dialog';
+      dialog.setAttribute('role', 'dialog');
+      dialog.setAttribute('aria-modal', 'true');
+      dialog.innerHTML = `
+        <div class="ai-explain-loading">
+          <i class="ph ph-circle-notch" aria-hidden="true"></i>
+          <span>${this.esc(t('commitMenu.aiExplaining'))}</span>
+        </div>`;
+      overlay.classList.remove('is-hidden');
+      let settled = false;
+      const finish = value => {
+        if (settled) return;
+        settled = true;
+        document.removeEventListener('keydown', onKeydown);
+        overlay.classList.add('is-hidden');
+        dialog.className = 'confirm-dialog';
+        dialog.removeAttribute('role');
+        dialog.removeAttribute('aria-modal');
+        dialog.innerHTML = '';
+        resolve(value);
+      };
+      const onKeydown = event => {
+        if (event.key === 'Escape') finish(null);
+      };
+      document.addEventListener('keydown', onKeydown);
+      window.gitTree.explainCommit(repo.path, {
+        hash,
+        language
+      }).then(result => {
+        if (result?.error) {
+          finish(null);
+          this.app.showToast(result.error, 'error');
+          return;
+        }
+        dialog.innerHTML = `
+          <div class="ai-explain-result">
+            <span class="eyebrow">${this.esc(hash.slice(0, 8))}</span>
+            <h3>${this.esc(result.summary || '')}</h3>
+            <div class="ai-explain-body">${this.esc(result.body || '')}</div>
+            <div class="confirm-actions">
+              <button class="btn btn-primary" type="button" data-close>${this.esc(t('common.cancel'))}</button>
+            </div>
+          </div>`;
+        dialog.querySelector('[data-close]').onclick = () => finish(null);
+      }).catch(error => {
+        finish(null);
+        this.app.showToast(error?.message || t('common.error'), 'error');
+      });
+    });
+  }
+
+  async aiLanguage() {
+    const settings = await window.gitTree.getAiSettings().catch(() => null);
+    if (settings?.language === 'en' || settings?.language === 'it') {
+      return settings.language;
+    }
+    const current = localStorage.getItem('gittree.language') || 'en';
+    return current.startsWith('it') ? 'it' : 'en';
   }
 
   createTagDialog(repo, hash) {

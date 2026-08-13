@@ -237,6 +237,9 @@ contextBridge.exposeInMainWorld('gitTree', {
   explainConflict: (repoPath, options) =>
     ipcRenderer.invoke('ai:explain-conflict', repoPath, options),
 
+  explainCommit: (repoPath, options) =>
+    ipcRenderer.invoke('ai:explain-commit', repoPath, options),
+
   generatePrDescription: (repoPath, options) =>
     ipcRenderer.invoke('ai:pr-description', repoPath, options),
 

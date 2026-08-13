@@ -456,6 +456,16 @@ class MainApplication {
           current: block.current,
           incoming: block.incoming
         };
+      },
+      getCommitContext: async (repoPath, hash) => {
+        const detail = await this.getGitService(repoPath).getCommitDetail(hash);
+        if (!detail) return null;
+        return {
+          message: detail.message,
+          author: detail.author_name,
+          date: detail.date,
+          diff: detail.diff
+        };
       }
     });
     await this.aiService.initialize();
