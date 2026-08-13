@@ -1,3 +1,10 @@
+## [0.14.1](https://github.com/giannoccarol/gittree/compare/v0.14.0...v0.14.1) (2026-08-13)
+
+
+### Bug Fixes
+
+* **ai:** run opencode through a PTY and allow a model override ([39b4db6](https://github.com/giannoccarol/gittree/commit/39b4db661f3983f4b899b98c0c795a347fb63c8c))
+
 # [0.14.0](https://github.com/giannoccarol/gittree/compare/v0.13.5...v0.14.0) (2026-08-13)
 
 
