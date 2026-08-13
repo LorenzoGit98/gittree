@@ -1,3 +1,10 @@
+# [0.18.0](https://github.com/giannoccarol/gittree/compare/v0.17.0...v0.18.0) (2026-08-13)
+
+
+### Features
+
+* **pull-requests:** one-click AI-assisted PR draft ([6650af4](https://github.com/giannoccarol/gittree/commit/6650af4fc83db4ab1db89d7e315e53f5533e369d))
+
 # [0.17.0](https://github.com/giannoccarol/gittree/compare/v0.16.0...v0.17.0) (2026-08-13)
 
 
