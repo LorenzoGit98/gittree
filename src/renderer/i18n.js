@@ -465,7 +465,9 @@ const I18n = {
               createSuccess: 'Pull request #{{number}} created',
               aiGenerate: 'Generate with AI',
               aiGenerating: 'Generating…',
-              aiGenerated: 'Pull request description generated'
+              aiGenerated: 'Pull request description generated',
+              aiSmartCreate: 'Create PR with AI',
+              aiSmartCreating: 'Drafting PR…'
             },
             search: {
               trigger: 'Search commits, branches and files',
@@ -1263,7 +1265,9 @@ const I18n = {
               createSuccess: 'Pull request #{{number}} creata',
               aiGenerate: 'Genera con AI',
               aiGenerating: 'Generazione…',
-              aiGenerated: 'Descrizione della pull request generata'
+              aiGenerated: 'Descrizione della pull request generata',
+              aiSmartCreate: 'Crea PR con AI',
+              aiSmartCreating: 'Bozza PR…'
             },
             search: {
               trigger: 'Cerca commit, branch e file',

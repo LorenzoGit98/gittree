@@ -18,12 +18,14 @@ class PullRequestView {
     this.rowHeight = 70;
     this.overscan = 10;
     this.generation = 0;
+    this.smartCreating = false;
     this.elements = {
       list: document.getElementById('pr-list'),
       notice: document.getElementById('pr-notice'),
       search: document.getElementById('pr-search'),
       auth: document.getElementById('btn-pr-auth'),
-      create: document.getElementById('btn-pr-create')
+      create: document.getElementById('btn-pr-create'),
+      createAi: document.getElementById('btn-pr-create-ai')
     };
     this.bind();
   }
@@ -51,6 +53,7 @@ class PullRequestView {
     };
     this.elements.auth.onclick = () => this.toggleAuthentication();
     this.elements.create.onclick = () => this.openCreateDialog();
+    this.elements.createAi.onclick = () => this.openSmartCreate();
     let frame = 0;
     this.elements.list.onscroll = () => {
       if (frame) return;
@@ -131,6 +134,7 @@ class PullRequestView {
     if (this.status?.error) {
       this.showNotice(this.status.error, 'warning');
       this.elements.create.disabled = true;
+      this.elements.createAi.disabled = true;
       return;
     }
     const label = this.elements.auth.querySelector('span');
@@ -148,6 +152,7 @@ class PullRequestView {
       this.status.connected
       && this.availableProviders?.has(this.provider)
     );
+    this.elements.createAi.disabled = this.smartCreating || this.elements.create.disabled;
     if (this.status.warning) this.showNotice(this.status.warning, 'warning');
     else if (!this.availableProviders?.has(this.provider)) {
       this.showNotice(t('pullRequests.noRemote', { provider: this.provider }), 'warning');
@@ -866,6 +871,76 @@ class PullRequestView {
     return [...names].sort((a, b) => a.localeCompare(b));
   }
 
+  async loadCreateDefaults() {
+    const metadata = await window.gitTree.getBranchMetadata(this.repoPath);
+    if (metadata?.error) throw new Error(metadata.error);
+    const branches = this.branchOptions(metadata);
+    const source = (metadata.current && branches.includes(metadata.current)
+      ? metadata.current
+      : null) || branches[0] || '';
+    const target = (metadata.defaultBranch && branches.includes(metadata.defaultBranch)
+      ? metadata.defaultBranch
+      : null) || (branches.find(name => name !== source) || branches[0] || '');
+    const remoteName = (metadata.remotes || []).find(item => (
+      item.provider?.provider === this.provider
+    ))?.name || null;
+    return { metadata, branches, source, target, remoteName };
+  }
+
+  async openSmartCreate() {
+    if (this.smartCreating || !this.repoPath) return;
+    if (!this.status?.connected) {
+      this.app.showToast(t('pullRequests.connect'), 'warning');
+      return;
+    }
+    this.smartCreating = true;
+    this.setSmartCreateBusy(true);
+    let defaults;
+    try {
+      const loaded = await this.loadCreateDefaults();
+      const result = await window.gitTree.generatePrDescription(this.repoPath, {
+        source: loaded.source,
+        target: loaded.target,
+        language: await this.aiLanguage()
+      });
+      if (result?.error) {
+        this.app.showToast(result.error, 'error');
+        return;
+      }
+      defaults = {
+        source: loaded.source,
+        target: loaded.target,
+        title: result.summary || '',
+        body: result.body || '',
+        force: true
+      };
+    } catch (error) {
+      this.app.showToast(error?.message || t('common.error'), 'error');
+      return;
+    } finally {
+      this.smartCreating = false;
+      this.setSmartCreateBusy(false);
+    }
+    await this.openCreateDialog(defaults);
+  }
+
+  setSmartCreateBusy(busy) {
+    const button = this.elements.createAi;
+    const icon = button.querySelector('i');
+    const label = button.querySelector('span');
+    button.disabled = busy;
+    if (busy) {
+      icon.className = 'ph ph-circle-notch';
+      label.textContent = t('pullRequests.aiSmartCreating');
+      return;
+    }
+    icon.className = 'ph ph-sparkle';
+    label.textContent = t('pullRequests.aiSmartCreate');
+    button.disabled = !(
+      this.status?.connected && this.availableProviders?.has(this.provider)
+    );
+  }
+
   async openCreateDialog(defaults = {}) {
     if (this.elements.create.disabled && !defaults.force) {
       if (!this.status?.connected) {
@@ -885,33 +960,21 @@ class PullRequestView {
     let values;
     let remoteName;
     try {
-      const metadata = await window.gitTree.getBranchMetadata(this.repoPath);
-      if (metadata?.error) throw new Error(metadata.error);
-      const branches = this.branchOptions(metadata);
-      const preferredSource = defaults.source && branches.includes(defaults.source)
+      const loaded = await this.loadCreateDefaults();
+      const branches = loaded.branches;
+      const source = defaults.source && branches.includes(defaults.source)
         ? defaults.source
-        : null;
-      const source = preferredSource
-        || (metadata.current && branches.includes(metadata.current) ? metadata.current : null)
-        || branches[0]
-        || '';
-      const preferredTarget = defaults.target && branches.includes(defaults.target)
+        : loaded.source;
+      const target = defaults.target && branches.includes(defaults.target)
         ? defaults.target
-        : null;
-      const target = preferredTarget
-        || (metadata.defaultBranch && branches.includes(metadata.defaultBranch)
-          ? metadata.defaultBranch
-          : null)
-        || (branches.find(name => name !== source) || branches[0] || '');
-      remoteName = (metadata.remotes || []).find(item => (
-        item.provider?.provider === this.provider
-      ))?.name || null;
+        : loaded.target;
+      remoteName = loaded.remoteName;
       values = await this.createPullRequestDialog({
         source,
         target,
         branches,
         title: defaults.title || '',
-        body: '',
+        body: defaults.body || '',
         workItems: ''
       });
       if (!values) return;
