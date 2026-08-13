@@ -1,3 +1,10 @@
+## [0.13.1](https://github.com/giannoccarol/gittree/compare/v0.13.0...v0.13.1) (2026-08-13)
+
+
+### Bug Fixes
+
+* stabilize cherry-pick and graph rendering ([b043830](https://github.com/giannoccarol/gittree/commit/b043830a71f397bf8e885bc2783ff3e5335ec4fb))
+
 # [0.13.0](https://github.com/giannoccarol/gittree/compare/v0.12.0...v0.13.0) (2026-08-12)
 
 
