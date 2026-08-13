@@ -8,6 +8,7 @@ class MergeWorkspace {
     this.preview = null;
     this.container = null;
     this.strategy = 'noff';
+    this.onKeydown = null;
   }
 
   async open(source, target) {
@@ -47,8 +48,22 @@ class MergeWorkspace {
 
   showLoading() {
     this.ensureContainer();
+    this.bindEscape();
     this.container.classList.remove('is-hidden');
-    this.container.innerHTML = '<div class="empty-state">' + this.esc(t('common.loading')) + '</div>';
+    this.container.innerHTML = `
+      <div class="merge-modal-card">
+      <header class="merge-header">
+        <div class="merge-heading">
+          <span class="eyebrow">${this.esc(t('mergeWorkspace.mergeAction'))}</span>
+        </div>
+        <div class="merge-header-actions">
+          <button id="merge-cancel-btn" class="btn"><i class="ph ph-x" aria-hidden="true"></i><span>${this.esc(t('common.close'))}</span></button>
+        </div>
+      </header>
+      <div class="empty-state">${this.esc(t('common.loading'))}</div>
+      </div>
+    `;
+    document.getElementById('merge-cancel-btn').onclick = () => this.hide();
   }
 
   ensureContainer() {
@@ -59,7 +74,7 @@ class MergeWorkspace {
       this.container.id = 'merge-preview-overlay';
       document.getElementById('app').appendChild(this.container);
     }
-    this.container.className = 'merge-workspace-shell fullscreen-workspace is-hidden';
+    this.container.className = 'merge-workspace-shell is-hidden';
   }
 
   renderMerge() {
@@ -77,6 +92,7 @@ class MergeWorkspace {
     const conflictList = conflictFiles.slice(0, 6).join(', ');
 
     this.container.innerHTML = `
+      <div class="merge-modal-card">
       <header class="merge-header">
         <div class="merge-heading">
           <span class="eyebrow">${this.esc(t('mergeWorkspace.mergeAction'))}</span>
@@ -213,6 +229,7 @@ class MergeWorkspace {
           <span>${this.esc(t('mergeWorkspace.mergeAndPush'))}</span>
         </button>
       </footer>
+      </div>
     `;
 
     document.getElementById('merge-cancel-btn').onclick = () => this.hide();
@@ -351,7 +368,23 @@ class MergeWorkspace {
     await this.open(data.source, data.target);
   }
 
+  bindEscape() {
+    if (this.onKeydown) return;
+    this.onKeydown = event => {
+      if (event.key !== 'Escape') return;
+      if (!this.container || this.container.classList.contains('is-hidden')) return;
+      const cancel = document.getElementById('merge-cancel-btn');
+      if (!cancel || cancel.disabled) return;
+      this.hide();
+    };
+    document.addEventListener('keydown', this.onKeydown);
+  }
+
   hide() {
+    if (this.onKeydown) {
+      document.removeEventListener('keydown', this.onKeydown);
+      this.onKeydown = null;
+    }
     if (this.container) this.container.classList.add('is-hidden');
   }
 

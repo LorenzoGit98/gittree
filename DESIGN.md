@@ -10,7 +10,8 @@ The interface must feel bright, stable, precise, and calm. Visual hierarchy come
 
 - Use opaque surfaces for every functional component.
 - Use gradients only on the outer application canvas through `--canvas-gradient`.
-- Never use glassmorphism, backdrop blur, translucent overlays, glow effects, illuminated borders, reflections, neumorphism, or frosted effects.
+- Never use glassmorphism, backdrop blur, glow effects, illuminated borders, reflections, neumorphism, or frosted effects.
+- Modal backdrops may use the flat translucent `--modal-backdrop` token only; dialog surfaces themselves stay fully opaque.
 - Never apply gradients to panels, cards, controls, tables, dialogs, overlays, or navigation.
 - Use semantic tokens from `src/renderer/styles/variables.css`; do not add raw colors elsewhere in renderer code.
 - Use Phosphor regular icons. Do not use emoji, Unicode pictograms, or mixed icon weights.
@@ -78,7 +79,7 @@ The desktop workspace is a resizable three-panel bento:
 2. Commit history: primary work area with repository search and remote actions.
 3. Inspector: commit details and unified/split diff.
 
-The left and right widths persist locally. The history panel always receives the remaining width. At narrower breakpoints the inspector hides first, then the branch navigator. Full-screen workflows such as merge and conflict resolution use an opaque shell rather than a translucent modal.
+The left and right widths persist locally. The history panel always receives the remaining width. At narrower breakpoints the inspector hides first, then the branch navigator. Conflict resolution uses an opaque shell; merge preview and settings are resizable modals over a flat `--modal-backdrop` dim.
 
 The desktop window is frameless. The repository tabs are the first visible row of the application card: do not add a native menu, a separate title bar, or a GitTree brand label above or beside them. Keep minimize, maximize, and close controls inside the tab row, and preserve a draggable empty area between the tabs and right-side actions.
 
@@ -122,7 +123,8 @@ The desktop window is frameless. The repository tabs are the first visible row o
 
 ### Dialogs, toasts, and full-screen workflows
 
-- Dialog overlays are opaque. The dialog itself uses `--surface-primary`.
+- Dialog overlays use the flat translucent `--modal-backdrop` dim; dialog surfaces themselves use `--surface-primary` and stay fully opaque.
+- Dialogs are resizable with min/max clamps; resize never shrinks a surface below its usable minimum.
 - Toasts use borders and soft elevation; status is never communicated by color alone.
 - Merge and conflict views retain the same spacing, radius, component, and icon rules.
 

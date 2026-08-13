@@ -622,17 +622,21 @@ kbd {
   align-items: center;
   justify-content: center;
   padding: var(--space-6);
-  background: var(--surface-overlay);
+  background: var(--modal-backdrop);
   animation: motion-backdrop-in var(--duration-fast) var(--ease-smooth);
 }
 
 .confirm-dialog {
   width: min(480px, 100%);
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 48px);
   padding: var(--space-6);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
   background: var(--surface-primary);
   box-shadow: var(--shadow-lg);
+  overflow: auto;
+  resize: both;
   animation: motion-scale-in-spring var(--duration-normal) var(--ease-spring);
 }
 

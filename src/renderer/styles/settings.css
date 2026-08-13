@@ -1,11 +1,14 @@
 .settings-dialog {
   width: min(980px, calc(100vw - 48px));
   height: min(720px, calc(100vh - 48px));
+  min-width: min(560px, calc(100vw - 48px));
+  min-height: min(420px, calc(100vh - 48px));
   max-height: calc(100vh - 48px);
   display: flex;
   flex-direction: column;
   padding: 0;
   overflow: hidden;
+  resize: both;
   border-radius: var(--radius-xl);
   background: var(--surface-primary);
   animation: motion-scale-in-spring var(--duration-normal) var(--spring-gentle);
@@ -14,6 +17,8 @@
 .settings-dialog.settings-dialog-about {
   width: min(720px, calc(100vw - 48px));
   height: min(560px, calc(100vh - 48px));
+  min-width: min(520px, calc(100vw - 48px));
+  min-height: min(380px, calc(100vh - 48px));
 }
 
 .settings-header {

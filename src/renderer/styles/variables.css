@@ -11,6 +11,7 @@
   --surface-active: #e3eaf5;
   --surface-input: #f6f8fb;
   --surface-overlay: #eef2f8;
+  --modal-backdrop: rgba(16, 22, 32, 0.4);
   --surface-selected: #e3edf7;
 
   --text-primary: #101828;
@@ -211,6 +212,7 @@
   --surface-active: #28282c;
   --surface-input: #141416;
   --surface-overlay: #0a0a0c;
+  --modal-backdrop: rgba(3, 6, 12, 0.58);
   --surface-selected: #1a2f38;
 
   --text-primary: #f1f2f5;
@@ -327,6 +329,7 @@
   --surface-active: #e5e5e8;
   --surface-input: #f7f7f8;
   --surface-overlay: #f0f0f2;
+  --modal-backdrop: rgba(16, 22, 32, 0.4);
   --surface-selected: #e9e9ee;
 
   --border-subtle: #e7e7e9;
@@ -349,6 +352,7 @@
   --surface-active: #e9e1d1;
   --surface-input: #faf6ef;
   --surface-overlay: #f4efe5;
+  --modal-backdrop: rgba(16, 22, 32, 0.4);
   --surface-selected: #f0e8d8;
 
   --border-subtle: #eae3d5;
@@ -371,6 +375,7 @@
   --surface-active: #e0e8d8;
   --surface-input: #f5f8f1;
   --surface-overlay: #edf2e8;
+  --modal-backdrop: rgba(16, 22, 32, 0.4);
   --surface-selected: #e2ecda;
 
   --border-subtle: #e0e7d8;
@@ -393,6 +398,7 @@
   --surface-active: #e3dcf0;
   --surface-input: #f7f4fb;
   --surface-overlay: #f0ecf7;
+  --modal-backdrop: rgba(16, 22, 32, 0.4);
   --surface-selected: #e7e0f4;
 
   --border-subtle: #e5e0ee;
@@ -417,6 +423,7 @@
   --surface-active: #28282c;
   --surface-input: #141416;
   --surface-overlay: #0a0a0c;
+  --modal-backdrop: rgba(3, 6, 12, 0.58);
   --surface-selected: #1a2f38;
 
   --border-subtle: #30363d;
@@ -439,6 +446,7 @@
   --surface-active: #2f2f34;
   --surface-input: #1c1c1f;
   --surface-overlay: #151517;
+  --modal-backdrop: rgba(3, 6, 12, 0.58);
   --surface-selected: #1e3038;
 
   --border-subtle: #2f353b;
@@ -461,6 +469,7 @@
   --surface-active: #2a3747;
   --surface-input: #131a22;
   --surface-overlay: #0e1218;
+  --modal-backdrop: rgba(3, 6, 12, 0.58);
   --surface-selected: #1a2f42;
 
   --border-subtle: #2a3644;
@@ -483,6 +492,7 @@
   --surface-active: #2f2925;
   --surface-input: #13100f;
   --surface-overlay: #0f0c0b;
+  --modal-backdrop: rgba(3, 6, 12, 0.58);
   --surface-selected: #2a2018;
 
   --border-subtle: #2e2722;
@@ -505,6 +515,7 @@
   --surface-active: #243029;
   --surface-input: #0f1411;
   --surface-overlay: #0b0f0d;
+  --modal-backdrop: rgba(3, 6, 12, 0.58);
   --surface-selected: #1a2f23;
 
   --border-subtle: #233127;
