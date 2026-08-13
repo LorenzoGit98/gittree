@@ -442,6 +442,7 @@ class MainApplication {
       spawn: this.modules.createPty,
       resolveExecutable: resolveAgentExecutable,
       getStagedDiff: repoPath => this.getGitService(repoPath).getStagedDiff(),
+      getUnstagedDiff: repoPath => this.getGitService(repoPath).getUnstagedDiff(),
       getBranchComparison: (repoPath, base, compare) => (
         this.getGitService(repoPath).getBranchComparison(base, compare)
       )

@@ -66,6 +66,7 @@ class AiService {
     spawn,
     resolveExecutable,
     getStagedDiff = async () => '',
+    getUnstagedDiff = async () => '',
     getBranchComparison = async () => ({ commits: [], diff: '' }),
     timeouts = DEFAULT_TIMEouts
   }) {
@@ -79,6 +80,7 @@ class AiService {
     this.spawn = spawn;
     this.resolveExecutable = resolveExecutable || (command => command);
     this.getStagedDiff = getStagedDiff;
+    this.getUnstagedDiff = getUnstagedDiff;
     this.getBranchComparison = getBranchComparison;
     this.timeouts = { ...DEFAULT_TIMEouts, ...(timeouts || {}) };
     const restored = this.store.load();
@@ -159,9 +161,13 @@ class AiService {
   }
 
   async generateCommitMessage(repoPath, options = {}) {
-    const diff = await this.getStagedDiff(repoPath);
-    if (!String(diff || '').trim()) {
-      throw new Error('Stage changes before generating a commit message');
+    const staged = await this.getStagedDiff(repoPath);
+    let diff = String(staged || '');
+    if (!diff.trim()) {
+      diff = String(await this.getUnstagedDiff(repoPath) || '');
+    }
+    if (!diff.trim()) {
+      throw new Error('No changes to generate a commit message from');
     }
     const language = this.normalizeLanguage(options.language);
     const prompt = buildCommitPrompt({

@@ -93,6 +93,7 @@ function createHarness(t, { realAiService = false } = {}) {
       return {
         getStatus: async () => ({ clean: true }),
         getStagedDiff: async () => '',
+        getUnstagedDiff: async () => '',
         getBranchComparison: async () => ({ commits: [], diff: '' })
       };
     }
@@ -270,7 +271,7 @@ test('Main application composes Electron once and tears down every owned resourc
   assert.deepEqual(harness.getRepoManagerOptions(), {
     configPath: path.join(harness.userDataPath, 'repos.json')
   });
-  assert.equal(harness.handlers.size, 141);
+  assert.equal(harness.handlers.size, 142);
   assert.equal(harness.processHost.listenerCount('unhandledRejection'), 1);
   assert.equal(harness.app.listenerCount('activate'), 1);
   assert.equal(
@@ -366,7 +367,7 @@ test('Main application composes Electron once and tears down every owned resourc
   await harness.application.stop();
 
   assert.equal(harness.handlers.size, 0);
-  assert.equal(new Set(harness.removedHandlers).size, 141);
+  assert.equal(new Set(harness.removedHandlers).size, 142);
   assert.equal(harness.windows[0].isDestroyed(), true);
   assert.equal(harness.processHost.listenerCount('unhandledRejection'), 0);
   assert.equal(harness.app.listenerCount('activate'), 0);
@@ -401,7 +402,7 @@ test('Main application composes the real AI service over the credential vault', 
   })).provider, 'openai');
   assert.match(
     (await harness.handlers.get('ai:commit-message')({}, 'C:\\repo')).error,
-    /Stage changes/
+    /No changes to generate a commit message from/
   );
   assert.match(
     (await harness.handlers.get('ai:pr-description')({}, 'C:\\repo', {

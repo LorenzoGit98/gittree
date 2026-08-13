@@ -54,10 +54,10 @@ test('every preload invoke has exactly one registered main-process handler', () 
     )
   ];
 
-  assert.equal(invoked.length, 141);
-  assert.equal(new Set(invoked).size, 141);
-  assert.equal(registered.length, 141);
-  assert.equal(new Set(registered).size, 141);
+  assert.equal(invoked.length, 142);
+  assert.equal(new Set(invoked).size, 142);
+  assert.equal(registered.length, 142);
+  assert.equal(new Set(registered).size, 142);
   assert.deepEqual([...registered].sort(), [...invoked].sort());
 });
 
@@ -74,7 +74,7 @@ test('all managed Git channels use the validating registrar', () => {
     ...matches(gitHandlers, /register(?:ManagedRepoHandler|Logged|ConflictOperation)\(\s*'([^']+)'/g)
   ]);
 
-  assert.equal(managedGitChannels.length, 74);
+  assert.equal(managedGitChannels.length, 75);
   for (const channel of managedGitChannels) {
     assert.equal(registered.has(channel), true, `${channel} is not managed`);
   }

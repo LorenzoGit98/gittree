@@ -170,7 +170,8 @@ class ChangesView {
     this.elements.discardAll.disabled = unstaged.length === 0;
     this.elements.commitButton.disabled =
       staged.length === 0 && !this.elements.amend.checked;
-    this.elements.aiCommit.disabled = this.generatingCommit || staged.length === 0;
+    this.elements.aiCommit.disabled = this.generatingCommit
+      || (staged.length === 0 && unstaged.length === 0);
     const fileCount = this.snapshot?.files?.length || 0;
     this.elements.modeCount.textContent = String(fileCount);
     this.elements.modeCount.classList.toggle('is-hidden', fileCount === 0);
@@ -249,10 +250,7 @@ class ChangesView {
 
   async generateCommitMessage() {
     if (this.generatingCommit) return;
-    if (!this.repoPath || this.stagedFiles().length === 0) {
-      this.app.showToast(t('changes.aiNoStaged'), 'warning');
-      return;
-    }
+    if (!this.repoPath) return;
     const hasText = Boolean(
       this.elements.summary.value.trim() || this.elements.body.value.trim()
     );
@@ -307,7 +305,8 @@ class ChangesView {
     }
     icon.className = 'ph ph-sparkle';
     label.textContent = t('changes.aiGenerate');
-    button.disabled = this.stagedFiles().length === 0;
+    button.disabled =
+      this.stagedFiles().length === 0 && this.unstagedFiles().length === 0;
   }
 
   async runSubmoduleAction(action) {

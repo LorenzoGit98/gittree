@@ -33,6 +33,7 @@ function registerGitHandlers({
     ['git:status', 'getStatus'],
     ['git:working-tree', 'getWorkingTree'],
     ['git:staged-diff', 'getStagedDiff'],
+    ['git:unstaged-diff', 'getUnstagedDiff'],
     ['git:working-diff', 'getWorkingDiff'],
     ['git:stage-paths', 'stagePaths'],
     ['git:unstage-paths', 'unstagePaths'],

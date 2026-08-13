@@ -40,6 +40,9 @@ the local OpenCode CLI.
 - Prompts are bounded: the diff is truncated to 24 KiB before prompting.
   Generation runs in the main process; the renderer shows an explicit loading
   state and is never blocked.
+- Commit messages describe staged changes when any exist; otherwise the
+  unstaged working-tree diff is used (the same policy editor assistants such
+  as VS Code Copilot apply), so generation works before staging.
 - Configured keys are exported as environment variables to agent CLI sessions
   (`DEEPSEEK_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
   `OPENAI_BASE_URL`) so the existing OpenCode/Codex/Claude agents reuse the

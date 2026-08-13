@@ -663,6 +663,12 @@ class GitService {
     return raw.length > cap ? `${raw.slice(0, cap)}\n... diff truncated ...` : raw;
   }
 
+  async getUnstagedDiff(maxBytes = 24576) {
+    const raw = await this.git.raw(['diff', '--no-ext-diff']);
+    const cap = Math.min(1024 * 1024, Math.max(1024, Number(maxBytes) || 24576));
+    return raw.length > cap ? `${raw.slice(0, cap)}\n... diff truncated ...` : raw;
+  }
+
   async getParsedWorkingDiff(filePath, staged = false) {
     return this.workingTree.getParsedWorkingDiff(filePath, staged);
   }

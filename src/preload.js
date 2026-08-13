@@ -237,6 +237,9 @@ contextBridge.exposeInMainWorld('gitTree', {
   getStagedDiff: repoPath =>
     ipcRenderer.invoke('git:staged-diff', repoPath),
 
+  getUnstagedDiff: repoPath =>
+    ipcRenderer.invoke('git:unstaged-diff', repoPath),
+
   listAgentTasks: repoPath =>
     ipcRenderer.invoke('agent:tasks', repoPath),
 

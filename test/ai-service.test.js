@@ -63,6 +63,7 @@ function createService(t, overrides = {}) {
     spawn: overrides.spawn || (() => { throw new Error('spawn should not be called'); }),
     resolveExecutable: overrides.resolveExecutable || (command => `${command}.exe`),
     getStagedDiff: overrides.getStagedDiff || (async () => 'diff --git a/x b/x'),
+    getUnstagedDiff: overrides.getUnstagedDiff || (async () => ''),
     getBranchComparison: overrides.getBranchComparison
       || (async () => ({ commits: [{ subject: 'feat: first' }], diff: 'diff body' }))
   });
@@ -152,8 +153,11 @@ test('service rejects generation without a key for HTTP providers', async t => {
   );
 });
 
-test('service rejects generation without staged changes', async t => {
-  const { service } = createService(t, { getStagedDiff: async () => '' });
+test('service rejects generation without any changes', async t => {
+  const { service } = createService(t, {
+    getStagedDiff: async () => '',
+    getUnstagedDiff: async () => ''
+  });
   await service.initialize();
   await service.setKey('sk-test');
   await service.setSettings({
@@ -161,8 +165,57 @@ test('service rejects generation without staged changes', async t => {
   });
   await assert.rejects(
     () => service.generateCommitMessage('C:\\repo'),
-    /Stage changes/
+    /No changes to generate a commit message from/
   );
+});
+
+test('service falls back to the unstaged diff when nothing is staged', async t => {
+  const diffs = [];
+  const fetch = async (_url, options) => {
+    diffs.push(JSON.parse(options.body).messages[0].content);
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: 'TITLE: feat: unstaged\nBODY: from working tree' } }]
+      })
+    };
+  };
+  const { service } = createService(t, {
+    fetch,
+    getStagedDiff: async () => '',
+    getUnstagedDiff: async () => 'diff --git a/working b/working'
+  });
+  await service.initialize();
+  await service.setKey('sk-test');
+  await service.setSettings({
+    provider: 'openai', baseUrl: 'https://api.deepseek.com/v1', model: 'm'
+  });
+
+  const result = await service.generateCommitMessage('C:\\repo');
+  assert.equal(result.summary, 'feat: unstaged');
+  assert.match(diffs[0], /diff --git a\/working/);
+});
+
+test('service prefers the staged diff over the unstaged one', async t => {
+  let prompt = '';
+  const fetch = async (_url, options) => {
+    prompt = JSON.parse(options.body).messages[0].content;
+    return { ok: true, json: async () => ({ choices: [{ message: { content: 'TITLE: t\nBODY: b' } }] }) };
+  };
+  const { service } = createService(t, {
+    fetch,
+    getStagedDiff: async () => 'diff --git a/staged b/staged',
+    getUnstagedDiff: async () => 'diff --git a/unstaged b/unstaged'
+  });
+  await service.initialize();
+  await service.setKey('sk-test');
+  await service.setSettings({
+    provider: 'openai', baseUrl: 'https://api.deepseek.com/v1', model: 'm'
+  });
+
+  await service.generateCommitMessage('C:\\repo');
+  assert.match(prompt, /a\/staged/);
+  assert.doesNotMatch(prompt, /a\/unstaged/);
 });
 
 test('service generates through the opencode CLI and uses its own config', async t => {
