@@ -69,6 +69,28 @@ function buildExplainPrompt({ diff, language }) {
   ].filter(Boolean).join('\n');
 }
 
+function buildConflictPrompt({ file, base, current, incoming, language }) {
+  const targetLanguage = language === 'it' ? 'Italian' : 'English';
+  return [
+    'You are the merge-conflict advisor of a Git desktop client.',
+    'Explain the conflict block below and suggest how to combine the two sides.',
+    `Conflicted file: ${file}`,
+    `Write the explanation in ${targetLanguage}.`,
+    'Keep it under 12 markdown lines: what each side does, which parts overlap,',
+    'and a concrete way to merge them without breaking either intent.',
+    'Describe content only; never instruct the user to run commands.',
+    'Answer with exactly this format and nothing else:',
+    'TITLE: <short summary of the suggested resolution>',
+    'BODY: <explanation and suggested combined code>',
+    '--- base version ---',
+    base || '(empty)',
+    '--- current version (ours) ---',
+    current || '(empty)',
+    '--- incoming version (theirs) ---',
+    incoming || '(empty)'
+  ].filter(Boolean).join('\n');
+}
+
 function buildPrPrompt({ diff, commits, hint, language }) {
   const targetLanguage = language === 'it' ? 'Italian' : 'English';
   const commitLines = (commits || [])
@@ -97,5 +119,6 @@ module.exports = {
   parseAiOutput,
   buildCommitPrompt,
   buildPrPrompt,
-  buildExplainPrompt
+  buildExplainPrompt,
+  buildConflictPrompt
 };

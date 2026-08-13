@@ -10,6 +10,9 @@ function registerAiHandlers({ registerHandler, registerManagedRepoHandler, aiSer
   registerManagedRepoHandler('ai:explain-changes', (repoPath, options = {}) => (
     aiService.explainChanges(repoPath, options)
   ));
+  registerManagedRepoHandler('ai:explain-conflict', (repoPath, options = {}) => (
+    aiService.explainConflict(repoPath, options)
+  ));
   registerManagedRepoHandler('ai:pr-description', (repoPath, options = {}) => (
     aiService.generatePrDescription(repoPath, options)
   ));

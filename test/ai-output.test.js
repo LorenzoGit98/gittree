@@ -5,7 +5,8 @@ const {
   parseAiOutput,
   buildCommitPrompt,
   buildPrPrompt,
-  buildExplainPrompt
+  buildExplainPrompt,
+  buildConflictPrompt
 } = require('../src/main/ai/ai-output');
 
 test('parses the strict TITLE/BODY format from provider output', () => {
@@ -71,4 +72,34 @@ test('explain prompt carries the diff, language and the strict format contract',
   assert.match(prompt, /TITLE: <short heading>\s*\nBODY: <explanation>/);
   assert.match(prompt, /--- changes diff ---/);
   assert.match(prompt, /\+{3} b\/auth\.js/);
+});
+
+test('conflict prompt carries the three versions, file and language', () => {
+  const prompt = buildConflictPrompt({
+    file: 'src/auth.js',
+    base: 'base',
+    current: 'ours',
+    incoming: 'theirs',
+    language: 'en'
+  });
+  assert.match(prompt, /Conflicted file: src\/auth\.js/);
+  assert.match(prompt, /Write the explanation in English/);
+  assert.match(prompt, /--- base version ---\s*\nbase/);
+  assert.match(prompt, /--- current version \(ours\) ---\s*\nours/);
+  assert.match(prompt, /--- incoming version \(theirs\) ---\s*\ntheirs/);
+  assert.match(prompt, /TITLE: <short summary of the suggested resolution>/);
+});
+
+test('conflict prompt marks empty sides explicitly', () => {
+  const prompt = buildConflictPrompt({
+    file: 'f.txt',
+    base: null,
+    current: '',
+    incoming: 'incoming',
+    language: 'it'
+  });
+  assert.match(prompt, /Write the explanation in Italian/);
+  assert.match(prompt, /--- base version ---\s*\n\(empty\)/);
+  assert.match(prompt, /--- current version \(ours\) ---\s*\n\(empty\)/);
+  assert.match(prompt, /--- incoming version \(theirs\) ---\s*\nincoming/);
 });

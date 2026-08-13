@@ -445,7 +445,18 @@ class MainApplication {
       getUnstagedDiff: repoPath => this.getGitService(repoPath).getUnstagedDiff(),
       getBranchComparison: (repoPath, base, compare) => (
         this.getGitService(repoPath).getBranchComparison(base, compare)
-      )
+      ),
+      getConflictBlock: async (repoPath, file, blockIndex) => {
+        const conflict = await this.getGitService(repoPath).readConflict(file);
+        const block = conflict.blocks?.[blockIndex];
+        if (!block) return null;
+        return {
+          file: conflict.path,
+          base: block.base,
+          current: block.current,
+          incoming: block.incoming
+        };
+      }
     });
     await this.aiService.initialize();
     this.hostingService = new this.modules.HostingService({

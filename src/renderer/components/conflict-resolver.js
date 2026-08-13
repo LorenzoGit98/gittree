@@ -19,6 +19,8 @@ class ConflictResolver {
     this.binaryMap = new Map();
     this.fileFilter = '';
     this.reparseTimer = null;
+    this.explainingBlock = false;
+    this.aiExplanation = null;
     this.layout = localStorage.getItem('gittree.mergeEditor.layout') === 'vertical'
       ? 'vertical'
       : 'horizontal';
@@ -190,6 +192,7 @@ class ConflictResolver {
     this.resultContent = this.current.result;
     this.blocks = (this.current.blocks || []).map(block => ({ ...block }));
     this.activeBlockIndex = 0;
+    this.aiExplanation = null;
     this.pendingBinaryStrategy = null;
     this.manualEdited = false;
     this.dirty = false;
@@ -286,9 +289,81 @@ class ConflictResolver {
     });
     document.getElementById('conflict-undo')?.addEventListener('click', () => this.undo());
     document.getElementById('conflict-mark-resolved')?.addEventListener('click', () => this.markResolved());
+    document.getElementById('conflict-ai-explain')?.addEventListener('click', () => this.explainBlock());
     const resultEditor = document.getElementById('conflict-result-editor');
     if (resultEditor) resultEditor.value = this.resultContent;
     this.bindTextEditor();
+    this.renderAiPanel();
+  }
+
+  async explainBlock() {
+    const repo = this.app.state.repo;
+    if (!repo || this.explainingBlock) return;
+    const blockIndex = this.activeBlockIndex;
+    this.explainingBlock = true;
+    this.setBlockExplainBusy(true);
+    try {
+      const result = await window.gitTree.explainConflict(repo.path, {
+        file: this.currentPath,
+        blockIndex,
+        language: await this.aiLanguage()
+      });
+      if (result?.error) {
+        this.app.showToast(result.error, 'error');
+        return;
+      }
+      this.aiExplanation = {
+        blockIndex,
+        summary: result.summary || '',
+        body: result.body || ''
+      };
+      this.renderAiPanel();
+      this.app.showToast(t('conflicts.aiExplained'), 'success');
+    } finally {
+      this.explainingBlock = false;
+      this.setBlockExplainBusy(false);
+    }
+  }
+
+  setBlockExplainBusy(busy) {
+    const button = document.getElementById('conflict-ai-explain');
+    if (!button) return;
+    const icon = button.querySelector('i');
+    const label = button.querySelector('span');
+    button.disabled = busy;
+    if (busy) {
+      icon.className = 'ph ph-circle-notch';
+      label.textContent = t('conflicts.aiExplaining');
+      return;
+    }
+    icon.className = 'ph ph-sparkle';
+    label.textContent = t('conflicts.aiExplain');
+  }
+
+  renderAiPanel() {
+    const panel = document.getElementById('conflict-ai-panel');
+    if (!panel) return;
+    const matches = this.aiExplanation
+      && this.aiExplanation.blockIndex === this.activeBlockIndex;
+    if (!matches) {
+      panel.classList.add('is-hidden');
+      return;
+    }
+    document.getElementById('conflict-ai-title').textContent = this.aiExplanation.summary;
+    document.getElementById('conflict-ai-body').textContent = this.aiExplanation.body;
+    panel.classList.remove('is-hidden');
+    document.getElementById('conflict-ai-close').onclick = () => {
+      panel.classList.add('is-hidden');
+    };
+  }
+
+  async aiLanguage() {
+    const settings = await window.gitTree.getAiSettings().catch(() => null);
+    if (settings?.language === 'en' || settings?.language === 'it') {
+      return settings.language;
+    }
+    const current = localStorage.getItem('gittree.language') || 'en';
+    return current.startsWith('it') ? 'it' : 'en';
   }
 
   renderBinaryState() {
@@ -329,10 +404,25 @@ class ConflictResolver {
             <button class="btn btn-small" data-choice="both">${this.esc(t('conflicts.acceptBoth'))}</button>
             <button class="btn btn-small" data-choice="smart" ${active.smartCombination === null ? 'disabled' : ''}>${this.esc(t('conflicts.smartCombination'))}</button>
             <button class="btn btn-small" data-choice="ignore">${this.esc(t('conflicts.ignore'))}</button>
+            <button class="btn btn-small" id="conflict-ai-explain" type="button">
+              <i class="ph ph-sparkle" aria-hidden="true"></i><span>${this.esc(t('conflicts.aiExplain'))}</span>
+            </button>
           </div>
         ` : `<span class="conflict-manual-note">${this.esc(
           this.manualEdited ? t('conflicts.manualMode') : t('conflicts.noUnresolvedBlocks')
         )}</span>`}
+      </div>
+      <div id="conflict-ai-panel" class="conflict-ai-panel is-hidden">
+        <div class="conflict-ai-header">
+          <div class="conflict-ai-heading">
+            <i class="ph ph-sparkle" aria-hidden="true"></i>
+            <span id="conflict-ai-title"></span>
+          </div>
+          <button id="conflict-ai-close" class="btn-icon" type="button" data-i18n-aria-label="conflicts.aiExplainClose" aria-label="${this.esc(t('conflicts.aiExplainClose'))}">
+            <i class="ph ph-x" aria-hidden="true"></i>
+          </button>
+        </div>
+        <div id="conflict-ai-body" class="conflict-ai-body"></div>
       </div>
       <details class="conflict-base">
         <summary>${this.esc(t('conflicts.base'))}</summary>

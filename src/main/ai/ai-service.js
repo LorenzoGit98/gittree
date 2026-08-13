@@ -3,7 +3,8 @@ const {
   parseAiOutput,
   buildCommitPrompt,
   buildPrPrompt,
-  buildExplainPrompt
+  buildExplainPrompt,
+  buildConflictPrompt
 } = require('./ai-output');
 const { requestOpenAiCompatible, requestAnthropic } = require('./ai-providers');
 const { generateWithOpencode } = require('./ai-opencode');
@@ -73,6 +74,7 @@ class AiService {
     getStagedDiff = async () => '',
     getUnstagedDiff = async () => '',
     getBranchComparison = async () => ({ commits: [], diff: '' }),
+    getConflictBlock = async () => null,
     timeouts = DEFAULT_TIMEouts
   }) {
     if (!storagePath) throw new Error('AI settings storage path is required');
@@ -87,6 +89,7 @@ class AiService {
     this.getStagedDiff = getStagedDiff;
     this.getUnstagedDiff = getUnstagedDiff;
     this.getBranchComparison = getBranchComparison;
+    this.getConflictBlock = getConflictBlock;
     this.timeouts = { ...DEFAULT_TIMEouts, ...(timeouts || {}) };
     const restored = this.store.load();
     this.settings = restored.settings;
@@ -200,6 +203,32 @@ class AiService {
     });
     const raw = await this.runProvider(prompt);
     return parseAiOutput(raw, { maxTitleLength: 140 });
+  }
+
+  async explainConflict(repoPath, options = {}) {
+    const file = String(options.file || '').trim();
+    const blockIndex = Number(options.blockIndex);
+    if (
+      !file ||
+      file.length > 500 ||
+      !Number.isInteger(blockIndex) ||
+      blockIndex < 0 ||
+      blockIndex > 500
+    ) {
+      throw new Error('Invalid conflict block');
+    }
+    const block = await this.getConflictBlock(repoPath, file, blockIndex);
+    if (!block) throw new Error('Conflict block not found');
+    const language = this.normalizeLanguage(options.language);
+    const prompt = buildConflictPrompt({
+      file: block.file || file,
+      base: truncateDiff(block.base || ''),
+      current: truncateDiff(block.current || ''),
+      incoming: truncateDiff(block.incoming || ''),
+      language
+    });
+    const raw = await this.runProvider(prompt);
+    return parseAiOutput(raw, { maxTitleLength: 200 });
   }
 
   async generatePrDescription(repoPath, options = {}) {

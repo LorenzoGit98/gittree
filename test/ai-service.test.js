@@ -65,7 +65,8 @@ function createService(t, overrides = {}) {
     getStagedDiff: overrides.getStagedDiff || (async () => 'diff --git a/x b/x'),
     getUnstagedDiff: overrides.getUnstagedDiff || (async () => ''),
     getBranchComparison: overrides.getBranchComparison
-      || (async () => ({ commits: [{ subject: 'feat: first' }], diff: 'diff body' }))
+      || (async () => ({ commits: [{ subject: 'feat: first' }], diff: 'diff body' })),
+    getConflictBlock: overrides.getConflictBlock || (async () => null)
   });
   return { directory, vault, service };
 }
@@ -391,4 +392,84 @@ test('service caps oversized diffs in the prompt', async t => {
   await service.generateCommitMessage('C:\\repo');
   assert.ok(prompt.length < 24 * 1024 + 2048);
   assert.match(prompt, /diff truncated/);
+});
+
+test('service explains a conflict block through the configured provider', async t => {
+  const prompts = [];
+  const fetch = async (_url, options) => {
+    prompts.push(JSON.parse(options.body).messages[0].content);
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: { content: 'TITLE: Keep both validations\nBODY: The sides guard different inputs.\n- Suggested: retain both checks' }
+        }]
+      })
+    };
+  };
+  const { service } = createService(t, {
+    fetch,
+    getConflictBlock: async (repoPath, file, blockIndex) => {
+      assert.equal(repoPath, 'C:\\repo');
+      assert.equal(file, 'src/auth.js');
+      assert.equal(blockIndex, 2);
+      return {
+        file: 'src/auth.js',
+        base: 'base code',
+        current: 'ours code',
+        incoming: 'theirs code'
+      };
+    }
+  });
+  await service.initialize();
+  await service.setKey('sk-test');
+  await service.setSettings({
+    provider: 'openai', baseUrl: 'https://api.deepseek.com/v1', model: 'm'
+  });
+
+  const result = await service.explainConflict('C:\\repo', {
+    file: 'src/auth.js',
+    blockIndex: 2,
+    language: 'it'
+  });
+  assert.equal(result.summary, 'Keep both validations');
+  assert.match(result.body, /retain both checks/);
+  assert.equal(prompts.length, 1);
+  assert.match(prompts[0], /Conflicted file: src\/auth\.js/);
+  assert.match(prompts[0], /--- current version \(ours\) ---\s*\nours code/);
+  assert.match(prompts[0], /Write the explanation in Italian/);
+});
+
+test('service rejects invalid conflict block requests before prompting', async t => {
+  const { service } = createService(t);
+  await service.initialize();
+  await service.setKey('sk-test');
+  await service.setSettings({
+    provider: 'openai', baseUrl: 'https://api.deepseek.com/v1', model: 'm'
+  });
+  await assert.rejects(
+    () => service.explainConflict('C:\\repo', { file: '', blockIndex: 0 }),
+    /Invalid conflict block/
+  );
+  await assert.rejects(
+    () => service.explainConflict('C:\\repo', { file: 'a.js', blockIndex: -1 }),
+    /Invalid conflict block/
+  );
+  await assert.rejects(
+    () => service.explainConflict('C:\\repo', { file: 'a.js', blockIndex: 1.5 }),
+    /Invalid conflict block/
+  );
+});
+
+test('service rejects explaining a missing conflict block', async t => {
+  const { service } = createService(t);
+  await service.initialize();
+  await service.setKey('sk-test');
+  await service.setSettings({
+    provider: 'openai', baseUrl: 'https://api.deepseek.com/v1', model: 'm'
+  });
+  await assert.rejects(
+    () => service.explainConflict('C:\\repo', { file: 'a.js', blockIndex: 0 }),
+    /Conflict block not found/
+  );
 });
