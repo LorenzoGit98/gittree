@@ -1,3 +1,10 @@
+## [0.13.2](https://github.com/giannoccarol/gittree/compare/v0.13.1...v0.13.2) (2026-08-13)
+
+
+### Bug Fixes
+
+* **pull-requests:** auto-fill Azure PR title, commits and work items ([a33fa4e](https://github.com/giannoccarol/gittree/commit/a33fa4e55782fcadea42b23bcbf912cdbf6272fc))
+
 ## [0.13.1](https://github.com/giannoccarol/gittree/compare/v0.13.0...v0.13.1) (2026-08-13)
 
 
