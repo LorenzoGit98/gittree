@@ -32,7 +32,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Run quality gates
-        run: npm run quality
+        run: npm run quality:full
         env:
           NODE_V8_COVERAGE: coverage
       - name: Run Electron E2E

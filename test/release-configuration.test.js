@@ -23,10 +23,12 @@ test('release dependencies are assigned to the correct package scopes', () => {
   assert.equal(packageJson.scripts.postinstall, 'electron-builder install-app-deps');
   assert.ok(packageJson.scripts['prepare:assets']);
   assert.ok(packageJson.scripts['release:check']);
+  assert.equal(packageJson.scripts.quality, 'node scripts/quality.js');
   assert.equal(
-    packageJson.scripts.quality,
+    packageJson.scripts['quality:full'],
     'npm run lint && npm run test && npm run test:coverage && npm run audit:design && npm run test:contracts'
   );
+  assert.ok(packageJson.scripts['quality:bench']);
 });
 
 test('continuous integration validates the actual default branch', () => {
