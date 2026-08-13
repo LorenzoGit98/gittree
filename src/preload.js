@@ -240,6 +240,9 @@ contextBridge.exposeInMainWorld('gitTree', {
   explainCommit: (repoPath, options) =>
     ipcRenderer.invoke('ai:explain-commit', repoPath, options),
 
+  searchHistory: (repoPath, options) =>
+    ipcRenderer.invoke('ai:history-search', repoPath, options),
+
   generatePrDescription: (repoPath, options) =>
     ipcRenderer.invoke('ai:pr-description', repoPath, options),
 

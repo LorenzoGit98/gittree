@@ -466,6 +466,13 @@ class MainApplication {
           date: detail.date,
           diff: detail.diff
         };
+      },
+      getHistoryCandidates: async (repoPath, maxCount) => {
+        const log = await this.getGitService(repoPath).getLog(maxCount);
+        return (log?.all || []).map(commit => ({
+          hash: commit.hash,
+          subject: String(commit.message || '').split('\n')[0]
+        }));
       }
     });
     await this.aiService.initialize();

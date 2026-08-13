@@ -1,11 +1,13 @@
 const AiSettingsStore = require('./ai-store');
 const {
   parseAiOutput,
+  parseSearchOutput,
   buildCommitPrompt,
   buildPrPrompt,
   buildExplainPrompt,
   buildConflictPrompt,
-  buildCommitExplainPrompt
+  buildCommitExplainPrompt,
+  buildHistorySearchPrompt
 } = require('./ai-output');
 const { requestOpenAiCompatible, requestAnthropic } = require('./ai-providers');
 const { generateWithOpencode } = require('./ai-opencode');
@@ -77,6 +79,7 @@ class AiService {
     getBranchComparison = async () => ({ commits: [], diff: '' }),
     getConflictBlock = async () => null,
     getCommitContext = async () => null,
+    getHistoryCandidates = async () => [],
     timeouts = DEFAULT_TIMEouts
   }) {
     if (!storagePath) throw new Error('AI settings storage path is required');
@@ -93,6 +96,7 @@ class AiService {
     this.getBranchComparison = getBranchComparison;
     this.getConflictBlock = getConflictBlock;
     this.getCommitContext = getCommitContext;
+    this.getHistoryCandidates = getHistoryCandidates;
     this.timeouts = { ...DEFAULT_TIMEouts, ...(timeouts || {}) };
     const restored = this.store.load();
     this.settings = restored.settings;
@@ -251,6 +255,32 @@ class AiService {
     });
     const raw = await this.runProvider(prompt);
     return parseAiOutput(raw, { maxTitleLength: 200 });
+  }
+
+  async searchHistory(repoPath, options = {}) {
+    const query = String(options.query || '').trim().slice(0, 300);
+    if (query.length < 3) {
+      throw new Error('Enter a longer search question');
+    }
+    const candidates = (await this.getHistoryCandidates(repoPath, 300) || [])
+      .map(candidate => ({
+        hash: String(candidate.hash || '').toLowerCase(),
+        subject: String(candidate.subject || '').slice(0, 500)
+      }))
+      .filter(candidate => /^[0-9a-f]{7,40}$/i.test(candidate.hash));
+    if (!candidates.length) return { matches: [] };
+    const language = this.normalizeLanguage(options.language);
+    const prompt = buildHistorySearchPrompt({ query, commits: candidates, language });
+    const raw = await this.runProvider(prompt);
+    const found = parseSearchOutput(raw, candidates);
+    const byHash = new Map(candidates.map(candidate => [candidate.hash, candidate]));
+    return {
+      matches: found.map(match => ({
+        hash: match.hash,
+        subject: byHash.get(match.hash)?.subject || match.hash,
+        reason: match.reason
+      }))
+    };
   }
 
   async generatePrDescription(repoPath, options = {}) {

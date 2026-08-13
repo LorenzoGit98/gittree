@@ -1,5 +1,24 @@
 const TITLE_PATTERN = /^\s*TITLE\s*:\s*(.*)$/im;
 const BODY_PATTERN = /^\s*BODY\s*:\s*([\s\S]*)$/im;
+const HASH_LINE_PATTERN = /^\s*HASH\s*:\s*([0-9a-f]{7,40})(?:\s*[—|-]\s*(.*))?\s*$/i;
+
+function parseSearchOutput(raw, candidates) {
+  const known = new Set((candidates || []).map(candidate => (
+    String(candidate.hash || '').toLowerCase()
+  )));
+  const matches = [];
+  const seen = new Set();
+  for (const line of String(raw || '').split(/\r?\n/)) {
+    const match = line.match(HASH_LINE_PATTERN);
+    if (!match) continue;
+    const hash = match[1].toLowerCase();
+    if (!known.has(hash) || seen.has(hash)) continue;
+    seen.add(hash);
+    matches.push({ hash, reason: String(match[2] || '').trim() });
+    if (matches.length >= 20) break;
+  }
+  return matches;
+}
 
 function truncate(value, limit) {
   const text = String(value || '').replace(/\s+$/u, '');
@@ -109,6 +128,25 @@ function buildCommitExplainPrompt({ message, author, date, diff, language }) {
   ].filter(Boolean).join('\n');
 }
 
+function buildHistorySearchPrompt({ query, commits, language }) {
+  const targetLanguage = language === 'it' ? 'Italian' : 'English';
+  const commitLines = (commits || [])
+    .slice(0, 300)
+    .map(commit => `${commit.hash} ${commit.subject}`);
+  return [
+    'You are the history-search assistant of a Git desktop client.',
+    'The user asks a question about the repository history. Pick up to 10 commits',
+    'from the list below whose subject (or likely content) answers the question.',
+    `Write the reasons in ${targetLanguage}.`,
+    'Answer with exactly this format, one line per commit, and nothing else:',
+    'HASH: <hash> — <one-line reason why it matches>',
+    'If nothing matches, answer with exactly: NO MATCHES',
+    `Question: ${query}`,
+    '--- candidate commits ---',
+    ...commitLines
+  ].filter(Boolean).join('\n');
+}
+
 function buildPrPrompt({ diff, commits, hint, language }) {
   const targetLanguage = language === 'it' ? 'Italian' : 'English';
   const commitLines = (commits || [])
@@ -135,9 +173,11 @@ function buildPrPrompt({ diff, commits, hint, language }) {
 
 module.exports = {
   parseAiOutput,
+  parseSearchOutput,
   buildCommitPrompt,
   buildPrPrompt,
   buildExplainPrompt,
   buildConflictPrompt,
-  buildCommitExplainPrompt
+  buildCommitExplainPrompt,
+  buildHistorySearchPrompt
 };

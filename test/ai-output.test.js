@@ -3,11 +3,13 @@ const assert = require('node:assert/strict');
 
 const {
   parseAiOutput,
+  parseSearchOutput,
   buildCommitPrompt,
   buildPrPrompt,
   buildExplainPrompt,
   buildConflictPrompt,
-  buildCommitExplainPrompt
+  buildCommitExplainPrompt,
+  buildHistorySearchPrompt
 } = require('../src/main/ai/ai-output');
 
 test('parses the strict TITLE/BODY format from provider output', () => {
@@ -119,4 +121,46 @@ test('commit explain prompt carries message, author, date and diff', () => {
   assert.match(prompt, /--- commit diff ---/);
   assert.match(prompt, /\+{3} b\/list\.js/);
   assert.match(prompt, /TITLE: <one-line explanation>/);
+});
+
+test('history search prompt carries the question and bounded candidates', () => {
+  const prompt = buildHistorySearchPrompt({
+    query: 'when did the login bug appear?',
+    commits: [
+      { hash: 'abc1234', subject: 'feat: login page' },
+      { hash: 'def5678', subject: 'fix: session refresh' }
+    ],
+    language: 'it'
+  });
+  assert.match(prompt, /Write the reasons in Italian/);
+  assert.match(prompt, /Question: when did the login bug appear\?/);
+  assert.match(prompt, /abc1234 feat: login page/);
+  assert.match(prompt, /def5678 fix: session refresh/);
+  assert.match(prompt, /NO MATCHES/);
+});
+
+test('search output parser keeps only known candidate hashes', () => {
+  const candidates = [
+    { hash: 'abc1234', subject: 'feat: login' },
+    { hash: 'def5678', subject: 'fix: session' }
+  ];
+  const matches = parseSearchOutput(
+    'HASH: abc1234 — introduced the login form\n'
+      + 'HASH: ffffffffffffffffffffffffffffffffffffffff — invented hash\n'
+      + 'HASH: def5678 - changed session handling',
+    candidates
+  );
+  assert.deepEqual(matches, [
+    { hash: 'abc1234', reason: 'introduced the login form' },
+    { hash: 'def5678', reason: 'changed session handling' }
+  ]);
+});
+
+test('search output parser dedupes hashes and ignores NO MATCHES', () => {
+  const candidates = [{ hash: 'abc1234', subject: 'x' }];
+  const matches = parseSearchOutput(
+    'NO MATCHES\nHASH: abc1234 — first\nHASH: abc1234 — second',
+    candidates
+  );
+  assert.deepEqual(matches, [{ hash: 'abc1234', reason: 'first' }]);
 });

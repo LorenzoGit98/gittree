@@ -477,7 +477,11 @@ const I18n = {
               commits: 'Commits',
               files: 'Files',
               repositories: 'Repositories',
-              actions: 'Actions'
+              actions: 'Actions',
+              aiSearch: 'Ask AI',
+              aiSearching: 'Searching…',
+              aiQueryShort: 'Type a longer question for the AI search.',
+              aiNoMatches: 'The AI found no matching commits.'
             },
             statusBar: {
               onBranch: 'On {{branch}}',
@@ -1280,7 +1284,11 @@ const I18n = {
               commits: 'Commit',
               files: 'File',
               repositories: 'Repository',
-              actions: 'Azioni'
+              actions: 'Azioni',
+              aiSearch: 'Chiedi all’AI',
+              aiSearching: 'Ricerca…',
+              aiQueryShort: 'Scrivi una domanda più lunga per la ricerca AI.',
+              aiNoMatches: 'L’AI non ha trovato commit corrispondenti.'
             },
             statusBar: {
               onBranch: 'Su {{branch}}',

@@ -16,6 +16,9 @@ function registerAiHandlers({ registerHandler, registerManagedRepoHandler, aiSer
   registerManagedRepoHandler('ai:explain-commit', (repoPath, options = {}) => (
     aiService.explainCommit(repoPath, options)
   ));
+  registerManagedRepoHandler('ai:history-search', (repoPath, options = {}) => (
+    aiService.searchHistory(repoPath, options)
+  ));
   registerManagedRepoHandler('ai:pr-description', (repoPath, options = {}) => (
     aiService.generatePrDescription(repoPath, options)
   ));

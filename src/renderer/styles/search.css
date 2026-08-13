@@ -51,6 +51,14 @@
   color: var(--text-tertiary);
 }
 
+.search-ai-ask {
+  flex-shrink: 0;
+}
+
+.search-ai-ask i.ph-circle-notch {
+  animation: project-loading-spin 0.8s linear infinite;
+}
+
 .search-results {
   flex: 1;
   overflow-y: auto;

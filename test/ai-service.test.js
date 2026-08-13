@@ -67,7 +67,8 @@ function createService(t, overrides = {}) {
     getBranchComparison: overrides.getBranchComparison
       || (async () => ({ commits: [{ subject: 'feat: first' }], diff: 'diff body' })),
     getConflictBlock: overrides.getConflictBlock || (async () => null),
-    getCommitContext: overrides.getCommitContext || (async () => null)
+    getCommitContext: overrides.getCommitContext || (async () => null),
+    getHistoryCandidates: overrides.getHistoryCandidates || (async () => [])
   });
   return { directory, vault, service };
 }
@@ -530,5 +531,74 @@ test('service rejects invalid hashes and unknown commits before prompting', asyn
   await assert.rejects(
     () => service.explainCommit('C:\\repo', { hash: 'abcdef0' }),
     /Commit not found/
+  );
+});
+
+test('service searches history through the configured provider', async t => {
+  const prompts = [];
+  const fetch = async (_url, options) => {
+    prompts.push(JSON.parse(options.body).messages[0].content);
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: 'HASH: abc1234 — introduced the login form\nHASH: def5678 — changed session handling'
+          }
+        }]
+      })
+    };
+  };
+  const { service } = createService(t, {
+    fetch,
+    getHistoryCandidates: async (repoPath, maxCount) => {
+      assert.equal(repoPath, 'C:\\repo');
+      assert.equal(maxCount, 300);
+      return [
+        { hash: 'abc1234', subject: 'feat: login page' },
+        { hash: 'def5678', subject: 'fix: session refresh' }
+      ];
+    }
+  });
+  await service.initialize();
+  await service.setKey('sk-test');
+  await service.setSettings({
+    provider: 'openai', baseUrl: 'https://api.deepseek.com/v1', model: 'm'
+  });
+
+  const result = await service.searchHistory('C:\\repo', {
+    query: 'when did the login bug appear?',
+    language: 'en'
+  });
+  assert.deepEqual(result.matches, [
+    { hash: 'abc1234', subject: 'feat: login page', reason: 'introduced the login form' },
+    { hash: 'def5678', subject: 'fix: session refresh', reason: 'changed session handling' }
+  ]);
+  assert.equal(prompts.length, 1);
+  assert.match(prompts[0], /Question: when did the login bug appear\?/);
+  assert.match(prompts[0], /--- candidate commits ---/);
+});
+
+test('service returns no matches without history candidates or a provider round', async t => {
+  const { service } = createService(t);
+  await service.initialize();
+  await service.setKey('sk-test');
+  await service.setSettings({
+    provider: 'openai', baseUrl: 'https://api.deepseek.com/v1', model: 'm'
+  });
+  const result = await service.searchHistory('C:\\repo', { query: 'any question here' });
+  assert.deepEqual(result.matches, []);
+});
+
+test('service rejects too-short history search questions', async t => {
+  const { service } = createService(t);
+  await service.initialize();
+  await service.setKey('sk-test');
+  await service.setSettings({
+    provider: 'openai', baseUrl: 'https://api.deepseek.com/v1', model: 'm'
+  });
+  await assert.rejects(
+    () => service.searchHistory('C:\\repo', { query: 'ab' }),
+    /longer search question/
   );
 });

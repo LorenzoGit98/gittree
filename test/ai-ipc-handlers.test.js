@@ -32,6 +32,7 @@ test('AI handlers validate managed repositories and normalize errors', async () 
     explainChanges: async () => ({ summary: 'Auth refactor', body: 'Tokens move behind a service.' }),
     explainConflict: async () => ({ summary: 'Merge both validations', body: 'Keep both checks.' }),
     explainCommit: async () => ({ summary: 'Fixes pagination', body: 'Offset corrected.' }),
+    searchHistory: async () => ({ matches: [{ hash: 'abc1234', subject: 'feat: login', reason: 'added login' }] }),
     generatePrDescription: async (repoPath, options) => ({
       summary: options.title || 'PR', body: ''
     })
@@ -46,6 +47,7 @@ test('AI handlers validate managed repositories and normalize errors', async () 
       'ai:explain-changes',
       'ai:explain-conflict',
       'ai:explain-commit',
+      'ai:history-search',
       'ai:pr-description'
     ]
   );
@@ -67,6 +69,10 @@ test('AI handlers validate managed repositories and normalize errors', async () 
   assert.equal(
     (await registered.get('ai:explain-commit')('C:\\repo', { hash: 'abc1234' })).summary,
     'Fixes pagination'
+  );
+  assert.equal(
+    (await registered.get('ai:history-search')('C:\\repo', { query: 'login' })).matches[0].hash,
+    'abc1234'
   );
   assert.equal(
     (await registered.get('ai:pr-description')('C:\\repo', { source: 'a', target: 'b', title: 'T' })).summary,

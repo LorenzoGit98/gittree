@@ -7,9 +7,11 @@ class GlobalSearch {
     this.input = document.getElementById('search-input');
     this.results = document.getElementById('search-results');
     this.filters = document.getElementById('search-filters');
+    this.aiButton = document.getElementById('search-ai-ask');
     this.allData = [];
     this.selectedIdx = -1;
     this.visible = false;
+    this.aiSearching = false;
   }
 
   init() {
@@ -32,6 +34,9 @@ class GlobalSearch {
 
     this.input.addEventListener('input', () => this.search());
     this.input.addEventListener('keydown', e => this.handleKey(e));
+    if (this.aiButton) {
+      this.aiButton.onclick = () => this.askAi();
+    }
 
     this.overlay.addEventListener('click', (e) => {
       if (e.target === this.overlay) this.hide();
@@ -46,6 +51,9 @@ class GlobalSearch {
     this.allData = [];
     this.results.innerHTML = '';
     this.filters.innerHTML = '';
+    if (this.aiButton) {
+      this.aiButton.disabled = !this.app.state.repo;
+    }
 
     if (this.app.state.repo) {
       try {
@@ -131,6 +139,69 @@ class GlobalSearch {
     }
 
     this.renderResults(filtered);
+  }
+
+  async askAi() {
+    const repo = this.app.state.repo;
+    if (!repo || this.aiSearching) return;
+    const query = this.input.value.trim();
+    if (query.length < 3) {
+      this.app.showToast(t('search.aiQueryShort'), 'warning');
+      return;
+    }
+    this.aiSearching = true;
+    this.setAiSearching(true);
+    try {
+      const result = await window.gitTree.searchHistory(repo.path, {
+        query,
+        language: await this.aiLanguage()
+      });
+      if (result?.error) {
+        this.app.showToast(result.error, 'error');
+        return;
+      }
+      const matches = result?.matches || [];
+      if (!matches.length) {
+        this.renderResults([]);
+        this.app.showToast(t('search.aiNoMatches'), 'warning');
+        return;
+      }
+      this.renderResults(matches.map(match => ({
+        type: 'commit',
+        label: match.subject || match.hash,
+        subtitle: String(match.hash || '').slice(0, 7),
+        detail: match.reason || '',
+        data: { hash: match.hash }
+      })));
+    } finally {
+      this.aiSearching = false;
+      this.setAiSearching(false);
+    }
+  }
+
+  setAiSearching(searching) {
+    const button = this.aiButton;
+    if (!button) return;
+    const icon = button.querySelector('i');
+    const label = button.querySelector('span');
+    button.disabled = searching;
+    if (searching) {
+      icon.className = 'ph ph-circle-notch';
+      label.textContent = t('search.aiSearching');
+      return;
+    }
+    icon.className = 'ph ph-sparkle';
+    label.textContent = t('search.aiSearch');
+    button.disabled = !this.app.state.repo;
+  }
+
+  async aiLanguage() {
+    const settings = await window.gitTree.getAiSettings().catch(() => null);
+    if (settings?.language === 'en' || settings?.language === 'it') {
+      return settings.language;
+    }
+    const current = localStorage.getItem('gittree.language') || 'en';
+    return current.startsWith('it') ? 'it' : 'en';
   }
 
   renderResults(items) {
