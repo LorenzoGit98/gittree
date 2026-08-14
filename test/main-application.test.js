@@ -94,7 +94,11 @@ function createHarness(t, { realAiService = false } = {}) {
         getStatus: async () => ({ clean: true }),
         getStagedDiff: async () => '',
         getUnstagedDiff: async () => '',
-        getBranchComparison: async () => ({ commits: [], diff: '' })
+        getBranchComparison: async () => ({ commits: [], diff: '' }),
+        readConflict: async () => ({ path: 'src/a.js', blocks: [] }),
+        getCommitDetail: async () => null,
+        getLog: async () => ({ all: [] }),
+        getBlame: async () => ({ rows: [] })
       };
     }
     list() { return [...this.repositories]; }
@@ -412,4 +416,49 @@ test('Main application composes the real AI service over the credential vault', 
   );
 
   await harness.application.stop();
+});
+
+test('AI composition callbacks expose conflict, commit, history and blame reads to the real AI service', async t => {
+  const harness = createHarness(t, { realAiService: true });
+
+  assert.equal(await harness.application.start(), true);
+
+  assert.match(
+    (await harness.handlers.get('ai:explain-conflict')({}, 'C:\\repo', {
+      file: 'src/a.js', blockIndex: 0, language: 'en'
+    })).error,
+    /Conflict block not found/
+  );
+  assert.match(
+    (await harness.handlers.get('ai:explain-commit')({}, 'C:\\repo', {
+      hash: 'a1b2c3d', language: 'en'
+    })).error,
+    /Commit not found/
+  );
+  assert.deepEqual(
+    await harness.handlers.get('ai:history-search')({}, 'C:\\repo', {
+      query: 'find the parser change'
+    }),
+    { matches: [] }
+  );
+  assert.match(
+    (await harness.handlers.get('ai:explain-lines')({}, 'C:\\repo', {
+      file: 'src/a.js', hash: 'a1b2c3d', language: 'en'
+    })).error,
+    /No blame information for this file/
+  );
+
+  await harness.application.stop();
+});
+
+test('application start propagates runtime failures and detaches process listeners', async t => {
+  const harness = createHarness(t);
+
+  harness.app.whenReady = async () => {
+    throw new Error('ready failed');
+  };
+
+  await assert.rejects(() => harness.application.start(), /ready failed/);
+  assert.equal(harness.processHost.listenerCount('unhandledRejection'), 0);
+  assert.equal(harness.processHost.listenerCount('uncaughtException'), 0);
 });
