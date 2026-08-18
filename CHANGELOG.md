@@ -1,3 +1,10 @@
+## [0.20.3](https://github.com/giannoccarol/gittree/compare/v0.20.2...v0.20.3) (2026-08-18)
+
+
+### Bug Fixes
+
+* **tabs:** keep the app's custom scrollbar look on a much slimmer tab strip ([01d73e1](https://github.com/giannoccarol/gittree/commit/01d73e1bc2c2a19d22bee4454f13b0ba11559bd2))
+
 ## [0.20.2](https://github.com/giannoccarol/gittree/compare/v0.20.1...v0.20.2) (2026-08-18)
 
 
