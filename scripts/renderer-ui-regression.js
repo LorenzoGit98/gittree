@@ -800,7 +800,9 @@ const contractExpression = `
       workspaceTargetIsLarge:
         parseFloat(workspaceScrollbarStyle.width) >= 14 &&
         parseFloat(workspaceScrollbarStyle.height) >= 14,
-      tabsRemainReachable: parseFloat(tabsScrollbarStyle.height) >= 12,
+      tabsScrollbarSlim:
+        parseFloat(tabsScrollbarStyle.height) >= 4 &&
+        parseFloat(tabsScrollbarStyle.height) < 12,
       thumbIsVisible:
         scrollbarThumbStyle.backgroundColor !== 'rgba(0, 0, 0, 0)' &&
         parseFloat(scrollbarThumbStyle.minHeight) >= 44
