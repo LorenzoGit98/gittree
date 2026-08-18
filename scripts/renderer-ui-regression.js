@@ -496,6 +496,10 @@ const contractExpression = `
     document.querySelector('.repo-tab-container'),
     '::-webkit-scrollbar'
   );
+  const tabsThumbStyle = getComputedStyle(
+    document.querySelector('.repo-tab-container'),
+    '::-webkit-scrollbar-thumb'
+  );
   const scrollbarThumbStyle = getComputedStyle(
     document.querySelector('.graph-view'),
     '::-webkit-scrollbar-thumb'
@@ -800,9 +804,10 @@ const contractExpression = `
       workspaceTargetIsLarge:
         parseFloat(workspaceScrollbarStyle.width) >= 14 &&
         parseFloat(workspaceScrollbarStyle.height) >= 14,
-      tabsScrollbarSlim:
-        parseFloat(tabsScrollbarStyle.height) >= 4 &&
-        parseFloat(tabsScrollbarStyle.height) < 12,
+      tabsScrollbarSlimCustom:
+        parseFloat(tabsScrollbarStyle.height) >= 8 &&
+        parseFloat(tabsScrollbarStyle.height) < 12 &&
+        parseFloat(tabsThumbStyle.borderTopWidth) >= 2.5,
       thumbIsVisible:
         scrollbarThumbStyle.backgroundColor !== 'rgba(0, 0, 0, 0)' &&
         parseFloat(scrollbarThumbStyle.minHeight) >= 44

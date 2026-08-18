@@ -7,18 +7,18 @@
 
 .repo-tab-container {
   min-width: 0;
-  height: 44px;
+  height: 52px;
   display: flex;
   align-items: flex-start;
   gap: var(--space-1);
-  padding-top: var(--space-1);
+  padding-top: var(--space-2);
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
 }
 
 .repo-tab-container::-webkit-scrollbar {
-  height: 6px;
+  height: 10px;
 }
 
 .repo-tab-container::-webkit-scrollbar-track {
@@ -27,8 +27,8 @@
 
 .repo-tab-container::-webkit-scrollbar-thumb {
   min-height: 0;
-  background: var(--border-strong);
-  border: 0;
+  background: var(--border-default);
+  border: 3px solid var(--surface-primary);
   border-radius: var(--radius-pill);
 }
 
