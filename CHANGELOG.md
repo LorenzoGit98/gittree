@@ -1,3 +1,10 @@
+## [0.20.2](https://github.com/giannoccarol/gittree/compare/v0.20.1...v0.20.2) (2026-08-18)
+
+
+### Bug Fixes
+
+* **tabs:** slim tab-strip scrollbar that no longer shifts tabs and remove hover lift ([ab11bb9](https://github.com/giannoccarol/gittree/commit/ab11bb9527018f1f50c9421765c7f396dbb5262a))
+
 # [0.20.0](https://github.com/giannoccarol/gittree/compare/v0.19.0...v0.20.0) (2026-08-13)
 
 
