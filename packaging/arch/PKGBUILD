@@ -1,0 +1,36 @@
+# Maintainer: Lorenzo <lorenzo.giannoccaro998@gmail.com>
+# Repository: https://github.com/giannoccarol/gittree
+#
+# GitTree is released by the GitHub Actions flow (.github/workflows/release.yml):
+# electron-builder --linux produces GitTree-<ver>-linux-x86_64.AppImage and
+# GitTree-<ver>-linux-amd64.deb, uploaded to the GitHub release (scripts/release-assets.js).
+# This PKGBUILD mirrors that flow for Arch Linux by repackaging the .deb artifact.
+#
+# To update: bump pkgver, update the release asset URL and sha256sums
+# (sha256sum of GitTree-<ver>-linux-amd64.deb from the new release).
+
+pkgname=gittree-bin
+pkgver=0.20.3
+pkgrel=1
+pkgdesc="A fast, visual and privacy-first Git desktop client (prebuilt release)"
+arch=('x86_64')
+url="https://github.com/giannoccarol/gittree"
+license=('MIT')
+depends=('gtk3' 'libnotify' 'nss' 'libxss' 'libxtst' 'xdg-utils' 'at-spi2-core' 'libsecret' 'alsa-lib' 'util-linux-libs')
+optdepends=('libappindicator-gtk3: system tray support')
+provides=('gittree')
+conflicts=('gittree')
+source=("https://github.com/giannoccarol/gittree/releases/download/v${pkgver}/GitTree-${pkgver}-linux-amd64.deb")
+sha256sums=('9ee8c5795b81e6f497016f82fc01a3514e669d72c3b6ca17fa749041bf5344e3')
+
+package() {
+  cd "$srcdir"
+  bsdtar -xf "GitTree-${pkgver}-linux-amd64.deb" data.tar.xz
+  bsdtar -xf data.tar.xz -C "$pkgdir"
+
+  # The deb ships /opt/GitTree, /usr/share/applications/gittree.desktop,
+  # /usr/share/icons/hicolor/1024x1024/apps/gittree.png and /usr/share/doc/gittree.
+
+  # Enable the sandbox helper instead of falling back to --no-sandbox.
+  chmod 4755 "$pkgdir/opt/GitTree/chrome-sandbox"
+}
