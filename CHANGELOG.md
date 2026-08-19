@@ -1,3 +1,10 @@
+## [0.20.4](https://github.com/giannoccarol/gittree/compare/v0.20.3...v0.20.4) (2026-08-19)
+
+
+### Bug Fixes
+
+* **agents:** buffer terminal output until the terminal is attached ([762f66e](https://github.com/giannoccarol/gittree/commit/762f66e6a6d1523a2502572942d7a43e615eb42c))
+
 ## [0.20.3](https://github.com/giannoccarol/gittree/compare/v0.20.2...v0.20.3) (2026-08-18)
 
 
