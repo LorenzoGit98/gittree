@@ -1,6 +1,6 @@
 pkgbase = gittree-bin
 	pkgdesc = A fast, visual and privacy-first Git desktop client (prebuilt release)
-	pkgver = 0.20.3
+	pkgver = 0.20.4
 	pkgrel = 1
 	url = https://github.com/giannoccarol/gittree
 	arch = x86_64
@@ -18,7 +18,7 @@ pkgbase = gittree-bin
 	optdepends = libappindicator-gtk3: system tray support
 	provides = gittree
 	conflicts = gittree
-	source = https://github.com/giannoccarol/gittree/releases/download/v0.20.3/GitTree-0.20.3-linux-amd64.deb
-	sha256sums = 9ee8c5795b81e6f497016f82fc01a3514e669d72c3b6ca17fa749041bf5344e3
+	source = https://github.com/giannoccarol/gittree/releases/download/v0.20.4/GitTree-0.20.4-linux-amd64.deb
+	sha256sums = ea68fbeef42c1eaa82af78611ad43332785bdb87f91feb900c4efff04a979356
 
 pkgname = gittree-bin

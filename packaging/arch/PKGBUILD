@@ -10,7 +10,7 @@
 # (sha256sum of GitTree-<ver>-linux-amd64.deb from the new release).
 
 pkgname=gittree-bin
-pkgver=0.20.3
+pkgver=0.20.4
 pkgrel=1
 pkgdesc="A fast, visual and privacy-first Git desktop client (prebuilt release)"
 arch=('x86_64')
@@ -21,7 +21,7 @@ optdepends=('libappindicator-gtk3: system tray support')
 provides=('gittree')
 conflicts=('gittree')
 source=("https://github.com/giannoccarol/gittree/releases/download/v${pkgver}/GitTree-${pkgver}-linux-amd64.deb")
-sha256sums=('9ee8c5795b81e6f497016f82fc01a3514e669d72c3b6ca17fa749041bf5344e3')
+sha256sums=('ea68fbeef42c1eaa82af78611ad43332785bdb87f91feb900c4efff04a979356')
 
 package() {
   cd "$srcdir"
