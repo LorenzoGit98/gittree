@@ -276,7 +276,7 @@ test('Electron opens a deep-linked repository and renders its deterministic hist
     assert.match(await page.locator('#changes-view').innerText(), /dirty\.txt/);
 
     await page.locator('#btn-settings').click();
-    await page.locator('.settings-dialog').waitFor();
+    await page.locator('.settings-dialog .settings-nav').waitFor();
     const settingsLayout = await page.evaluate(() => {
       const dialog = document.querySelector('.settings-dialog');
       const navigation = document.querySelector('.settings-nav');
@@ -409,6 +409,9 @@ test('Electron welcome is full-bleed and exposes only About and updates', async 
   assert.ok(Math.abs(welcomeLayout.rect.width - welcomeLayout.viewport.width) <= 1);
   assert.ok(Math.abs(welcomeLayout.rect.height - welcomeLayout.viewport.height) <= 1);
 
+  await page.waitForFunction(() => (
+    typeof document.getElementById('btn-welcome-settings')?.onclick === 'function'
+  ));
   const welcomeSettings = page.getByRole('button', { name: /Settings|Impostazioni/ });
   await welcomeSettings.click();
   await page.locator('.settings-dialog.settings-dialog-about').waitFor();
