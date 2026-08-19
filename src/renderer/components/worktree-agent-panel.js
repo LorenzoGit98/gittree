@@ -14,6 +14,7 @@ class WorktreeAgentPanel {
     this.disposers = [];
     this.resizeFrame = 0;
     this.pendingHeight = 0;
+    this.pendingTerminalData = new Map();
   }
 
   mount() {
@@ -318,6 +319,7 @@ class WorktreeAgentPanel {
     if (result?.error) return this.app.showToast(result.error, 'error');
     await this.app.components.repoTabs.addRepo(task.worktreePath);
     this.selectedTaskId = task.id;
+    this.flushTerminalData();
     this.renderDrawer(task);
     document.getElementById('agent-drawer').classList.remove('is-hidden');
     if (task.needsAttention) window.gitTree.acknowledgeAgentAttention(task.id);
@@ -366,6 +368,7 @@ class WorktreeAgentPanel {
     this.terminal.onData(data => {
       if (this.selectedTaskId) window.gitTree.writeAgentTerminal(this.selectedTaskId, data);
     });
+    this.flushTerminalData();
     requestAnimationFrame(() => this.fitTerminal());
   }
 
@@ -380,7 +383,27 @@ class WorktreeAgentPanel {
   }
 
   onTerminalData(payload) {
-    if (payload?.taskId === this.selectedTaskId) this.terminal?.write(String(payload.data || ''));
+    if (!payload?.taskId) return;
+    const data = String(payload.data || '');
+    if (payload.taskId === this.selectedTaskId && this.terminal) {
+      this.terminal.write(data);
+      return;
+    }
+    const pending = this.pendingTerminalData.get(payload.taskId) || { parts: [], size: 0 };
+    pending.parts.push(data);
+    pending.size += data.length;
+    while (pending.size > 65536 && pending.parts.length > 1) {
+      pending.size -= pending.parts.shift().length;
+    }
+    this.pendingTerminalData.set(payload.taskId, pending);
+  }
+
+  flushTerminalData() {
+    if (!this.terminal || !this.selectedTaskId) return;
+    const pending = this.pendingTerminalData.get(this.selectedTaskId);
+    if (!pending?.parts.length) return;
+    this.pendingTerminalData.delete(this.selectedTaskId);
+    this.terminal.write(pending.parts.join(''));
   }
 
   onTaskChanged(task) {
@@ -458,6 +481,7 @@ class WorktreeAgentPanel {
   destroy() {
     this.disposers.forEach(dispose => dispose?.());
     this.disposers = [];
+    this.pendingTerminalData.clear();
     this.terminal?.dispose();
     this.terminal = null;
   }

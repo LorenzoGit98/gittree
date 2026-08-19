@@ -136,3 +136,28 @@ test('disabling agent sessions hides the mode and removes launch controls', t =>
   assert.equal(modeButtons[1].classList.contains('is-hidden'), false);
   assert.equal(modeButtons[1].attributes['aria-disabled'], 'false');
 });
+
+test('terminal data is buffered until the task is selected and the terminal attaches', t => {
+  const { panel } = harness(t);
+  const writes = [];
+  const terminal = { write: data => writes.push(data) };
+
+  panel.onTerminalData({ taskId: 'early', data: 'fixture-ready\r\n' });
+  panel.onTerminalData({ taskId: 'other', data: 'ignored' });
+  assert.equal(panel.pendingTerminalData.get('early').parts.join(''), 'fixture-ready\r\n');
+
+  panel.terminal = terminal;
+  panel.selectedTaskId = 'early';
+  panel.flushTerminalData();
+  assert.deepEqual(writes, ['fixture-ready\r\n']);
+  assert.equal(panel.pendingTerminalData.has('early'), false);
+
+  panel.onTerminalData({ taskId: 'early', data: 'echo:hello\r\n' });
+  assert.deepEqual(writes, ['fixture-ready\r\n', 'echo:hello\r\n']);
+  assert.equal(panel.pendingTerminalData.has('early'), false);
+
+  panel.selectedTaskId = 'other';
+  panel.onTerminalData({ taskId: 'early', data: 'later' });
+  assert.equal(panel.pendingTerminalData.get('early').parts.join(''), 'later');
+  assert.deepEqual(writes.slice(1), ['echo:hello\r\n']);
+});
