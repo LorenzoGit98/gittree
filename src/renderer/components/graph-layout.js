@@ -64,14 +64,12 @@
       }
 
       trimTrailingLanes(lanes);
-      const after = [...lanes];
-      laneCount = Math.max(laneCount, before.length, after.length, lane + 1);
+      laneCount = Math.max(laneCount, before.length, lanes.length, lane + 1);
       rows.push({
         commit,
         lane,
         incoming,
         before,
-        after,
         parents: parentLayouts
       });
     }

@@ -31,6 +31,22 @@ node scripts/renderer-perf-benchmark.js --runs=5 --output=performance-results/re
 node scripts/workspace-perf-benchmark.js --runs=3 --output=performance-results/workspace.json
 ```
 
+For memory investigation with deliberately oversized renderer fixtures, use:
+
+```powershell
+npm run perf:memory -- --profile=aggressive --scenario=all --runs=3
+```
+
+The stress benchmark measures graph retention, rendered diff lines, agent cards
+and terminal scrollback separately. It records renderer working set, JavaScript
+heap and DOM counters before stress, after clearing the surfaces, and after an
+explicit diagnostic garbage collection. `normal`, `aggressive` and `extreme`
+profiles are reproducible presets; individual dimensions can be overridden with
+`--commits`, `--subject-bytes`, `--diff-lines`, `--agent-cards` and
+`--terminal-lines`, plus `--diff-mode=unified|split` and
+`--navigate-file=true|false` for diff navigation coverage. These measurements
+are investigation aids, not functional quality gates.
+
 The workspace benchmark uses two real isolated Git repositories and a local bare remote to measure repeated tab switching at three milestones: graph data ready, primary workspace interactive, and all supporting panels settled. It also measures a real Fetch and verifies that the operation does not trigger a global repository reload, enter the workspace-wide loading state, or replace an already visible graph row. Its memory protocol records a stable welcome baseline, one settled repository, two settled repositories, ten switches, and post-switch idle. It reports working set, Windows private bytes, JavaScript heaps, DOM counters, and Electron browser, renderer, GPU, and utility processes separately. `--diagnostic-gc=true` is an opt-in investigation aid and is never used by the application.
 
 Timing values are observations, not functional assertions. The command fails only when a deterministic renderer contract is broken. Approved nightly baselines compare the same machine, operating system, build mode, fixture, and run count.

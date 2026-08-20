@@ -22,6 +22,34 @@
   margin-bottom: 0;
 }
 
+.diff-virtual-layer {
+  position: relative;
+  min-height: 100%;
+}
+
+.diff-file-block.is-virtual {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  margin: 0;
+  overflow: visible;
+  animation: none;
+}
+
+.diff-file-block.is-virtual > .diff-line {
+  position: absolute;
+}
+
+.diff-file-block.is-virtual > .diff-split-columns {
+  position: absolute;
+}
+
+.diff-virtualized .diff-line {
+  white-space: pre;
+  word-break: normal;
+}
+
 .diff-file-header {
   position: sticky;
   top: 0;

@@ -629,11 +629,11 @@ const contractExpression = `
     settingsHasAccounts =
       Boolean(settingsDialog?.querySelector('[data-settings-section="accounts"]')) &&
       Boolean(settingsDialog?.querySelector('#settings-account-form'));
-    const shortcutNavigation = settingsDialog?.querySelector('[data-settings-shortcuts]');
+    const shortcutNavigation = settingsDialog?.querySelector('[data-settings-section="shortcuts"]');
     settingsHasShortcuts = Boolean(shortcutNavigation);
     shortcutNavigation?.click();
     settingsShortcutsDedicated =
-      Boolean(document.querySelector('[data-shortcuts-back]')) &&
+      Boolean(settingsDialog?.querySelector('.settings-shortcut-content')) &&
       document.querySelectorAll('.settings-shortcut-list kbd').length === 6;
     window.app.components.settings.close();
   }
@@ -778,9 +778,9 @@ const contractExpression = `
       reopens,
       persists: inspectorPersists,
       compactTitle:
-        detailTitleStyle.whiteSpace === 'nowrap' &&
         detailTitleStyle.overflow === 'hidden' &&
-        detailTitleStyle.textOverflow === 'ellipsis'
+        detailTitleStyle.textOverflow === 'ellipsis' &&
+        detailTitleStyle.getPropertyValue('-webkit-line-clamp') === '2'
     },
     persistence: {
       branchGroups: branchGroupsPersist,

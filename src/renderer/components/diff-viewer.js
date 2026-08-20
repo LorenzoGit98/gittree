@@ -1,4 +1,8 @@
 /* exported DiffViewer */
+/* global DiffLayout */
+const VIRTUAL_DIFF_THRESHOLD = 1200;
+const VIRTUAL_DIFF_OVERSCAN_PX = 440;
+
 class DiffViewer {
   constructor(bodyEl, app) {
     this.body = bodyEl;
@@ -10,6 +14,18 @@ class DiffViewer {
     this.currentDiff = null;
     this.fileSummaries = [];
     this.selectedFilePath = null;
+    this.virtualLayer = null;
+    this.virtualFiles = [];
+    this.virtualMode = null;
+    this.virtualScrollRaf = 0;
+    this.fileTargetTimer = 0;
+    this.handleVirtualScroll = () => {
+      if (this.virtualScrollRaf) return;
+      this.virtualScrollRaf = requestAnimationFrame(() => {
+        this.virtualScrollRaf = 0;
+        this.renderVirtualViewport();
+      });
+    };
 
     const savedPad = localStorage.getItem('gittree.diff.gutterPad');
     if (savedPad) document.documentElement.style.setProperty('--diff-gutter-pad', savedPad + 'px');
@@ -143,7 +159,9 @@ class DiffViewer {
   }
 
   render(diffText) {
+    this.clearFileTargetTimer();
     if (!diffText) {
+      this.disableVirtualization();
       this.body.innerHTML = `<div class="diff-placeholder"><i class="ph ph-check-circle"></i>${t('details.noChanges')}</div>`;
       return;
     }
@@ -153,6 +171,11 @@ class DiffViewer {
 
   renderUnified(diffText) {
     const lines = DiffParser.parseUnified(diffText);
+    if (lines.length > VIRTUAL_DIFF_THRESHOLD) {
+      this.renderVirtualized(lines, 'unified');
+      return;
+    }
+    this.disableVirtualization();
     const frag = document.createDocumentFragment();
     this.body.style.setProperty('--diff-gutter-digits', DiffParser.maxDigits(lines));
     let lastRemoval = null;
@@ -195,6 +218,11 @@ class DiffViewer {
   }
 
   renderSplit(diffText) {
+    const lineCount = String(diffText || '').split('\n').length;
+    if (lineCount > VIRTUAL_DIFF_THRESHOLD) {
+      this.renderVirtualized(DiffParser.parseUnified(diffText), 'split-unified');
+      return;
+    }
     const wrapper = document.createElement('div');
     wrapper.className = 'diff-split';
     let columns = null;
@@ -209,6 +237,7 @@ class DiffViewer {
     };
 
     const parsedRows = this.parseSplitRows(diffText);
+    this.disableVirtualization();
     this.body.style.setProperty('--diff-gutter-digits', DiffParser.maxDigits(parsedRows));
     parsedRows.forEach(row => {
       if (row.type === 'full') {
@@ -244,6 +273,174 @@ class DiffViewer {
 
     this.body.innerHTML = '';
     this.body.appendChild(wrapper);
+  }
+
+  renderVirtualized(rows, mode) {
+    this.disableVirtualization();
+    const isUnified = mode === 'unified';
+    const isSplit = mode === 'split' || mode === 'split-unified';
+    const files = DiffLayout.groupRows(rows, {
+      isFile: row => isUnified || mode === 'split-unified'
+        ? row.kind === 'file'
+        : row.type === 'full' && row.kind === 'file',
+      pathForFile: row => this.extractPath(row.content) || row.content
+    });
+    const rowHeight = this.inspectorExpanded ? 24 : 22;
+    const layout = DiffLayout.layoutFiles(files, { rowHeight });
+    this.virtualMode = mode;
+    this.virtualFiles = layout.files;
+    this.body.classList.add('diff-virtualized');
+    this.body.classList.toggle('diff-split', isSplit);
+    this.body.style.setProperty('--diff-gutter-digits', String(DiffParser.maxDigits(rows)));
+    this.body.innerHTML = '';
+    this.virtualLayer = document.createElement('div');
+    this.virtualLayer.className = 'diff-virtual-layer';
+    this.virtualLayer.style.height = `${layout.totalHeight}px`;
+    this.body.appendChild(this.virtualLayer);
+    this.body.addEventListener('scroll', this.handleVirtualScroll, { passive: true });
+    this.renderVirtualViewport(true);
+  }
+
+  renderVirtualViewport(force = false) {
+    if (!this.virtualLayer || !this.virtualMode) return;
+    const viewportHeight = this.body.clientHeight || 640;
+    const visible = DiffLayout.visibleFiles(
+      this.virtualFiles,
+      this.body.scrollTop,
+      viewportHeight,
+      VIRTUAL_DIFF_OVERSCAN_PX
+    );
+    if (!force && !visible.length) return;
+
+    const fragment = document.createDocumentFragment();
+    for (const file of visible) {
+      const block = document.createElement('section');
+      block.className = 'diff-file-block is-virtual';
+      block.style.top = `${file.top}px`;
+      block.style.height = `${file.height}px`;
+      if (file.path) block.dataset.filePath = file.path;
+      if (file.header) block.appendChild(this.createFileHeader(block, file.header.content));
+
+      const rowsBeforeViewport = Math.ceil(VIRTUAL_DIFF_OVERSCAN_PX / file.rowHeight);
+      const firstRow = Math.max(
+        0,
+        Math.floor((this.body.scrollTop - file.top - file.contentTop) / file.rowHeight)
+          - rowsBeforeViewport
+      );
+      const lastRow = Math.min(
+        file.rows.length,
+        Math.ceil((this.body.scrollTop + viewportHeight - file.top - file.contentTop)
+          / file.rowHeight) + rowsBeforeViewport
+      );
+      let previousRemoval = null;
+      if (this.virtualMode === 'unified') {
+        for (let index = 0; index < firstRow; index += 1) {
+          const row = file.rows[index];
+          if (row.kind === 'del') previousRemoval = row.content;
+          else if (row.kind === 'add') previousRemoval = null;
+        }
+      }
+      for (let index = firstRow; index < lastRow; index += 1) {
+        const row = file.rows[index];
+        const elements = this.virtualMode === 'unified'
+          ? [this.createUnifiedLine(row, previousRemoval)]
+          : this.createSplitLineElements(row);
+        const isSplitPair = this.virtualMode === 'split'
+          ? row.type === 'pair'
+          : this.virtualMode === 'split-unified' && ['del', 'add', 'context'].includes(row.kind);
+        if (isSplitPair) {
+          const columns = document.createElement('div');
+          columns.className = 'diff-split-columns';
+          columns.style.top = `${file.contentTop + index * file.rowHeight}px`;
+          columns.style.left = '0';
+          columns.style.right = '0';
+          elements.forEach(element => columns.appendChild(element));
+          block.appendChild(columns);
+        } else {
+          for (const element of elements) {
+            element.style.top = `${file.contentTop + index * file.rowHeight}px`;
+            element.style.left = '0';
+            element.style.right = '0';
+            block.appendChild(element);
+          }
+        }
+        if (this.virtualMode === 'unified') {
+          if (row.kind === 'del') previousRemoval = row.content;
+          else if (row.kind === 'add') previousRemoval = null;
+        }
+      }
+      fragment.appendChild(block);
+    }
+    this.virtualLayer.replaceChildren(fragment);
+  }
+
+  createUnifiedLine(line, previousRemoval = null) {
+    const element = document.createElement('div');
+    element.className = `diff-line ${line.kind === 'no-newline' ? 'header' : line.kind}`;
+    element.appendChild(this.lineNumber(line.oldLine, 'old'));
+    element.appendChild(this.lineNumber(line.newLine, 'new'));
+    const content = document.createElement('span');
+    content.className = 'diff-line-content';
+    if (line.kind === 'add') {
+      this.appendHighlightedLine(content, line.content, previousRemoval);
+    } else {
+      content.textContent = line.content;
+    }
+    element.appendChild(content);
+    return element;
+  }
+
+  createSplitLineElements(row) {
+    if (row.type === 'pair') {
+      return [
+        this.splitLine(row.left, 'old', row.right?.content),
+        this.splitLine(row.right, 'new', row.left?.content)
+      ];
+    }
+    if (row.kind === 'del') {
+      return [
+        this.splitLine(row, 'old'),
+        this.splitLine({ content: '', kind: 'empty' }, 'new')
+      ];
+    }
+    if (row.kind === 'add') {
+      return [
+        this.splitLine({ content: '', kind: 'empty' }, 'old'),
+        this.splitLine(row, 'new')
+      ];
+    }
+    if (row.kind === 'context') {
+      return [
+        this.splitLine(row, 'old', row.content),
+        this.splitLine(row, 'new', row.content)
+      ];
+    }
+    const element = document.createElement('div');
+    element.className = `diff-line ${row.kind}`;
+    element.append(
+      this.lineNumber(null, 'old'),
+      this.lineNumber(null, 'new')
+    );
+    const content = document.createElement('span');
+    content.className = 'diff-line-content';
+    content.textContent = row.content;
+    element.appendChild(content);
+    return [element];
+  }
+
+  disableVirtualization() {
+    if (this.virtualScrollRaf) {
+      cancelAnimationFrame(this.virtualScrollRaf);
+      this.virtualScrollRaf = 0;
+    }
+    if (this.virtualLayer) {
+      this.body.removeEventListener('scroll', this.handleVirtualScroll);
+    }
+    this.body.classList.remove('diff-virtualized');
+    this.body.classList.remove('diff-split');
+    this.virtualLayer = null;
+    this.virtualFiles = [];
+    this.virtualMode = null;
   }
 
   parseSplitRows(diffText) {
@@ -427,21 +624,42 @@ class DiffViewer {
   }
 
   scrollToFile(path) {
+    if (this.virtualMode) {
+      const file = this.virtualFiles.find(item => item.path === path);
+      if (!file) return false;
+      this.body.scrollTop = file.top;
+      this.renderVirtualViewport(true);
+    }
     const blocks = [...this.body.querySelectorAll('.diff-file-block')];
     const block = blocks.find(element => element.dataset.filePath === path);
     if (!block) return false;
     this.selectedFilePath = path;
     this.app.components?.inspectorWorkspace?.setSelectedFile(path);
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    block.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+    this.clearFileTargetTimer();
+    block.scrollIntoView({
+      behavior: this.virtualMode || reduced ? 'auto' : 'smooth',
+      block: 'start'
+    });
     block.classList.add('is-file-target');
-    window.setTimeout(() => block.classList.remove('is-file-target'), 1000);
+    this.fileTargetTimer = window.setTimeout(() => {
+      block.classList.remove('is-file-target');
+      this.fileTargetTimer = 0;
+    }, 1000);
     return true;
+  }
+
+  clearFileTargetTimer() {
+    if (!this.fileTargetTimer) return;
+    window.clearTimeout(this.fileTargetTimer);
+    this.fileTargetTimer = 0;
   }
 
   esc(value) { return HtmlEncoder.encode(value); }
 
   clear() {
+    this.clearFileTargetTimer();
+    this.disableVirtualization();
     this.currentDiff = null;
     this.fileSummaries = [];
     this.selectedFilePath = null;

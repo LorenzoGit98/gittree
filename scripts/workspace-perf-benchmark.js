@@ -5,7 +5,7 @@ const path = require('node:path');
 const { performance: nodePerformance } = require('node:perf_hooks');
 const { _electron: electron } = require('playwright');
 const { createElectronFixture } = require('../test/helpers/electron-fixture');
-const { createRepository } = require('../test/helpers/git-repository');
+const { createRepository, toWindowsShortPath } = require('../test/helpers/git-repository');
 
 const projectRoot = path.resolve(__dirname, '..');
 
@@ -40,6 +40,16 @@ function prepareRepository(repository, subject) {
   repository.git('commit', '-m', subject);
   repository.git('branch', 'feature/performance');
   repository.git('tag', 'v0.1.0');
+}
+
+function deepLinkFor(repositoryPath) {
+  return `gittree://open?path=${encodeURIComponent(toWindowsShortPath(repositoryPath))}`;
+}
+
+async function openRepositoryThroughDeepLink(application, deepLink) {
+  await application.evaluate(({ app }, url) => {
+    app.emit('second-instance', {}, [url]);
+  }, deepLink);
 }
 
 async function readMemory(application, page, cdp, label) {
@@ -295,7 +305,7 @@ async function runBenchmark({ diagnosticGc = false } = {}) {
     await installSwitchInstrumentation(page);
     const memory = [await readStableMemory(application, page, cdp, 'base-welcome')];
 
-    await page.evaluate(repoPath => window.app.components.repoTabs.addRepo(repoPath), primary.repository);
+    await openRepositoryThroughDeepLink(application, primary.deepLink);
     await page.locator('.repo-tab.active').waitFor();
     await page.waitForFunction(() => (
       document.getElementById('workspace')?.dataset.loadState === 'settled'
@@ -304,7 +314,7 @@ async function runBenchmark({ diagnosticGc = false } = {}) {
     ));
     memory.push(await readStableMemory(application, page, cdp, 'one-repository-settled'));
 
-    await page.evaluate(repoPath => window.app.components.repoTabs.addRepo(repoPath), secondary.repository);
+    await openRepositoryThroughDeepLink(application, deepLinkFor(secondary.repository));
     await page.waitForFunction(repoPath => (
       window.app.state.repo?.path === repoPath
       && document.getElementById('workspace')?.dataset.loadState === 'settled'

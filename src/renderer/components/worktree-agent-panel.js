@@ -351,7 +351,7 @@ class WorktreeAgentPanel {
   ensureTerminal() {
     if (this.terminal || typeof Terminal === 'undefined') return;
     this.terminal = new Terminal({
-      scrollback: 5000,
+      scrollback: 1000,
       convertEol: true,
       fontFamily: getComputedStyle(document.documentElement).getPropertyValue('--font-mono'),
       fontSize: 12,
