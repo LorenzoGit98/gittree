@@ -1,3 +1,10 @@
+## [0.21.3](https://github.com/giannoccarol/gittree/compare/v0.21.2...v0.21.3) (2026-08-20)
+
+
+### Bug Fixes
+
+* **graph:** preserve history connectors across rows ([c5dc6be](https://github.com/giannoccarol/gittree/commit/c5dc6be7e6e1db28887c19cf2a648f6aca2539ff))
+
 ## [0.21.2](https://github.com/giannoccarol/gittree/compare/v0.21.1...v0.21.2) (2026-08-20)
 
 ## [0.21.1](https://github.com/giannoccarol/gittree/compare/v0.21.0...v0.21.1) (2026-08-20)
