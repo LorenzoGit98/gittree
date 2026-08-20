@@ -80,7 +80,7 @@
     "@semantic-release/npm": "^12.0.1",
     "@semantic-release/release-notes-generator": "^14.0.3",
     "c8": "^12.0.0",
-    "electron": "^43.2.0",
+    "electron": "^43.4.0",
     "electron-builder": "^26.15.3",
     "eslint": "^10.8.0",
     "globals": "^17.8.0",
