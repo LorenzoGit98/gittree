@@ -120,8 +120,8 @@
   border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-primary);
   cursor: default;
-  contain: layout paint style;
-  content-visibility: auto;
+  /* Keep the shared graph connectors visible across row boundaries. */
+  contain: layout style;
   transition: opacity var(--duration-fast) var(--ease-smooth);
 }
 

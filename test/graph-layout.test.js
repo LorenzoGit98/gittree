@@ -52,6 +52,28 @@ test('disconnected tips receive separate active lanes', () => {
   assert.deepEqual(result.nextState.lanes, ['a1', 'b1']);
 });
 
+test('parallel branch tips reconnect to their shared parent', () => {
+  const result = layoutGraph([
+    commit('dependabot-a', ['main']),
+    commit('dependabot-b', ['main']),
+    commit('main', ['base']),
+    commit('base')
+  ]);
+
+  assert.equal(result.rows[0].lane, 0);
+  assert.equal(result.rows[1].lane, 1);
+  assert.deepEqual(result.rows[1].parents, [
+    { hash: 'main', lane: 0, kind: 'first-parent' }
+  ]);
+  assert.equal(result.rows[2].lane, 0);
+  assert.equal(result.rows[2].incoming, true);
+
+  const branchSegments = createGraphSegments(result.rows[1], 38);
+  assert.ok(branchSegments.some(segment => (
+    segment.path === 'M 30 19 C 30 29, 12 29, 12 39'
+  )));
+});
+
 test('lane state continues across progressively loaded pages', () => {
   const firstPage = layoutGraph([
     commit('merge', ['main-1', 'topic-1']),

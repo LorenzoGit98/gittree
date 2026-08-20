@@ -152,7 +152,8 @@
   border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-primary);
   cursor: pointer;
-  contain: strict;
+  /* Graph paths intentionally overlap adjacent rows at their boundaries. */
+  contain: layout style;
 }
 
 .graph-row:hover { background: var(--surface-hover); }
@@ -161,7 +162,7 @@
 .graph-cell {
   width: 100%;
   height: 38px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .graph-lanes {
