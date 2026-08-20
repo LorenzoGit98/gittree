@@ -1,3 +1,10 @@
+## [0.21.4](https://github.com/giannoccarol/gittree/compare/v0.21.3...v0.21.4) (2026-08-20)
+
+
+### Performance Improvements
+
+* **renderer:** bound large workspace memory usage ([4d7d8e7](https://github.com/giannoccarol/gittree/commit/4d7d8e70fe5f38e081fede1810411467c47d0212))
+
 ## [0.21.3](https://github.com/giannoccarol/gittree/compare/v0.21.2...v0.21.3) (2026-08-20)
 
 
