@@ -1,3 +1,10 @@
+# [0.21.0](https://github.com/giannoccarol/gittree/compare/v0.20.4...v0.21.0) (2026-08-20)
+
+
+### Features
+
+* **packaging:** publish native Arch Pacman packages ([33d9bc0](https://github.com/giannoccarol/gittree/commit/33d9bc095fa4bdd8d0df51e5a03ae2168ed23609))
+
 ## [0.20.4](https://github.com/giannoccarol/gittree/compare/v0.20.3...v0.20.4) (2026-08-19)
 
 
