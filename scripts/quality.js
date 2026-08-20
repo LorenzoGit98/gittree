@@ -191,6 +191,7 @@ function run(command, args, label) {
 function runFull() {
   const steps = [
     ['lint', 'npm', ['run', 'lint']],
+    ['typecheck', 'npm', ['run', 'typecheck']],
     ['test', 'npm', ['test']],
     ['coverage', 'npm', ['run', 'test:coverage']],
     ['design audit', 'npm', ['run', 'audit:design']],
@@ -222,6 +223,7 @@ function runScoped({ benchmarks = false } = {}) {
       process.exitCode = 1;
     }
   }
+  if (!run('npm', ['run', 'typecheck'], 'typecheck')) process.exitCode = 1;
   if (!run('node', ['--test', ...scoped.testFiles], 'scoped tests')) process.exitCode = 1;
   if (scoped.needsDesignAudit) {
     if (!run('npm', ['run', 'audit:design'], 'design audit')) process.exitCode = 1;
