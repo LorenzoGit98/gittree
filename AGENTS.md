@@ -4,8 +4,8 @@ These instructions apply to the entire repository.
 
 ## Product invariants
 
-- Keep the stack vanilla: JavaScript, CommonJS, Electron and the native DOM.
-- Do not add a framework, bundler or TypeScript without an explicit product decision.
+- Keep the stack vanilla: CommonJS, Electron and the native DOM.
+- TypeScript is adopted incrementally per `docs/adr/0008-incremental-typescript-adoption.md`: main process first, renderer stays directly loadable vanilla JavaScript. Do not add a framework or bundler.
 - Preserve the named `window.gitTree` API. Never expose a generic public IPC invoke method.
 - Preserve registered-repository validation, the per-repository Git queue and `{ error }` IPC envelopes.
 - Keep GitTree local and privacy-first: no telemetry, repository upload or automatic diagnostics upload.

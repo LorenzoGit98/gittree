@@ -96,6 +96,10 @@ The contributor-facing ownership map and dependency direction live in
 - Conventional Commits (`feat`/`fix`/`perf`/`refactor`/`style` bump; `feat` and
   breaking → minor on the 0.x line, the rest → patch).
 - ESLint flat config, error-level rules, enforced in CI.
+- TypeScript is adopted incrementally per
+  [`docs/adr/0008-incremental-typescript-adoption.md`](docs/adr/0008-incremental-typescript-adoption.md):
+  `npm run typecheck` gates the migration scope, main-process modules convert
+  first, the renderer stays directly loadable vanilla JavaScript.
 - Every feature ships English + Italian i18n keys (enforced by
   `test/i18n-parity.test.js`).
 - Design rules live in `DESIGN.md` and are audited by `npm run audit:design`
