@@ -45,13 +45,14 @@ test('macOS release assets require ZIP update payloads and include DMG installer
   ]);
 });
 
-test('Linux release assets include AppImage OTA payload, DEB installer and metadata', t => {
+test('Linux release assets include AppImage OTA payload, DEB and Pacman installers, and metadata', t => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'gittree-release-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   [
     'GitTree-1.2.3-linux-x64.AppImage',
     'GitTree-1.2.3-linux-x64.AppImage.blockmap',
     'GitTree-1.2.3-linux-x64.deb',
+    'GitTree-1.2.3-linux-x64.pacman',
     'latest-linux.yml'
   ].forEach(name => fs.writeFileSync(path.join(directory, name), name));
 
@@ -61,6 +62,7 @@ test('Linux release assets include AppImage OTA payload, DEB installer and metad
     'GitTree-1.2.3-linux-x64.AppImage',
     'GitTree-1.2.3-linux-x64.AppImage.blockmap',
     'GitTree-1.2.3-linux-x64.deb',
+    'GitTree-1.2.3-linux-x64.pacman',
     'latest-linux.yml'
   ]);
 });

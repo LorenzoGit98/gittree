@@ -30,12 +30,13 @@ const PLATFORM_RULES = {
     ]
   },
   linux: {
-    package: name => /^GitTree-.+-linux-.+\.(?:AppImage|deb)$/i.test(name),
+    package: name => /^GitTree-.+-linux-.+\.(?:AppImage|deb|pacman)$/i.test(name),
     metadata: name => /^(?:latest|beta|alpha)-linux\.yml$/i.test(name),
     optional: name => /^GitTree-.+-linux-.+\.AppImage\.blockmap$/i.test(name),
     required: [
       { label: 'AppImage update payload', matches: name => /^GitTree-.+-linux-.+\.AppImage$/i.test(name) },
-      { label: 'DEB installer', matches: name => /^GitTree-.+-linux-.+\.deb$/i.test(name) }
+      { label: 'DEB installer', matches: name => /^GitTree-.+-linux-.+\.deb$/i.test(name) },
+      { label: 'Pacman installer', matches: name => /^GitTree-.+-linux-.+\.pacman$/i.test(name) }
     ]
   }
 };

@@ -178,7 +178,7 @@
 }
 
 .pr-row-title {
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-semibold);
 }
 
 .pr-row-meta {

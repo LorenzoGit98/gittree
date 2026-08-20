@@ -63,11 +63,15 @@ test('electron-builder emits installable and update-compatible artifacts', () =>
   assert.match(config, /target:\s*nsis/);
   assert.match(config, /-\s*zip/);
   assert.match(config, /-\s*AppImage/);
+  assert.match(config, /-\s*pacman/);
   assert.match(config, /generateUpdatesFilesForAllChannels:\s*true/);
   assert.match(config, /asarUnpack:[\s\S]*node_modules\/node-pty\/\*\*\/\*/);
   assert.match(config, /from:\s*build\/oauth-config\.json/);
   assert.match(config, /include:\s*installer\.nsh/);
   assert.match(config, /deb:\s*[\s\S]*depends:/);
+  assert.match(config, /pacman:\s*[\s\S]*depends:/);
+  assert.match(config, /pacman:\s*[\s\S]*packageName:\s*gittree-bin/);
+  assert.match(config, /pacman:\s*[\s\S]*util-linux-libs/);
   for (const dependency of [
     'libgtk-3-0',
     'libnotify4',
@@ -145,6 +149,7 @@ test('release workflow publishes one atomic draft after every native build succe
   assert.match(workflow, /GITTREE_GITLAB_CLIENT_ID/);
   assert.match(workflow, /dpkg-deb\s+--field/);
   assert.match(workflow, /libasound2/);
+  assert.match(workflow, /Linux Pacman artifact was not generated/);
 });
 
 test('automatic versioning explicitly dispatches the atomic release workflow', () => {

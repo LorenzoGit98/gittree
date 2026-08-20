@@ -158,6 +158,7 @@
 
 .changes-file-path {
   overflow: hidden;
+  font-weight: var(--weight-semibold);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

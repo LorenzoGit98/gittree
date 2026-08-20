@@ -275,6 +275,10 @@ html.is-resizing-history-columns * {
   white-space: nowrap;
 }
 
+.graph-commit-message .truncate {
+  font-weight: var(--weight-semibold);
+}
+
 .graph-commit-author {
   overflow: hidden;
   color: var(--text-secondary);

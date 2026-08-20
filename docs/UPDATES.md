@@ -33,7 +33,7 @@ La pipeline atomica valida e pubblica:
 - `latest.yml` per Windows;
 - `latest-mac.yml` e ZIP per macOS soltanto quando firma e notarizzazione sono configurate;
 - `latest-linux.yml` per Linux;
-- installer, AppImage, DMG e relativi file `.blockmap`.
+- installer, AppImage, pacchetto Pacman, DMG e relativi file `.blockmap`.
 
 Non rinominare o rimuovere manualmente i manifest da una release.
 

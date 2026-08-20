@@ -136,6 +136,7 @@ input:focus-visible {
   border-color: var(--primary);
   background: var(--primary);
   color: var(--text-inverse);
+  font-weight: var(--weight-semibold);
 }
 
 :root[data-theme="dark"] .btn-primary {

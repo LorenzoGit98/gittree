@@ -110,9 +110,9 @@ La release fallisce se mancano o contengono valori non validi. Il file generato 
 | Windows x64 | Installer NSIS assistito | Sì |
 | macOS x64/arm64 firmato | DMG, ZIP e manifest | Sì |
 | macOS x64/arm64 non firmato | DMG | No, download manuale |
-| Linux x64 | AppImage e DEB | AppImage |
+| Linux x64 | AppImage, DEB e pacchetto Pacman | AppImage |
 
-I nomi seguono lo schema `GitTree-versione-sistema-architettura.estensione`.
+I nomi seguono lo schema `GitTree-versione-sistema-architettura.estensione`. Il pacchetto `.pacman` è installabile su Arch Linux e derivate con `sudo pacman -U`; l’AppImage resta il payload usato per gli aggiornamenti OTA.
 
 La selezione degli asset è intenzionalmente restrittiva: file di debug e configurazioni interne di electron-builder non vengono caricati. Per verificare una build Windows locale senza pubblicarla:
 

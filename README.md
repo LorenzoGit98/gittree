@@ -74,9 +74,15 @@ Download the installer from [GitHub Releases](https://github.com/giannoccarol/gi
 | --- | --- |
 | Windows | NSIS installer |
 | macOS | DMG |
-| Linux | AppImage or DEB |
+| Linux | AppImage, DEB or Pacman package |
 
 Until production certificates are enabled, the OS may warn about unsigned builds.
+
+On Arch Linux and derivatives, download the `.pacman` asset and install it with:
+
+```bash
+sudo pacman -U GitTree-*-linux-x64.pacman
+```
 
 ### Run from source
 

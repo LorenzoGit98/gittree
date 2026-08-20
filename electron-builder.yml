@@ -75,6 +75,7 @@ linux:
   target:
     - AppImage
     - deb
+    - pacman
 
 deb:
   depends:
@@ -88,6 +89,20 @@ deb:
     - libuuid1
     - libsecret-1-0
     - libasound2
+
+pacman:
+  packageName: gittree-bin
+  depends:
+    - gtk3
+    - libnotify
+    - nss
+    - libxss
+    - libxtst
+    - xdg-utils
+    - at-spi2-core
+    - util-linux-libs
+    - libsecret
+    - alsa-lib
 
 appImage:
   artifactName: ${productName}-${version}-${os}-${arch}.${ext}

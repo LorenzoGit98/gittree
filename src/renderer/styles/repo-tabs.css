@@ -104,6 +104,10 @@
   box-shadow: var(--shadow-sm);
 }
 
+.repo-tab.active .repo-tab-name {
+  font-weight: var(--weight-semibold);
+}
+
 .repo-tab.active::before {
   background: var(--primary);
   transform: scale(1.25);
