@@ -165,6 +165,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run prepare:assets
+      - name: Install Pacman packaging tools
+        run: sudo apt-get update && sudo apt-get install --yes libarchive-tools
       - run: npx electron-builder --linux --x64 --publish never
       - name: Validate Linux runtime dependencies
         shell: bash
