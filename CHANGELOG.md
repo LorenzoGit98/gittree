@@ -1,3 +1,10 @@
+## [0.21.1](https://github.com/giannoccarol/gittree/compare/v0.21.0...v0.21.1) (2026-08-20)
+
+
+### Bug Fixes
+
+* **release:** install bsdtar for Pacman packaging ([6a9dfec](https://github.com/giannoccarol/gittree/commit/6a9dfeca74ad30570f34f55261af1660f7930ec5))
+
 # [0.21.0](https://github.com/giannoccarol/gittree/compare/v0.20.4...v0.21.0) (2026-08-20)
 
 
