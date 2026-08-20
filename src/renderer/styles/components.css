@@ -223,6 +223,10 @@ input:focus-visible {
   background: var(--surface-secondary);
 }
 
+.btn-toolbar-primary {
+  font-weight: var(--weight-semibold);
+}
+
 .btn.is-busy,
 .btn:disabled.is-busy {
   color: var(--text-secondary);
