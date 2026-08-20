@@ -1,3 +1,5 @@
+## [0.21.2](https://github.com/giannoccarol/gittree/compare/v0.21.1...v0.21.2) (2026-08-20)
+
 ## [0.21.1](https://github.com/giannoccarol/gittree/compare/v0.21.0...v0.21.1) (2026-08-20)
 
 
