@@ -12,14 +12,14 @@ async function runWithConflictState(git, operation) {
   }
 }
 
-function registerGitHandlers({
+export function registerGitHandlers({
   registerManagedRepoHandler,
   getGitService,
   consumeAuthorizedDirectory = directoryPath => directoryPath,
   authorizeCreatedRepository = repoPath => repoPath,
   assertWorktreeRemovable = () => true,
   sendToRenderer = () => {}
-}) {
+}: any) {
   const forwards = [
     ['git:log', 'getLog'],
     ['git:graph-page', 'getGraphPage'],
@@ -181,5 +181,3 @@ function registerGitHandlers({
     `Cherry-picked ${result.commits.length} commit(s)`
   ));
 }
-
-module.exports = { registerGitHandlers };

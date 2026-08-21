@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parseConflictBlocks } = require('../src/main/conflict-model');
+const { parseConflictBlocks } = require('../src/main/conflict-model.mts');
 const highlight = require('../src/renderer/components/conflict-highlight');
 
 test('classifies a simple two-way block', () => {

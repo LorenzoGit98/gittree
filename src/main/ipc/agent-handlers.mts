@@ -1,4 +1,5 @@
-function registerAgentHandlers({
+export function registerAgentHandlers({
+
   registerHandler,
   registerManagedRepoHandler,
   agentSessionService,
@@ -6,6 +7,14 @@ function registerAgentHandlers({
   consumeAuthorizedDirectory = value => value,
   showOpenDialog,
   getMainWindow
+}: {
+  registerHandler: (channel: string, handler: (...args: any[]) => unknown) => void;
+  registerManagedRepoHandler: (channel: string, handler: (...args: any[]) => unknown) => void;
+  agentSessionService: any;
+  repositoryWorkspace: any;
+  consumeAuthorizedDirectory?: (value: unknown) => unknown;
+  showOpenDialog?: any;
+  getMainWindow?: any;
 }) {
   registerHandler('agent:settings', () => agentSessionService.getSettings());
   registerHandler('agent:root-select', async () => {
@@ -66,4 +75,4 @@ function registerAgentHandlers({
   ));
 }
 
-module.exports = { registerAgentHandlers };
+

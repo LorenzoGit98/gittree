@@ -1,12 +1,104 @@
-const path = require('node:path');
-const {
+import * as nodePath from 'node:path';
+import {
   GitHubProviderAdapter,
   GitLabProviderAdapter,
   AzureProviderAdapter
-} = require('./hosting/providers');
+} from './hosting/providers/index.mts';
+import type {
+  HostingProviderId,
+  HostedRepositoryRef,
+  HostingAccount,
+  PullRequestListPage,
+  PullRequestDetail,
+  PullRequestDiffPage
+} from '../shared/hosting.mts';
 
-class HostingService {
-  constructor(options) {
+interface ProviderAdapterSurface {
+  listPullRequests(
+    repo: HostedRepositoryRef,
+    options: { page: number; filter: string; search?: string; account: HostingAccount }
+  ): Promise<PullRequestListPage>;
+  pullRequestDetail(
+    repo: HostedRepositoryRef,
+    id: number,
+    ctx: { viewer: HostingAccount['user'] }
+  ): Promise<PullRequestDetail>;
+  pullRequestDiff(
+    repo: HostedRepositoryRef,
+    id: number,
+    page?: number
+  ): Promise<PullRequestDiffPage>;
+  resolveThread(
+    repo: HostedRepositoryRef,
+    id: number,
+    thread: { id: string },
+    resolved: boolean
+  ): Promise<{ success: true; resolved: boolean }>;
+  submitReview(...args: unknown[]): Promise<unknown>;
+  createPullRequest(...args: unknown[]): Promise<unknown>;
+}
+
+interface LoginSession {
+  controller: AbortController;
+  deviceCode?: string;
+  interval?: number;
+  [key: string]: unknown;
+}
+
+export interface HostingAccountRecord {
+  accessToken?: string;
+  user?: { login?: string } | null;
+  refreshToken?: string;
+  expiresAt?: number | null;
+  [key: string]: unknown;
+}
+
+interface ValidatedRepository {
+  provider: HostingProviderId;
+  host: string;
+  ownerPath: string;
+  repository: string;
+  organization?: string;
+  project?: string;
+}
+
+export class HostingService {
+  private vault: {
+    getAccount: (provider: string) => Promise<HostingAccountRecord | null>;
+    setAccount: (provider: string, account: HostingAccountRecord) => Promise<unknown>;
+    getSecurityState?: () => { warning?: string } | undefined;
+    removeAccount?: (provider: string) => Promise<unknown>;
+    removeProviderDrafts?: (provider: string) => Promise<unknown>;
+    saveReviewDraft: (key: string, draft: unknown) => Promise<unknown>;
+    getReviewDraft: (key: string) => Promise<Record<string, unknown> | null>;
+    removeReviewDraft: (key: string) => Promise<unknown>;
+    [key: string]: unknown;
+  };
+
+  private oauthConfig: Record<string, unknown>;
+
+  private fetch: typeof globalThis.fetch;
+
+  private openExternal: (url: string) => Promise<void>;
+
+  private onAuthState: (state: unknown) => void;
+
+  private sleep: (milliseconds: number) => Promise<void>;
+
+  private loginSessions: Map<string, LoginSession>;
+
+  private providerAdapters: Record<string, ProviderAdapterSurface>;
+
+  constructor(options: {
+    vault: HostingService['vault'];
+    oauthConfig?: Record<string, unknown>;
+    fetch?: typeof globalThis.fetch;
+    openExternal?: (url: string) => Promise<void>;
+    onAuthState?: (state: unknown) => void;
+    sleep?: (milliseconds: number) => Promise<void>;
+    providerAdapters?: Record<string, ProviderAdapterSurface>;
+    loginSessions?: HostingService['loginSessions'];
+  }) {
     this.vault = options.vault;
     this.oauthConfig = options.oauthConfig || {};
     this.fetch = options.fetch || global.fetch;
@@ -30,7 +122,10 @@ class HostingService {
     };
   }
 
-  async fetchWithTimeout(url, options = {}) {
+  async fetchWithTimeout(
+    url: string,
+    options: RequestInit & { timeout?: unknown } = {}
+  ) {
     const controller = new AbortController();
     const timeoutMs = Number.isFinite(Number(options.timeout)) ? Number(options.timeout) : 30000;
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -54,13 +149,20 @@ class HostingService {
     return provider;
   }
 
-  providerAdapter(provider) {
+  providerAdapter(provider: unknown): ProviderAdapterSurface {
     const adapter = this.providerAdapters[this.validateProvider(provider)];
     if (!adapter) throw new Error(`Unsupported hosting provider: ${provider}`);
     return adapter;
   }
 
-  validateRepository(repository) {
+  validateRepository(repository: {
+    provider?: unknown;
+    host?: unknown;
+    ownerPath?: unknown;
+    repository?: unknown;
+    organization?: unknown;
+    project?: unknown;
+  }): ValidatedRepository {
     const provider = this.validateProvider(repository?.provider);
     const expectedHost = provider === 'github' ? 'github.com'
       : provider === 'gitlab' ? 'gitlab.com'
@@ -79,7 +181,7 @@ class HostingService {
     ) {
       throw new Error('Invalid hosting repository');
     }
-    const value = { provider, host: expectedHost, ownerPath, repository: name };
+    const value: ValidatedRepository = { provider, host: expectedHost, ownerPath, repository: name };
     if (provider === 'azure') {
       const [organization, project] = ownerPath.split('/');
       value.organization = String(repository.organization || organization || '');
@@ -165,16 +267,19 @@ class HostingService {
           },
           controller.signal
         );
-    const session = {
+    const session: LoginSession = {
       controller,
-      deviceCode: device.device_code,
+      deviceCode: String(device.device_code || ''),
       expiresAt: Date.now() + Number(device.expires_in || 900) * 1000,
       interval: Math.max(5, Number(device.interval || 5))
     };
     this.loginSessions.set(provider, session);
-    const verificationUri = device.verification_uri_complete
+    const verificationUri = String(
+      device.verification_uri_complete
       || device.verification_uri
-      || device.verification_url;
+      || device.verification_url
+      || ''
+    );
     if (verificationUri) {
       const parsed = new URL(verificationUri);
       const expectedHost = provider === 'github' ? 'github.com' : 'gitlab.com';
@@ -231,12 +336,12 @@ class HostingService {
       if (token.error) throw new Error(token.error_description || token.error);
       if (!token.access_token) throw new Error('Provider did not return an access token');
       const account = {
-        accessToken: token.access_token,
+        accessToken: String(token.access_token || ''),
         refreshToken: token.refresh_token || '',
         expiresAt: token.expires_in
           ? Date.now() + Number(token.expires_in) * 1000
           : null,
-        user: await this.fetchCurrentUser(provider, token.access_token)
+        user: await this.fetchCurrentUser(provider, String(token.access_token || ''))
       };
       await this.vault.setAccount(provider, account);
       this.loginSessions.delete(provider);
@@ -273,14 +378,20 @@ class HostingService {
     return { success: true, provider };
   }
 
-  async requestForm(url, values, signal) {
+  async requestForm(
+    url: string,
+    values: Record<string, unknown>,
+    signal?: AbortSignal
+  ): Promise<Record<string, unknown>> {
     const response = await this.fetchWithTimeout(url, {
       method: 'POST',
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/x-www-form-urlencoded'
       },
-      body: new URLSearchParams(values).toString(),
+      body: new URLSearchParams(
+        Object.entries(values).map(([key, value]) => [key, String(value)])
+      ).toString(),
       signal
     });
     return this.readResponse(response);
@@ -304,11 +415,15 @@ class HostingService {
     return theirs.some(value => candidates.includes(value));
   }
 
-  async fetchCurrentUser(provider, token, organization) {
+  async fetchCurrentUser(
+    provider: unknown,
+    token: unknown,
+    organization?: unknown
+  ) {
     let url;
     if (provider === 'azure') {
       url = organization
-        ? `https://dev.azure.com/${encodeURIComponent(organization)}/_apis/connectionData?api-version=7.1-preview`
+        ? `https://dev.azure.com/${encodeURIComponent(String(organization))}/_apis/connectionData?api-version=7.1-preview`
         : 'https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version=7.1-preview';
     } else {
       url = provider === 'github'
@@ -374,7 +489,11 @@ class HostingService {
     return value;
   }
 
-  async api(repository, endpoint, options = {}) {
+  async api(
+    repository: HostedRepositoryRef,
+    endpoint: string,
+    options: { method?: string; body?: unknown; headers?: Record<string, string>; signal?: AbortSignal } = {}
+  ) {
     const repo = this.validateRepository(repository);
     const account = await this.getAccessAccount(repo.provider);
     if (!account?.accessToken) throw new Error(`Connect ${repo.provider} first`);
@@ -429,8 +548,8 @@ class HostingService {
     if (!token.access_token) throw new Error('Provider token refresh failed');
     const refreshed = {
       ...account,
-      accessToken: token.access_token,
-      refreshToken: token.refresh_token || account.refreshToken,
+      accessToken: String(token.access_token || ''),
+      refreshToken: String(token.refresh_token || account.refreshToken || ''),
       expiresAt: token.expires_in
         ? Date.now() + Number(token.expires_in) * 1000
         : account.expiresAt
@@ -439,10 +558,14 @@ class HostingService {
     return refreshed;
   }
 
-  async listPullRequests(repository, options = {}) {
+  async listPullRequests(
+    repository: unknown,
+    options: { page?: unknown; filter?: unknown; search?: unknown } = {}
+  ) {
     const repo = this.validateRepository(repository);
     const page = Math.max(1, Math.min(10000, Number(options.page) || 1));
-    const filter = ['open', 'review-requested', 'authored', 'all'].includes(options.filter)
+    const filter = typeof options.filter === 'string'
+      && ['open', 'review-requested', 'authored', 'all'].includes(options.filter)
       ? options.filter
       : 'open';
     const search = String(options.search || '').trim().slice(0, 200).toLowerCase();
@@ -524,13 +647,13 @@ class HostingService {
     if (inlineComments.length > 500) throw new Error('Too many inline comments');
     const comments = inlineComments.map(comment => {
       const filePath = String(comment.path || '');
-      const normalized = path.posix.normalize(filePath);
+      const normalized = nodePath.posix.normalize(filePath);
       if (
         !filePath ||
         filePath.length > 1000 ||
         normalized !== filePath ||
         normalized.startsWith('../') ||
-        path.posix.isAbsolute(filePath)
+        nodePath.posix.isAbsolute(filePath)
       ) {
         throw new Error('Invalid review comment path');
       }
@@ -576,13 +699,13 @@ class HostingService {
     };
   }
 
-  async saveReviewDraft(repository, id, draft) {
+  async saveReviewDraft(repository: unknown, id: unknown, draft: unknown) {
     const safeDraft = this.validateReviewDraft(draft);
     await this.vault.saveReviewDraft(this.draftKey(repository, id), safeDraft);
     return { success: true };
   }
 
-  async getReviewDraft(repository, id, headSha) {
+  async getReviewDraft(repository: unknown, id: unknown, headSha: unknown) {
     if (typeof headSha !== 'string' || !/^[a-f0-9]{7,64}$/i.test(headSha)) {
       return null;
     }
@@ -590,7 +713,7 @@ class HostingService {
     return draft ? { ...draft, stale: draft.headSha !== headSha } : null;
   }
 
-  async submitReview(repository, id, draft) {
+  async submitReview(repository: unknown, id: unknown, draft: unknown) {
     const repo = this.validateRepository(repository);
     const pullRequestId = this.validatePullRequestId(id);
     const safeDraft = this.validateReviewDraft(draft);
@@ -601,7 +724,7 @@ class HostingService {
       safeDraft.completedOperations = [
         ...new Set([
           ...safeDraft.completedOperations,
-          ...(storedDraft.completedOperations || [])
+          ...((storedDraft.completedOperations as string[]) || [])
         ])
       ];
     }
@@ -669,7 +792,7 @@ class HostingService {
     return ids;
   }
 
-  validateCreatePullRequestInput(input = {}) {
+  validateCreatePullRequestInput(input: Record<string, unknown> = {}) {
     const title = String(input.title || '').trim();
     if (!title || title.length > 256 || /\0/.test(title)) {
       throw new Error('Pull request title is required');
@@ -725,4 +848,3 @@ class HostingService {
   }
 }
 
-module.exports = HostingService;

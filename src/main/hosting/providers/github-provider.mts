@@ -1,10 +1,36 @@
-class GitHubProviderAdapter {
-  constructor({ api, graphql }) {
+import type {
+  ProviderPayload,
+  HostingApiResult,
+  PullRequestSummary,
+  PullRequestFile,
+  PullRequestDetail,
+  PullRequestListPage,
+  PullRequestDiffPage,
+  HostedRepositoryRef,
+  HostingAccount
+} from '../../../shared/hosting.mts';
+
+export class GitHubProviderAdapter {
+  private api: (
+    repo: HostedRepositoryRef,
+    path: string,
+    options?: Record<string, unknown>
+  ) => Promise<HostingApiResult>;
+
+  private graphql: (
+    query: string,
+    variables?: Record<string, unknown>
+  ) => Promise<HostingApiResult>;
+
+  constructor({ api, graphql }: {
+    api: (repo: HostedRepositoryRef, path: string, options?: Record<string, unknown>) => Promise<HostingApiResult>;
+    graphql: (query: string, variables?: Record<string, unknown>) => Promise<HostingApiResult>;
+  }) {
     this.api = api;
     this.graphql = graphql;
   }
 
-  normalizeSummary(item, user) {
+  normalizeSummary(item: ProviderPayload, user: HostingAccount['user']): PullRequestSummary {
     return {
       provider: 'github',
       id: item.id,
@@ -26,7 +52,15 @@ class GitHubProviderAdapter {
     };
   }
 
-  async listPullRequests(repo, { page, filter, search, account }) {
+  async listPullRequests(
+    repo: HostedRepositoryRef,
+    { page, filter, search, account }: {
+      page: number;
+      filter: string;
+      search?: string;
+      account: HostingAccount;
+    }
+  ): Promise<PullRequestListPage> {
     const state = filter === 'all' ? 'all' : 'open';
     const result = await this.api(
       repo,
@@ -53,7 +87,7 @@ class GitHubProviderAdapter {
     };
   }
 
-  normalizeFile(file) {
+  normalizeFile(file: ProviderPayload): PullRequestFile {
     return {
       path: file.filename,
       oldPath: file.previous_filename || null,
@@ -65,7 +99,11 @@ class GitHubProviderAdapter {
     };
   }
 
-  async pullRequestDetail(repo, id, { viewer }) {
+  async pullRequestDetail(
+    repo: HostedRepositoryRef,
+    id: number,
+    { viewer }: { viewer: HostingAccount['user'] }
+  ): Promise<PullRequestDetail> {
     const prefix =
       `/repos/${encodeURIComponent(repo.ownerPath)}/${encodeURIComponent(repo.repository)}`;
     const pull = await this.api(repo, `${prefix}/pulls/${id}`);
@@ -156,7 +194,11 @@ class GitHubProviderAdapter {
     };
   }
 
-  async pullRequestDiff(repo, id, page) {
+  async pullRequestDiff(
+    repo: HostedRepositoryRef,
+    id: number,
+    page: number
+  ): Promise<PullRequestDiffPage> {
     const result = await this.api(
       repo,
       `/repos/${encodeURIComponent(repo.ownerPath)}/${encodeURIComponent(repo.repository)}/pulls/${id}/files?per_page=50&page=${page}`
@@ -168,7 +210,12 @@ class GitHubProviderAdapter {
     };
   }
 
-  async resolveThread(_repo, _id, thread, resolved) {
+  async resolveThread(
+    _repo: HostedRepositoryRef,
+    _id: number,
+    thread: { id: string },
+    resolved: boolean
+  ): Promise<{ success: true; resolved: boolean }> {
     const mutation = resolved ? 'resolveReviewThread' : 'unresolveReviewThread';
     const result = await this.graphql(
       `mutation($threadId: ID!) { ${mutation}(input: {threadId: $threadId}) { thread { id isResolved } } }`,
@@ -178,7 +225,17 @@ class GitHubProviderAdapter {
     return { success: true, resolved: Boolean(updated?.isResolved) };
   }
 
-  async submitReview(repo, id, draft) {
+  async submitReview(
+    repo: HostedRepositoryRef,
+    id: number,
+    draft: {
+      headSha: string;
+      body: string;
+      event: string;
+      inlineComments: unknown[];
+      replies: Array<{ commentId?: number | null; body: string }>
+    }
+  ): Promise<{ success: true; review: { id: unknown; state: unknown } }> {
     const prefix =
       `/repos/${encodeURIComponent(repo.ownerPath)}/${encodeURIComponent(repo.repository)}`;
     const result = await this.api(repo, `${prefix}/pulls/${id}/reviews`, {
@@ -201,7 +258,21 @@ class GitHubProviderAdapter {
     return { success: true, review: { id: result.data.id, state: result.data.state } };
   }
 
-  async createPullRequest(repo, options, { viewer }) {
+  async createPullRequest(
+    repo: HostedRepositoryRef,
+    options: {
+      title: string;
+      source: string;
+      target: string;
+      body?: string;
+      draft?: boolean;
+      maintainerCanModify?: boolean;
+      reviewers?: string[];
+      assignees?: string[];
+      labels?: string[];
+    },
+    { viewer }: { viewer: HostingAccount['user'] }
+  ) {
     const prefix =
       `/repos/${encodeURIComponent(repo.ownerPath)}/${encodeURIComponent(repo.repository)}`;
     const created = await this.api(repo, `${prefix}/pulls`, {
@@ -221,7 +292,7 @@ class GitHubProviderAdapter {
       [options.reviewers, `pulls/${number}/requested_reviewers`, 'reviewers'],
       [options.assignees, `issues/${number}/assignees`, 'assignees'],
       [options.labels, `issues/${number}/labels`, 'labels']
-    ]) {
+    ] as Array<[string[] | undefined, string, string]>) {
       if (!values.length) continue;
       try {
         await this.api(repo, `${prefix}/${endpoint}`, {
@@ -241,4 +312,3 @@ class GitHubProviderAdapter {
   }
 }
 
-module.exports = GitHubProviderAdapter;

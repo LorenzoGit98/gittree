@@ -1,4 +1,8 @@
-function registerAiHandlers({ registerHandler, registerManagedRepoHandler, aiService }) {
+export function registerAiHandlers({ registerHandler, registerManagedRepoHandler, aiService }: {
+  registerHandler: (channel: string, handler: (...args: any[]) => unknown) => void;
+  registerManagedRepoHandler: (channel: string, handler: (...args: any[]) => unknown) => void;
+  aiService: any;
+}) {
   registerHandler('ai:settings-get', () => aiService.getSettings());
   registerHandler('ai:settings-set', input => aiService.setSettings(input));
   registerHandler('ai:key-set', key => aiService.setKey(key));
@@ -27,4 +31,4 @@ function registerAiHandlers({ registerHandler, registerManagedRepoHandler, aiSer
   ));
 }
 
-module.exports = { registerAiHandlers };
+

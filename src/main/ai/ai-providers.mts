@@ -1,13 +1,19 @@
-function timeoutSignal(timeoutMs, existingSignal = null) {
+function timeoutSignal(
+  timeoutMs: unknown,
+  existingSignal: AbortSignal | null = null
+): { signal: AbortSignal; dispose: () => void } {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(new Error('AI request timed out')), timeoutMs);
+  const timer = setTimeout(
+    () => controller.abort(new Error('AI request timed out')),
+    timeoutMs as number
+  );
   const signal = existingSignal
     ? AbortSignal.any([existingSignal, controller.signal])
     : controller.signal;
   return { signal, dispose: () => clearTimeout(timer) };
 }
 
-async function readErrorBody(response) {
+async function readErrorBody(response: Response): Promise<string> {
   try {
     const data = await response.json();
     const message = data?.error?.message
@@ -20,14 +26,23 @@ async function readErrorBody(response) {
   }
 }
 
-async function requestOpenAiCompatible({
+interface AiRequestOptions {
+  fetch: typeof globalThis.fetch;
+  baseUrl?: string;
+  apiKey: string;
+  model: string;
+  prompt: string;
+  timeoutMs: number;
+}
+
+export async function requestOpenAiCompatible({
   fetch,
   baseUrl,
   apiKey,
   model,
   prompt,
   timeoutMs
-}) {
+}: AiRequestOptions): Promise<string> {
   const { signal, dispose } = timeoutSignal(timeoutMs);
   try {
     const response = await fetch(`${baseUrl.replace(/\/+$/, '')}/chat/completions`, {
@@ -59,13 +74,13 @@ async function requestOpenAiCompatible({
   }
 }
 
-async function requestAnthropic({
+export async function requestAnthropic({
   fetch,
   apiKey,
   model,
   prompt,
   timeoutMs
-}) {
+}: AiRequestOptions): Promise<string> {
   const { signal, dispose } = timeoutSignal(timeoutMs);
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -98,4 +113,4 @@ async function requestAnthropic({
   }
 }
 
-module.exports = { requestOpenAiCompatible, requestAnthropic };
+

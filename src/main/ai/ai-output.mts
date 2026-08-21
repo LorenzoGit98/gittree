@@ -2,7 +2,17 @@ const TITLE_PATTERN = /^\s*TITLE\s*:\s*(.*)$/im;
 const BODY_PATTERN = /^\s*BODY\s*:\s*([\s\S]*)$/im;
 const HASH_LINE_PATTERN = /^\s*HASH\s*:\s*([0-9a-f]{7,40})(?:\s*[—|-]\s*(.*))?\s*$/i;
 
-function parseSearchOutput(raw, candidates) {
+export interface SearchMatch {
+  hash: string;
+  reason: string;
+}
+
+interface CommitCandidate {
+  hash?: string;
+  subject?: string;
+}
+
+export function parseSearchOutput(raw: unknown, candidates: CommitCandidate[]): SearchMatch[] {
   const known = new Set((candidates || []).map(candidate => (
     String(candidate.hash || '').toLowerCase()
   )));
@@ -20,12 +30,25 @@ function parseSearchOutput(raw, candidates) {
   return matches;
 }
 
-function truncate(value, limit) {
+function truncate(value: unknown, limit: number): string {
   const text = String(value || '').replace(/\s+$/u, '');
   return text.length > limit ? `${text.slice(0, limit - 1)}…` : text;
 }
 
-function parseAiOutput(raw, { maxTitleLength = 200, maxBodyLength = 100000 } = {}) {
+export interface AiOutputOptions {
+  maxTitleLength?: number;
+  maxBodyLength?: number;
+}
+
+export interface AiOutput {
+  summary: string;
+  body: string;
+}
+
+export function parseAiOutput(
+  raw: unknown,
+  { maxTitleLength = 200, maxBodyLength = 100000 }: AiOutputOptions = {}
+): AiOutput {
   const text = String(raw || '');
   const titleMatch = text.match(TITLE_PATTERN);
   const bodyMatch = text.match(BODY_PATTERN);
@@ -52,7 +75,7 @@ function parseAiOutput(raw, { maxTitleLength = 200, maxBodyLength = 100000 } = {
   };
 }
 
-function buildCommitPrompt({ diff, hint, language }) {
+export function buildCommitPrompt({ diff, hint, language }): string {
   const targetLanguage = language === 'it' ? 'Italian' : 'English';
   const hintLine = hint ? `\nAdditional hint from the user: ${hint}\n` : '';
   return [
@@ -72,7 +95,7 @@ function buildCommitPrompt({ diff, hint, language }) {
   ].filter(Boolean).join('\n');
 }
 
-function buildExplainPrompt({ diff, language }) {
+export function buildExplainPrompt({ diff, language }): string {
   const targetLanguage = language === 'it' ? 'Italian' : 'English';
   return [
     'You are the changes-explainer assistant of a Git desktop client.',
@@ -88,7 +111,7 @@ function buildExplainPrompt({ diff, language }) {
   ].filter(Boolean).join('\n');
 }
 
-function buildConflictPrompt({ file, base, current, incoming, language }) {
+export function buildConflictPrompt({ file, base, current, incoming, language }): string {
   const targetLanguage = language === 'it' ? 'Italian' : 'English';
   return [
     'You are the merge-conflict advisor of a Git desktop client.',
@@ -110,7 +133,7 @@ function buildConflictPrompt({ file, base, current, incoming, language }) {
   ].filter(Boolean).join('\n');
 }
 
-function buildCommitExplainPrompt({ message, author, date, diff, language }) {
+export function buildCommitExplainPrompt({ message, author, date, diff, language }): string {
   const targetLanguage = language === 'it' ? 'Italian' : 'English';
   return [
     'You are the history-explainer assistant of a Git desktop client.',
@@ -128,7 +151,7 @@ function buildCommitExplainPrompt({ message, author, date, diff, language }) {
   ].filter(Boolean).join('\n');
 }
 
-function buildHistorySearchPrompt({ query, commits, language }) {
+export function buildHistorySearchPrompt({ query, commits, language }): string {
   const targetLanguage = language === 'it' ? 'Italian' : 'English';
   const commitLines = (commits || [])
     .slice(0, 300)
@@ -147,7 +170,7 @@ function buildHistorySearchPrompt({ query, commits, language }) {
   ].filter(Boolean).join('\n');
 }
 
-function buildBlamePrompt({ file, hash, rows, language }) {
+export function buildBlamePrompt({ file, hash, rows, language }): string {
   const targetLanguage = language === 'it' ? 'Italian' : 'English';
   const rowLines = (rows || [])
     .slice(0, 200)
@@ -168,7 +191,7 @@ function buildBlamePrompt({ file, hash, rows, language }) {
   ].filter(Boolean).join('\n');
 }
 
-function buildPrPrompt({ diff, commits, hint, language }) {
+export function buildPrPrompt({ diff, commits, hint, language }): string {
   const targetLanguage = language === 'it' ? 'Italian' : 'English';
   const commitLines = (commits || [])
     .slice(0, 30)
@@ -192,14 +215,4 @@ function buildPrPrompt({ diff, commits, hint, language }) {
   ].filter(Boolean).join('\n');
 }
 
-module.exports = {
-  parseAiOutput,
-  parseSearchOutput,
-  buildCommitPrompt,
-  buildPrPrompt,
-  buildExplainPrompt,
-  buildConflictPrompt,
-  buildCommitExplainPrompt,
-  buildHistorySearchPrompt,
-  buildBlamePrompt
-};
+

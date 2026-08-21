@@ -1,5 +1,5 @@
-const AiSettingsStore = require('./ai-store');
-const {
+import { AiSettingsStore, type AiSettings } from './ai-store.mts';
+import {
   parseAiOutput,
   parseSearchOutput,
   buildCommitPrompt,
@@ -9,10 +9,10 @@ const {
   buildCommitExplainPrompt,
   buildHistorySearchPrompt,
   buildBlamePrompt
-} = require('./ai-output');
-const { requestOpenAiCompatible, requestAnthropic } = require('./ai-providers');
-const { generateWithOpencode } = require('./ai-opencode');
-const { environmentForAi } = require('./ai-env');
+} from './ai-output.mts';
+import { requestOpenAiCompatible, requestAnthropic } from './ai-providers.mts';
+import { generateWithOpencode } from './ai-opencode.mts';
+import { environmentForAi } from './ai-env.mts';
 
 const PROVIDERS = ['opencode', 'openai', 'anthropic'];
 const LANGUAGES = ['auto', 'en', 'it'];
@@ -21,10 +21,10 @@ const DEFAULT_TIMEouts = { http: 60_000, opencode: 120_000 };
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]', '::1']);
 
-function validateBaseUrl(value) {
+export function validateBaseUrl(value: unknown): URL {
   let parsed;
   try {
-    parsed = new URL(value);
+    parsed = new URL(String(value));
   } catch {
     throw new Error('Invalid AI base URL');
   }
@@ -37,18 +37,18 @@ function validateBaseUrl(value) {
   return parsed;
 }
 
-function validateKey(value) {
-  const key = String(value || '').trim();
+export function validateKey(value: unknown): string {
+  const key = String(value ?? '').trim();
   if (key.length < 4 || key.length > 400 || /[\r\n\0]/.test(key)) {
     throw new Error('Invalid API key');
   }
   return key;
 }
 
-function validateSettingsInput(input = {}) {
+export function validateSettingsInput(input: Record<string, unknown> = {}): AiSettings {
   const provider = String(input.provider || '');
   if (!PROVIDERS.includes(provider)) throw new Error('Unsupported AI provider');
-  const language = LANGUAGES.includes(input.language) ? input.language : 'auto';
+  const language = LANGUAGES.includes(input.language as string) ? (input.language as string) : 'auto';
   const baseUrl = String(input.baseUrl || '').trim();
   const model = String(input.model || '').trim().slice(0, 200);
   if (provider === 'openai') {
@@ -62,13 +62,55 @@ function validateSettingsInput(input = {}) {
   return { provider, baseUrl, model, language };
 }
 
-function truncateDiff(diff) {
+function truncateDiff(diff: unknown): string {
   const text = String(diff || '');
   if (text.length <= DIFF_LIMIT) return text;
   return `${text.slice(0, DIFF_LIMIT)}\n\n... diff truncated ...`;
 }
 
-class AiService {
+export interface AiVault {
+  getAccount: (provider: string) => Promise<{ apiKey?: string } | null>;
+  setAccount: (provider: string, account: Record<string, unknown>) => Promise<unknown>;
+  removeAccount?: (provider: string) => Promise<unknown>;
+}
+
+export class AiService {
+  private store: AiSettingsStore;
+
+  private vault: AiVault;
+
+  private fetch: typeof globalThis.fetch;
+
+  private spawn: (
+    executable: string,
+    args: string[],
+    options: Record<string, unknown>
+  ) => { onData: (cb: (data: string) => void) => void; onExit: (cb: (e: { exitCode: number }) => void) => void; kill?: () => void };
+
+  private resolveExecutable: (command: string) => string;
+
+  private getStagedDiff: (repoPath: string) => Promise<string>;
+
+  private getUnstagedDiff: (repoPath: string) => Promise<string>;
+
+  private getBranchComparison: (repoPath: string, base: string, compare: string) => Promise<{ commits?: Array<Record<string, unknown>>; diff?: string }>;
+
+  private getConflictBlock: (repoPath: string, file: string, blockIndex: number) => Promise<Record<string, unknown> | null>;
+
+  private getCommitContext: (repoPath: string, hash: string) => Promise<Record<string, unknown> | null>;
+
+  private getHistoryCandidates: (repoPath: string, limit: number) => Promise<Array<Record<string, unknown>>>;
+
+  private getBlameRows: (repoPath: string, file: string, hash: string) => Promise<Array<Record<string, unknown>>>;
+
+  private timeouts: { http: number; opencode: number };
+
+  settings: AiSettings;
+
+  agentEnvironment: Record<string, string>;
+
+  keyConfigured: boolean;
+
   constructor({
     storagePath,
     vault,
@@ -83,6 +125,20 @@ class AiService {
     getHistoryCandidates = async () => [],
     getBlameRows = async () => [],
     timeouts = DEFAULT_TIMEouts
+  }: {
+    storagePath: string;
+    vault: AiVault;
+    fetch: typeof globalThis.fetch;
+    spawn: AiService['spawn'];
+    resolveExecutable?: (command: string) => string;
+    getStagedDiff?: (repoPath: string) => Promise<string>;
+    getUnstagedDiff?: (repoPath: string) => Promise<string>;
+    getBranchComparison?: (repoPath: string, base: string, compare: string) => Promise<{ commits?: Array<Record<string, unknown>>; diff?: string }>;
+    getConflictBlock?: (repoPath: string, file: string, blockIndex: number) => Promise<Record<string, unknown> | null>;
+    getCommitContext?: (repoPath: string, hash: string) => Promise<Record<string, unknown> | null>;
+    getHistoryCandidates?: (repoPath: string, limit: number) => Promise<Array<Record<string, unknown>>>;
+    getBlameRows?: (repoPath: string, file: string, hash: string) => Promise<Array<Record<string, unknown>>>;
+    timeouts?: { http?: number; opencode?: number };
   }) {
     if (!storagePath) throw new Error('AI settings storage path is required');
     if (!vault) throw new Error('Credential vault is required');
@@ -178,7 +234,7 @@ class AiService {
     return 'en';
   }
 
-  async generateCommitMessage(repoPath, options = {}) {
+  async generateCommitMessage(repoPath: string, options: { language?: unknown; hint?: unknown } = {}) {
     const staged = await this.getStagedDiff(repoPath);
     let diff = String(staged || '');
     if (!diff.trim()) {
@@ -197,7 +253,7 @@ class AiService {
     return parseAiOutput(raw);
   }
 
-  async explainChanges(repoPath, options = {}) {
+  async explainChanges(repoPath: string, options: { language?: unknown } = {}) {
     const staged = await this.getStagedDiff(repoPath);
     let diff = String(staged || '');
     if (!diff.trim()) {
@@ -215,7 +271,7 @@ class AiService {
     return parseAiOutput(raw, { maxTitleLength: 140 });
   }
 
-  async explainConflict(repoPath, options = {}) {
+  async explainConflict(repoPath: string, options: { file?: unknown; blockIndex?: unknown; language?: unknown } = {}) {
     const file = String(options.file || '').trim();
     const blockIndex = Number(options.blockIndex);
     if (
@@ -241,7 +297,7 @@ class AiService {
     return parseAiOutput(raw, { maxTitleLength: 200 });
   }
 
-  async explainCommit(repoPath, options = {}) {
+  async explainCommit(repoPath: string, options: { hash?: unknown; language?: unknown } = {}) {
     const hash = String(options.hash || '').trim();
     if (!/^[0-9a-f]{7,40}$/i.test(hash)) {
       throw new Error('Invalid commit hash');
@@ -260,7 +316,7 @@ class AiService {
     return parseAiOutput(raw, { maxTitleLength: 200 });
   }
 
-  async searchHistory(repoPath, options = {}) {
+  async searchHistory(repoPath: string, options: { query?: unknown; language?: unknown } = {}) {
     const query = String(options.query || '').trim().slice(0, 300);
     if (query.length < 3) {
       throw new Error('Enter a longer search question');
@@ -286,7 +342,7 @@ class AiService {
     };
   }
 
-  async explainLines(repoPath, options = {}) {
+  async explainLines(repoPath: string, options: { file?: unknown; hash?: unknown; language?: unknown } = {}) {
     const file = String(options.file || '').trim();
     const hash = String(options.hash || '').trim();
     if (!file || file.length > 500 || !/^[0-9a-f]{7,40}$/i.test(hash)) {
@@ -307,7 +363,7 @@ class AiService {
     return parseAiOutput(raw, { maxTitleLength: 200 });
   }
 
-  async generatePrDescription(repoPath, options = {}) {
+  async generatePrDescription(repoPath: string, options: { source?: unknown; target?: unknown; hint?: unknown; language?: unknown } = {}) {
     const source = String(options.source || '').trim();
     const target = String(options.target || '').trim();
     if (!source || !target || source === target) {
@@ -367,7 +423,4 @@ class AiService {
   }
 }
 
-module.exports = AiService;
-module.exports.validateSettingsInput = validateSettingsInput;
-module.exports.validateKey = validateKey;
-module.exports.validateBaseUrl = validateBaseUrl;
+

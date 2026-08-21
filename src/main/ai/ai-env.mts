@@ -1,6 +1,12 @@
-function environmentForAi({ provider, baseUrl = '', apiKey = '' }) {
+export interface AiEnvironmentOptions {
+  provider: string;
+  baseUrl?: string;
+  apiKey?: string;
+}
+
+export function environmentForAi({ provider, baseUrl = '', apiKey = '' }: AiEnvironmentOptions): Record<string, string> {
   if (!apiKey) return {};
-  const env = {};
+  const env: Record<string, string> = {};
   const host = String(baseUrl || '').toLowerCase();
   if (provider === 'anthropic') {
     env.ANTHROPIC_API_KEY = apiKey;
@@ -12,5 +18,3 @@ function environmentForAi({ provider, baseUrl = '', apiKey = '' }) {
   }
   return env;
 }
-
-module.exports = { environmentForAi };

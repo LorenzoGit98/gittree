@@ -1,10 +1,10 @@
-const fs = require('node:fs');
-const path = require('node:path');
+import * as nodeFs from 'node:fs';
+import * as nodePath from 'node:path';
 
 const ACTIVE_STATUSES = new Set(['queued', 'preparing', 'running', 'stopping']);
 const MAX_EVENTS = 200;
 
-function defaults() {
+export function defaults() {
   return {
     version: 1,
     settings: {
@@ -17,18 +17,29 @@ function defaults() {
   };
 }
 
-function sanitizeTask(task, { restore = false } = {}) {
+export function sanitizeTask(
+  task: Record<string, unknown>,
+  { restore = false }: { restore?: boolean } = {}
+): Record<string, unknown> {
   const clean = { ...task };
   delete clean.prompt;
   delete clean._prompt;
   delete clean._resume;
   clean.events = Array.isArray(clean.events) ? clean.events.slice(-MAX_EVENTS) : [];
-  if (restore && ACTIVE_STATUSES.has(clean.status)) clean.status = 'interrupted';
+  if (restore && typeof clean.status === 'string' && ACTIVE_STATUSES.has(clean.status)) {
+    clean.status = 'interrupted';
+  }
   return clean;
 }
 
-class AgentSessionStore {
-  constructor({ storagePath, fileSystem = fs } = {}) {
+type FileSystemLike = typeof nodeFs;
+
+export class AgentSessionStore {
+  private storagePath: string;
+
+  private fs: FileSystemLike;
+
+  constructor({ storagePath, fileSystem = nodeFs }: { storagePath?: string; fileSystem?: FileSystemLike } = {}) {
     if (!storagePath) throw new Error('Agent session storage path is required');
     this.storagePath = storagePath;
     this.fs = fileSystem;
@@ -66,7 +77,7 @@ class AgentSessionStore {
       settings: { ...defaults().settings, ...(state.settings || {}) },
       tasks: Array.isArray(state.tasks) ? state.tasks.map(task => sanitizeTask(task)) : []
     };
-    const directory = path.dirname(this.storagePath);
+    const directory = nodePath.dirname(this.storagePath);
     this.fs.mkdirSync(directory, { recursive: true });
     const temporaryPath = `${this.storagePath}.${process.pid}.${Date.now()}.tmp`;
     this.fs.writeFileSync(temporaryPath, `${JSON.stringify(payload, null, 2)}\n`, { mode: 0o600 });
@@ -74,6 +85,4 @@ class AgentSessionStore {
   }
 }
 
-module.exports = AgentSessionStore;
-module.exports.defaults = defaults;
-module.exports.sanitizeTask = sanitizeTask;
+

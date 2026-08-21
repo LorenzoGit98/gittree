@@ -1,8 +1,8 @@
-const crypto = require('node:crypto');
-const fs = require('node:fs');
-const path = require('node:path');
-const { execFile } = require('node:child_process');
-const { promisify } = require('node:util');
+import * as crypto from 'node:crypto';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
@@ -60,12 +60,12 @@ async function cloneRepository(url, parentDirectory, repositoryWorkspace) {
   return repositoryWorkspace.addTrustedRepository(targetPath) || { path: targetPath, name };
 }
 
-function registerScanHandlers({
+export function registerScanHandlers({
   registerHandler,
   scanRepositories,
   sendToRenderer,
   repositoryWorkspace
-}) {
+}: any) {
   const scans = new Map();
   registerHandler('repo:scan-start', rootPath => {
     const authorizedRoot = repositoryWorkspace.beginScan(rootPath);
@@ -135,7 +135,7 @@ async function addRepositories(repoPaths, createGitService, repositoryWorkspace)
   return { ...result, failed: [...failed, ...result.failed] };
 }
 
-function registerRepositoryHandlers(dependencies) {
+export function registerRepositoryHandlers(dependencies: any) {
   const {
     registerHandler,
     repositoryWorkspace,
@@ -180,5 +180,3 @@ function registerRepositoryHandlers(dependencies) {
   registerHandler('repo:set-active', index => repositoryWorkspace.setActive(index));
   registerHandler('repo:active', () => repositoryWorkspace.active());
 }
-
-module.exports = { registerRepositoryHandlers };

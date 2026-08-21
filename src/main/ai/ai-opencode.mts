@@ -3,13 +3,13 @@ const BELL = String.fromCharCode(7);
 const OSC_PATTERN = new RegExp(`${ESCAPE}\\][^${BELL}${ESCAPE}]*(?:${BELL}|${ESCAPE}\\\\)`, 'g');
 const CSI_PATTERN = new RegExp(`${ESCAPE}\\[[0-9;?]*[A-Za-z]`, 'g');
 
-function stripAnsi(value) {
+function stripAnsi(value: unknown): string {
   return String(value || '')
     .replace(OSC_PATTERN, '')
     .replace(CSI_PATTERN, '');
 }
 
-function collectOpencodeText(stdout) {
+export function collectOpencodeText(stdout: unknown): string {
   const lines = stripAnsi(stdout)
     .split(/\r?\n/)
     .map(line => line.trim())
@@ -40,14 +40,33 @@ function collectOpencodeText(stdout) {
   return output;
 }
 
-function generateWithOpencode({
+interface OpencodePty {
+  onData: (callback: (data: string) => void) => void;
+  onExit: (callback: (event: { exitCode: number }) => void) => void;
+  kill?: () => void;
+}
+
+interface OpencodeOptions {
+  spawn: (
+    executable: string,
+    args: string[],
+    options: Record<string, unknown>
+  ) => OpencodePty;
+  executable: string;
+  prompt: string;
+  model?: string;
+  timeoutMs?: number;
+  maxOutput?: number;
+}
+
+export function generateWithOpencode({
   spawn,
   executable,
   prompt,
   model = '',
   timeoutMs = 120000,
   maxOutput = 262144
-}) {
+}: OpencodeOptions): Promise<string> {
   const args = ['run'];
   if (model) args.push('--model', model);
   args.push(prompt, '--format', 'json');
@@ -72,7 +91,7 @@ function generateWithOpencode({
     } catch (error) {
       clearTimeout(timer);
       settled = true;
-      reject(new Error(error.message || 'OpenCode failed'));
+      reject(new Error((error as Error).message || 'OpenCode failed'));
       return;
     }
     pty.onData(data => {
@@ -95,4 +114,4 @@ function generateWithOpencode({
   });
 }
 
-module.exports = { generateWithOpencode, collectOpencodeText };
+

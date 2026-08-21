@@ -1,9 +1,29 @@
-class GitLabProviderAdapter {
-  constructor({ api }) {
+import type {
+  ProviderPayload,
+  HostingApiResult,
+  PullRequestSummary,
+  PullRequestFile,
+  PullRequestDetail,
+  PullRequestListPage,
+  PullRequestDiffPage,
+  HostedRepositoryRef,
+  HostingAccount
+} from '../../../shared/hosting.mts';
+
+export class GitLabProviderAdapter {
+  private api: (
+    repo: HostedRepositoryRef,
+    path: string,
+    options?: Record<string, unknown>
+  ) => Promise<HostingApiResult>;
+
+  constructor({ api }: {
+    api: (repo: HostedRepositoryRef, path: string, options?: Record<string, unknown>) => Promise<HostingApiResult>;
+  }) {
     this.api = api;
   }
 
-  normalizeSummary(item, user) {
+  normalizeSummary(item: ProviderPayload, user: HostingAccount['user']): PullRequestSummary {
     return {
       provider: 'gitlab',
       id: item.id,
@@ -25,7 +45,15 @@ class GitLabProviderAdapter {
     };
   }
 
-  async listPullRequests(repo, { page, filter, search, account }) {
+  async listPullRequests(
+    repo: HostedRepositoryRef,
+    { page, filter, search, account }: {
+      page: number;
+      filter: string;
+      search?: string;
+      account: HostingAccount;
+    }
+  ): Promise<PullRequestListPage> {
     const project = encodeURIComponent(`${repo.ownerPath}/${repo.repository}`);
     const query = new URLSearchParams({
       state: filter === 'all' ? 'all' : 'opened',
@@ -49,7 +77,7 @@ class GitLabProviderAdapter {
     };
   }
 
-  normalizeFile(file) {
+  normalizeFile(file: ProviderPayload): PullRequestFile {
     return {
       path: file.new_path,
       oldPath: file.old_path !== file.new_path ? file.old_path : null,
@@ -63,7 +91,11 @@ class GitLabProviderAdapter {
     };
   }
 
-  async pullRequestDetail(repo, id, { viewer }) {
+  async pullRequestDetail(
+    repo: HostedRepositoryRef,
+    id: number,
+    { viewer }: { viewer: HostingAccount['user'] }
+  ): Promise<PullRequestDetail> {
     const project = encodeURIComponent(`${repo.ownerPath}/${repo.repository}`);
     const prefix = `/projects/${project}/merge_requests/${id}`;
     const [mergeRequest, approvals, pipelines, changes, discussions] = await Promise.all([
@@ -120,7 +152,7 @@ class GitLabProviderAdapter {
     };
   }
 
-  async pullRequestDiff(repo, id) {
+  async pullRequestDiff(repo: HostedRepositoryRef, id: number): Promise<PullRequestDiffPage> {
     const project = encodeURIComponent(`${repo.ownerPath}/${repo.repository}`);
     const result = await this.api(
       repo,
@@ -133,7 +165,12 @@ class GitLabProviderAdapter {
     };
   }
 
-  async resolveThread(repo, id, thread, resolved) {
+  async resolveThread(
+    repo: HostedRepositoryRef,
+    id: number,
+    thread: { id: string; noteId?: number | string },
+    resolved: boolean
+  ): Promise<{ success: true; resolved: boolean }> {
     const noteId = Number(thread.noteId);
     if (!Number.isSafeInteger(noteId) || noteId <= 0) {
       throw new Error('Invalid GitLab discussion note');
@@ -147,7 +184,22 @@ class GitLabProviderAdapter {
     return { success: true, resolved: Boolean(resolved) };
   }
 
-  async submitReview(repo, id, draft, { markCompleted, validateThreadId }) {
+  async submitReview(
+    repo: HostedRepositoryRef,
+    id: number,
+    draft: {
+      headSha: string;
+      body?: string;
+      event: string;
+      inlineComments: Array<{ body: string; path: string; line: number | null }>;
+      replies: Array<{ threadId: unknown; body: string }>;
+      completedOperations?: string[];
+    },
+    { markCompleted, validateThreadId }: {
+      markCompleted: (operation: string) => Promise<void> | void;
+      validateThreadId: (threadId: unknown) => string;
+    }
+  ): Promise<{ success: true }> {
     if (draft.event === 'REQUEST_CHANGES') {
       throw new Error('GitLab does not support Request changes in GitTree');
     }
@@ -204,7 +256,7 @@ class GitLabProviderAdapter {
     return { success: true };
   }
 
-  async resolveUserIds(repo, names) {
+  async resolveUserIds(repo: HostedRepositoryRef, names: string[]): Promise<number[]> {
     const ids = [];
     for (const name of names) {
       const byUsername = await this.api(
@@ -228,7 +280,21 @@ class GitLabProviderAdapter {
     return ids;
   }
 
-  async createPullRequest(repo, options, { viewer }) {
+  async createPullRequest(
+    repo: HostedRepositoryRef,
+    options: {
+      title: string;
+      source: string;
+      target: string;
+      body?: string;
+      draft?: boolean;
+      reviewers?: string[];
+      assignees?: string[];
+      labels?: string[];
+      removeSourceBranch?: boolean;
+    },
+    { viewer }: { viewer: HostingAccount['user'] }
+  ) {
     const project = encodeURIComponent(`${repo.ownerPath}/${repo.repository}`);
     const warnings = [];
     let reviewerIds = [];
@@ -272,4 +338,3 @@ class GitLabProviderAdapter {
   }
 }
 
-module.exports = GitLabProviderAdapter;

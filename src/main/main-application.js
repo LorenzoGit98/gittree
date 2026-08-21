@@ -1,34 +1,34 @@
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
-const GitService = require('./git-service');
-const RepoManager = require('./repo-manager');
-const RepositoryWorkspace = require('./repository-workspace');
-const { scanRepositories } = require('./repository-scanner');
-const UpdateService = require('./update-service');
-const CredentialVault = require('./credential-vault');
-const HostingService = require('./hosting-service');
-const { loadOAuthConfig } = require('./oauth-config');
-const { buildPullRequestUrl } = require('./provider-links');
-const { getGitVersion } = require('./git-version');
-const { Logger } = require('./logger');
-const { parseDeepLink } = require('./deep-link');
-const { createHandlerRegistry } = require('./ipc/handler-registry');
-const { registerGitHandlers } = require('./ipc/git-handlers');
-const { registerHostingHandlers } = require('./ipc/hosting-handlers');
-const { registerRepositoryHandlers } = require('./ipc/repository-handlers');
-const { registerWindowApplicationHandlers } = require('./ipc/window-application-handlers');
-const { registerAgentHandlers } = require('./ipc/agent-handlers');
-const { registerAiHandlers } = require('./ipc/ai-handlers');
-const AgentSessionService = require('./agents/agent-session-service');
-const { resolveAgentExecutable } = require('./agents/agent-adapters');
-const AiService = require('./ai/ai-service');
-const { createPty } = require('./agents/pty-factory');
+const { GitService } = require('./git-service.mts');
+const { RepoManager } = require('./repo-manager.mts');
+const { RepositoryWorkspace } = require('./repository-workspace.mts');
+const { scanRepositories } = require('./repository-scanner.mts');
+const { UpdateService } = require('./update-service.mts');
+const { CredentialVault } = require('./credential-vault.mts');
+const { HostingService } = require('./hosting-service.mts');
+const { loadOAuthConfig } = require('./oauth-config.mts');
+const { buildPullRequestUrl } = require('./provider-links.mts');
+const { getGitVersion } = require('./git-version.mts');
+const { Logger } = require('./logger.mts');
+const { parseDeepLink } = require('./deep-link.mts');
+const { createHandlerRegistry } = require('./ipc/handler-registry.mts');
+const { registerGitHandlers } = require('./ipc/git-handlers.mts');
+const { registerHostingHandlers } = require('./ipc/hosting-handlers.mts');
+const { registerRepositoryHandlers } = require('./ipc/repository-handlers.mts');
+const { registerWindowApplicationHandlers } = require('./ipc/window-application-handlers.mts');
+const { registerAgentHandlers } = require('./ipc/agent-handlers.mts');
+const { registerAiHandlers } = require('./ipc/ai-handlers.mts');
+const { AgentSessionService } = require('./agents/agent-session-service.mts');
+const { resolveAgentExecutable } = require('./agents/agent-adapters.mts');
+const { AiService } = require('./ai/ai-service.mts');
+const { createPty } = require('./agents/pty-factory.mts');
 const { createInspectorWindowController } = require('./inspector-window-controller');
-const { createApplicationRuntime } = require('./application-runtime');
-const { DiagnosticsExporter } = require('./diagnostics-exporter');
-const { isWorkingTreeRepository } = require('./working-tree-repository');
-const { convertWorkspaceProfile } = require('./workspace-profile-conversion');
+const { createApplicationRuntime } = require('./application-runtime.mts');
+const { DiagnosticsExporter } = require('./diagnostics-exporter.mts');
+const { isWorkingTreeRepository } = require('./working-tree-repository.mts');
+const { convertWorkspaceProfile } = require('./workspace-profile-conversion.mts');
 
 const ALLOWED_EXTERNAL_HOSTS = new Set([
   'github.com',
@@ -190,7 +190,9 @@ class MainApplication {
     });
     this.mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
     if (this.updateService) this.updateService.setWindow(this.mainWindow);
-    else this.updateService = new this.modules.UpdateService(this.mainWindow);
+    else this.updateService = new this.modules.UpdateService(this.mainWindow, {
+      notify: (channel, payload) => this.sendToRenderer(channel, payload)
+    });
     this.mainWindow.webContents.once('did-finish-load', () => {
       this.updateService.initialize();
       this.sendWindowState();

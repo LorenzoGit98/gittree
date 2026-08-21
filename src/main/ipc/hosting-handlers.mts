@@ -1,4 +1,4 @@
-function registerAuthHandlers({
+export function registerAuthHandlers({
   registerHandler,
   assertManagedRepo,
   getHostingRepository,
@@ -30,7 +30,7 @@ function registerAuthHandlers({
   });
 }
 
-function registerPullRequestHandlers({
+export function registerPullRequestHandlers({
   registerManagedRepoHandler,
   getHostingRepository,
   getGitService,
@@ -124,7 +124,7 @@ function registerPullRequestHandlers({
   );
 }
 
-function registerOpenPullRequest({
+export function registerOpenPullRequest({
   registerManagedRepoHandler,
   getGitService,
   buildPullRequestUrl,
@@ -149,10 +149,8 @@ function registerOpenPullRequest({
   );
 }
 
-function registerHostingHandlers(dependencies) {
+export function registerHostingHandlers(dependencies) {
   registerAuthHandlers(dependencies);
   registerPullRequestHandlers(dependencies);
   registerOpenPullRequest(dependencies);
 }
-
-module.exports = { registerHostingHandlers };

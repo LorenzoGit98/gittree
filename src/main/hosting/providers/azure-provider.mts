@@ -1,11 +1,42 @@
-class AzureProviderAdapter {
-  constructor({ api, identityMatches, identitySearch }) {
+import type {
+  ProviderPayload,
+  HostingApiResult,
+  PullRequestSummary,
+  PullRequestFile,
+  PullRequestDetail,
+  PullRequestListPage,
+  HostedRepositoryRef,
+  HostingAccount
+} from '../../../shared/hosting.mts';
+
+export class AzureProviderAdapter {
+  private api: (
+    repo: HostedRepositoryRef,
+    path: string,
+    options?: Record<string, unknown>
+  ) => Promise<HostingApiResult>;
+
+  private identityMatches: (
+    user: Record<string, unknown> | null | undefined,
+    reviewer: ProviderPayload
+  ) => boolean;
+
+  private identitySearch: (
+    organization: string | undefined,
+    name: string
+  ) => Promise<ProviderPayload[]>;
+
+  constructor({ api, identityMatches, identitySearch }: {
+    api: (repo: HostedRepositoryRef, path: string, options?: Record<string, unknown>) => Promise<HostingApiResult>;
+    identityMatches: (user: Record<string, unknown> | null | undefined, reviewer: ProviderPayload) => boolean;
+    identitySearch: (organization: string | undefined, name: string) => Promise<ProviderPayload[]>;
+  }) {
     this.api = api;
     this.identityMatches = identityMatches;
     this.identitySearch = identitySearch;
   }
 
-  normalizeSummary(item, user) {
+  normalizeSummary(item: ProviderPayload, user: HostingAccount['user']): PullRequestSummary {
     const author = item.createdBy || {};
     return {
       provider: 'azure',
@@ -40,7 +71,15 @@ class AzureProviderAdapter {
     };
   }
 
-  async listPullRequests(repo, { page, filter, search, account }) {
+  async listPullRequests(
+    repo: HostedRepositoryRef,
+    { page, filter, search, account }: {
+      page: number;
+      filter: string;
+      search?: string;
+      account: HostingAccount;
+    }
+  ): Promise<PullRequestListPage> {
     const skip = (page - 1) * 50;
     const status = filter === 'all' ? 'all' : 'active';
     const result = await this.api(
@@ -66,7 +105,7 @@ class AzureProviderAdapter {
     return { items, page, hasMore: result.data.value.length >= 50 };
   }
 
-  normalizeFile(entry) {
+  normalizeFile(entry: ProviderPayload): PullRequestFile | null {
     const filePath = String(entry?.item?.path || '').replace(/^\//, '');
     if (!filePath) return null;
     const changeType = String(entry.changeType || '').toLowerCase();
@@ -90,7 +129,10 @@ class AzureProviderAdapter {
     };
   }
 
-  async listPullRequestFiles(repo, id) {
+  async listPullRequestFiles(
+    repo: HostedRepositoryRef,
+    id: number
+  ): Promise<{ files: PullRequestFile[]; headSha: string }> {
     try {
       const iterations = await this.api(repo, `/pullrequests/${id}/iterations`);
       const list = iterations.data.value || [];
@@ -114,7 +156,11 @@ class AzureProviderAdapter {
     }
   }
 
-  async pullRequestDetail(repo, id, { viewer }) {
+  async pullRequestDetail(
+    repo: HostedRepositoryRef,
+    id: number,
+    { viewer }: { viewer: HostingAccount['user'] }
+  ): Promise<PullRequestDetail> {
     const result = await this.api(repo, `/pullrequests/${id}`);
     const pullRequest = result.data;
     const [threadsResult, fileResult] = await Promise.all([
@@ -163,12 +209,17 @@ class AzureProviderAdapter {
     };
   }
 
-  async pullRequestDiff(repo, id) {
+  async pullRequestDiff(repo: HostedRepositoryRef, id: number): Promise<{ files: PullRequestFile[]; page: number; hasMore: false }> {
     const { files } = await this.listPullRequestFiles(repo, id);
     return { files, page: 1, hasMore: false };
   }
 
-  async resolveThread(repo, id, thread, resolved) {
+  async resolveThread(
+    repo: HostedRepositoryRef,
+    id: number,
+    thread: { id: string },
+    resolved: boolean
+  ): Promise<{ success: true; resolved: boolean }> {
     await this.api(
       repo,
       `/pullrequests/${id}/threads/${thread.id}`,
@@ -177,11 +228,22 @@ class AzureProviderAdapter {
     return { success: true, resolved: Boolean(resolved) };
   }
 
-  async submitReview(repo, id, draft, {
-    viewer,
-    markCompleted,
-    validateThreadId
-  }) {
+  async submitReview(
+    repo: HostedRepositoryRef,
+    id: number,
+    draft: {
+      body?: string;
+      event: string;
+      inlineComments: Array<{ body: string; path: string; line: number | null }>;
+      replies: Array<{ threadId: unknown; commentId?: number | null; body: string }>;
+      completedOperations?: string[];
+    },
+    { viewer, markCompleted, validateThreadId }: {
+      viewer: HostingAccount['user'];
+      markCompleted: (operation: string) => Promise<void> | void;
+      validateThreadId: (threadId: unknown) => string;
+    }
+  ): Promise<{ success: true }> {
     const completed = new Set(draft.completedOperations);
     const perform = async (operation, action) => {
       if (completed.has(operation)) return;
@@ -247,7 +309,10 @@ class AzureProviderAdapter {
     return { success: true };
   }
 
-  async resolveReviewers(repo, names) {
+  async resolveReviewers(
+    repo: HostedRepositoryRef,
+    names: string[]
+  ): Promise<Array<{ id: unknown }>> {
     const reviewers = [];
     for (const name of names) {
       const matches = await this.identitySearch(repo.organization, name);
@@ -275,7 +340,7 @@ class AzureProviderAdapter {
     return reviewers;
   }
 
-  buildDescription(body, workItems) {
+  buildDescription(body: unknown, workItems?: Array<number | string>): string {
     const base = String(body || '').replace(/\s+$/, '');
     const mentions = (workItems || [])
       .filter(id => !new RegExp(`AB#${id}\\b`, 'i').test(base))
@@ -284,8 +349,21 @@ class AzureProviderAdapter {
     return [base, '', ...mentions].join('\n').slice(0, 65536);
   }
 
-  async createPullRequest(repo, options, { viewer }) {
-    const body = {
+  async createPullRequest(
+    repo: HostedRepositoryRef,
+    options: {
+      title: string;
+      source: string;
+      target: string;
+      body?: string;
+      draft?: boolean;
+      reviewers?: string[];
+      labels?: string[];
+      workItems?: Array<number | string>;
+    },
+    { viewer }: { viewer: HostingAccount['user'] }
+  ) {
+    const body: Record<string, unknown> = {
       sourceRefName: `refs/heads/${options.source}`,
       targetRefName: `refs/heads/${options.target}`,
       title: options.title,
@@ -320,4 +398,3 @@ class AzureProviderAdapter {
   }
 }
 
-module.exports = AzureProviderAdapter;

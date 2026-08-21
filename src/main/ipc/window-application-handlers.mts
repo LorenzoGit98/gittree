@@ -1,7 +1,7 @@
-const { spawn } = require('node:child_process');
+import { spawn } from 'node:child_process';
 
-function launchTerminal(repoPath, platform) {
-  const launch = (command, args) => {
+function launchTerminal(repoPath: string, platform: string) {
+  const launch = (command: string, args: string[]) => {
     const child = spawn(command, args, {
       cwd: repoPath,
       detached: true,
@@ -28,7 +28,7 @@ function launchTerminal(repoPath, platform) {
   return { ok: true };
 }
 
-function registerWindowHandlers({ registerHandler, getMainWindow, getWindowState }) {
+function registerWindowHandlers({ registerHandler, getMainWindow, getWindowState }: any) {
   registerHandler('window:minimize', () => getMainWindow()?.minimize());
   registerHandler('window:toggle-maximize', () => {
     const window = getMainWindow();
@@ -41,7 +41,7 @@ function registerWindowHandlers({ registerHandler, getMainWindow, getWindowState
   registerHandler('window:close', () => getMainWindow()?.close());
 }
 
-function registerUpdateHandlers({ registerHandler, getUpdateService, getAppVersion, isPackaged }) {
+function registerUpdateHandlers({ registerHandler, getUpdateService, getAppVersion, isPackaged }: any) {
   registerHandler('update:get-state', () => (
     getUpdateService()?.getState() || {
       status: isPackaged ? 'idle' : 'disabled',
@@ -59,7 +59,7 @@ function registerUpdateHandlers({ registerHandler, getUpdateService, getAppVersi
   ));
 }
 
-function registerWindowApplicationHandlers(dependencies) {
+export function registerWindowApplicationHandlers(dependencies: any) {
   const {
     registerHandler,
     registerManagedRepoHandler,
@@ -72,26 +72,26 @@ function registerWindowApplicationHandlers(dependencies) {
     getGitVersion,
     exportDiagnostics,
     showOpenDialog,
-    authorizeDirectory = directoryPath => directoryPath,
+    authorizeDirectory = (directoryPath: unknown) => directoryPath,
     openInspector,
     updateInspector
   } = dependencies;
   registerWindowHandlers(dependencies);
   registerUpdateHandlers(dependencies);
-  registerHandler('app:set-theme', (theme, background) => setTheme(theme, background));
-  registerHandler('app:open-external', url => openExternal(url));
-  registerManagedRepoHandler('app:open-explorer', async repoPath => {
+  registerHandler('app:set-theme', (theme: unknown, background: unknown) => setTheme(theme, background));
+  registerHandler('app:open-external', (url: unknown) => openExternal(url));
+  registerManagedRepoHandler('app:open-explorer', async (repoPath: string) => {
     const error = await openPath(repoPath);
     return error ? { error } : { ok: true };
   });
-  registerManagedRepoHandler('app:open-terminal', repoPath => (
+  registerManagedRepoHandler('app:open-terminal', (repoPath: string) => (
     launchTerminal(repoPath, platform)
   ));
   registerHandler('app:version', () => getAppVersion());
   registerHandler('app:git-version', () => getGitVersion());
   registerHandler('app:export-diagnostics', () => exportDiagnostics());
-  registerHandler('window:open-inspector', payload => openInspector(payload));
-  registerHandler('window:update-inspector', payload => updateInspector(payload));
+  registerHandler('window:open-inspector', (payload: unknown) => openInspector(payload));
+  registerHandler('window:update-inspector', (payload: unknown) => updateInspector(payload));
   registerHandler('dialog:select-directory', async () => {
     const result = await showOpenDialog(getMainWindow(), { properties: ['openDirectory'] });
     return !result.canceled && result.filePaths.length
@@ -99,5 +99,3 @@ function registerWindowApplicationHandlers(dependencies) {
       : null;
   });
 }
-
-module.exports = { registerWindowApplicationHandlers };

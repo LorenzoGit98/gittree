@@ -1,8 +1,8 @@
-const { execFile } = require('node:child_process');
-const fs = require('node:fs');
-const path = require('node:path');
+import { execFile } from 'node:child_process';
+import * as fs from 'node:fs';
+import * as nodePath from 'node:path';
 
-const ADAPTERS = Object.freeze({
+export const ADAPTERS = Object.freeze({
   codex: Object.freeze({
     id: 'codex', label: 'Codex', command: 'codex',
     createArgs: prompt => [prompt], resumeArgs: () => ['resume', '--last']
@@ -17,13 +17,27 @@ const ADAPTERS = Object.freeze({
   })
 });
 
-function getAdapter(id) {
+export interface AgentAdapter {
+  id: string;
+  label: string;
+  command: string;
+  createArgs: (prompt: string) => string[];
+  resumeArgs: () => string[];
+}
+
+export function getAdapter(id: string): AgentAdapter {
   const adapter = ADAPTERS[id];
   if (!adapter) throw new Error('Unknown agent adapter');
   return adapter;
 }
 
-function accessibleFile(candidate, fileSystem, mode) {
+type FileSystemLike = typeof fs;
+
+function accessibleFile(
+  candidate: string | undefined,
+  fileSystem: FileSystemLike,
+  mode: number
+): boolean {
   if (!candidate) return false;
   try {
     fileSystem.accessSync(candidate, mode);
@@ -33,7 +47,12 @@ function accessibleFile(candidate, fileSystem, mode) {
   }
 }
 
-function windowsAdapterFallbacks(command, environment, fileSystem, pathModule) {
+function windowsAdapterFallbacks(
+  command: string,
+  environment: NodeJS.ProcessEnv,
+  fileSystem: FileSystemLike,
+  pathModule: typeof nodePath
+): string[] {
   const candidates = [];
   if (command === 'opencode' && environment.APPDATA) {
     candidates.push(pathModule.join(
@@ -61,12 +80,17 @@ function windowsAdapterFallbacks(command, environment, fileSystem, pathModule) {
   return candidates;
 }
 
-function resolveAgentExecutable(command, {
+export function resolveAgentExecutable(command: string, {
   environment = process.env,
   platform = process.platform,
   fileSystem = fs,
-  pathModule = path
-} = {}) {
+  pathModule = nodePath
+}: {
+  environment?: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
+  fileSystem?: FileSystemLike;
+  pathModule?: typeof nodePath;
+} = {}): string | null {
   const searchPath = environment.PATH || environment.Path || '';
   const extensions = platform === 'win32' ? ['.exe', '.com'] : [''];
   const directCandidates = [];
@@ -93,7 +117,13 @@ function resolveAgentExecutable(command, {
   return unrestricted[0] || fallbacks[0] || availableDirect[0] || null;
 }
 
-function detectAgentAdapters({ execute = execFile, resolveExecutable = resolveAgentExecutable } = {}) {
+export function detectAgentAdapters({
+  execute = execFile,
+  resolveExecutable = resolveAgentExecutable
+}: {
+  execute?: typeof execFile;
+  resolveExecutable?: (command: string) => string | null;
+} = {}) {
   return Promise.all(Object.values(ADAPTERS).map(adapter => new Promise(resolve => {
     const executable = resolveExecutable(adapter.command);
     if (!executable) {
@@ -121,4 +151,3 @@ function detectAgentAdapters({ execute = execFile, resolveExecutable = resolveAg
   })));
 }
 
-module.exports = { ADAPTERS, getAdapter, detectAgentAdapters, resolveAgentExecutable };

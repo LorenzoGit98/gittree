@@ -1,23 +1,27 @@
-const fs = require('node:fs');
-const path = require('node:path');
-const crypto = require('node:crypto');
-const AgentSessionStore = require('./agent-session-store');
-const { getAdapter, detectAgentAdapters, resolveAgentExecutable } = require('./agent-adapters');
-const { detectSetupRecipe } = require('./setup-recipes');
+import * as fs from 'node:fs';
+import * as nodePath from 'node:path';
+import * as nodeCrypto from 'node:crypto';
+import { AgentSessionStore } from './agent-session-store.mts';
+import { getAdapter, detectAgentAdapters, resolveAgentExecutable } from './agent-adapters.mts';
+import { detectSetupRecipe } from './setup-recipes.mts';
 
-const ACTIVE_STATUSES = new Set(['queued', 'preparing', 'running', 'stopping']);
+export const ACTIVE_STATUSES = new Set(['queued', 'preparing', 'running', 'stopping']);
 const TERMINAL_INPUT_LIMIT = 16_384;
 
-function canonical(value, pathModule = path) {
+function canonical(value: string, pathModule: typeof nodePath = nodePath) {
   return pathModule.resolve(value).replace(/[\\/]+$/, '').toLowerCase();
 }
 
-function inside(parent, child, pathModule = path) {
+function inside(
+  parent: string,
+  child: string,
+  pathModule: typeof nodePath = nodePath
+) {
   const relative = pathModule.relative(pathModule.resolve(parent), pathModule.resolve(child));
   return relative === '' || (!relative.startsWith('..') && !pathModule.isAbsolute(relative));
 }
 
-function slugify(value) {
+export function slugify(value: unknown): string {
   return String(value || '')
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -34,23 +38,128 @@ function publicTask(task) {
   return JSON.parse(JSON.stringify(clean));
 }
 
-class AgentSessionService {
+interface PtyProcess {
+  onData: (callback: (data: string) => void) => { dispose?: () => void };
+  onExit: (callback: (event: { exitCode: number }) => void) => void;
+  kill?: () => void;
+  write?: (data: string) => void;
+  resize?: (cols: number, rows: number) => void;
+}
+
+interface AgentTask extends Record<string, unknown> {
+  id?: string;
+  status?: string;
+  worktreePath?: string;
+  repositoryPath?: string;
+  branch?: string;
+}
+
+interface ActiveProcess {
+  [key: string]: unknown;
+}
+
+export class AgentSessionService {
+  private repositoryWorkspace: {
+    list: () => Array<{ path: string }>;
+    getGitService: (repositoryPath: string) => {
+      getWorktrees: () => Promise<Array<{ path: string; branch?: string }>>;
+      createManagedWorktree: (options: Record<string, unknown>) => Promise<unknown>;
+      getStatus: () => Promise<{ files?: Array<unknown>; ahead?: number; behind?: number }>;
+    };
+    addTrustedRepository: (path: string) => unknown;
+    [key: string]: unknown;
+  };
+
+  private createPty: (
+    command: string,
+    args: string[],
+    options: Record<string, unknown>
+  ) => PtyProcess;
+
+  private emit: (event: string, payload: unknown) => void;
+
+  private idFactory: () => string;
+
+  private now: () => string;
+
+  private nowMs: () => number;
+
+  private adapterDetectionTtl: number;
+
+  private adapterDetection: { timestamp: number; result: unknown } | null;
+
+  private fs: typeof fs;
+
+  private path: typeof nodePath;
+
+  private execute: typeof import("node:child_process").execFile | undefined;
+
+  private extraEnv: () => Record<string, string>;
+
+  private resolveExecutable: (command: string) => string | null;
+
+  private store: AgentSessionStore;
+
+  settings: {
+    agentsEnabled: boolean;
+    worktreeRoot: string;
+    maxConcurrent: number;
+    enabledAdapters: string[];
+    [key: string]: unknown;
+  };
+
+  tasks: Map<string, AgentTask>;
+
+  queue: string[];
+
+  active: Map<string, ActiveProcess>;
+
+  shuttingDown: boolean;
+
+  private clearInterval: (timer: unknown) => void;
+
+  private pollTimer: unknown;
+
   constructor({
     storagePath,
     repositoryWorkspace,
     createPty,
     emit = () => {},
-    idFactory = () => crypto.randomUUID(),
+    idFactory = () => nodeCrypto.randomUUID(),
     now = () => new Date().toISOString(),
     nowMs = () => Date.now(),
     adapterDetectionTtl = 60_000,
     setInterval: setIntervalFn = setInterval,
     clearInterval: clearIntervalFn = clearInterval,
     fileSystem = fs,
-    pathModule = path,
+    pathModule = nodePath,
     execute,
     extraEnv = () => ({}),
     resolveExecutable = resolveAgentExecutable
+  }: {
+    storagePath?: string;
+    repositoryWorkspace?: {
+      list: () => Array<{ path: string }>;
+      getGitService: (repositoryPath: string) => {
+        getWorktrees: () => Promise<Array<{ path: string; branch?: string }>>;
+        createManagedWorktree: (options: Record<string, unknown>) => Promise<unknown>;
+      };
+      addTrustedRepository: (path: string) => unknown;
+      [key: string]: unknown;
+    };
+    createPty?: (command: string, args: string[], options: Record<string, unknown>) => PtyProcess;
+    emit?: (event: string, payload: unknown) => void;
+    idFactory?: () => string;
+    now?: () => string;
+    nowMs?: () => number;
+    adapterDetectionTtl?: number;
+    setInterval?: (handler: () => void, timeout: number) => unknown;
+    clearInterval?: (timer: unknown) => void;
+    fileSystem?: typeof fs;
+    pathModule?: typeof nodePath;
+    execute?: typeof import("node:child_process").execFile;
+    extraEnv?: () => Record<string, string>;
+    resolveExecutable?: (command: string) => string | null;
   } = {}) {
     if (!repositoryWorkspace) throw new Error('Repository workspace is required');
     if (typeof createPty !== 'function') throw new Error('PTY factory is required');
@@ -175,7 +284,7 @@ class AgentSessionService {
     return true;
   }
 
-  async createTask(repositoryPath, options = {}) {
+  async createTask(repositoryPath: string, options: Record<string, unknown> = {}) {
     this._assertAgentsEnabled();
     this._validateRepository(repositoryPath);
     const input = this._validateTaskOptions(options);
@@ -186,8 +295,11 @@ class AgentSessionService {
     const branch = input.branch || `agent/${slug}-${shortId}`;
     this._validateBranch(branch);
     const repositoryDirectory = slugify(this.path.basename(repositoryPath));
-    const worktreePath = options.authorizedDestination
-      ? this.path.resolve(options.authorizedDestination)
+    const authorizedDestination = typeof options.authorizedDestination === 'string'
+      ? options.authorizedDestination
+      : null;
+    const worktreePath = authorizedDestination
+      ? this.path.resolve(authorizedDestination)
       : this.path.join(this.settings.worktreeRoot, repositoryDirectory, `${slug}-${shortId}`);
     if (!this.path.isAbsolute(worktreePath) || /[\0\r\n]/.test(worktreePath)) {
       throw new Error('Invalid worktree destination');
@@ -210,7 +322,7 @@ class AgentSessionService {
     });
   }
 
-  async createTaskForWorktree(repositoryPath, worktreePath, options = {}) {
+  async createTaskForWorktree(repositoryPath: string, worktreePath: string, options: Record<string, unknown> = {}) {
     this._assertAgentsEnabled();
     this._validateRepository(repositoryPath);
     const input = this._validateTaskOptions(options);
@@ -227,8 +339,8 @@ class AgentSessionService {
     });
   }
 
-  _createTaskRecord(input) {
-    this._assertWorktreeAvailable(input.worktreePath);
+  _createTaskRecord(input: Record<string, unknown>) {
+    this._assertWorktreeAvailable(input.worktreePath as string);
     const timestamp = this.now();
     const task = {
       id: input.id,
@@ -338,7 +450,7 @@ class AgentSessionService {
   }
 
   _runSetup(task, recipe) {
-    return new Promise((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
       const pty = this.createPty(recipe.command, recipe.args, this._ptyOptions(task.worktreePath));
       const active = this.active.get(task.id);
       if (!active) return reject(new Error('Task was stopped'));
@@ -412,7 +524,7 @@ class AgentSessionService {
     if (typeof value !== 'string' || value.length > TERMINAL_INPUT_LIMIT) throw new Error('Terminal input is too large');
     const active = this.active.get(taskId);
     if (!active?.pty) throw new Error('Agent terminal is not active');
-    active.pty.write(value);
+    (active.pty as PtyProcess).write?.(value);
   }
 
   resizeTerminal(taskId, cols, rows) {
@@ -421,7 +533,7 @@ class AgentSessionService {
     }
     const active = this.active.get(taskId);
     if (!active?.pty) throw new Error('Agent terminal is not active');
-    active.pty.resize(cols, rows);
+    (active.pty as PtyProcess).resize?.(cols, rows);
   }
 
   acknowledgeAttention(taskId) {
@@ -452,7 +564,7 @@ class AgentSessionService {
     task.status = 'stopping';
     this._record(task, 'stopping');
     this._emitTask(task);
-    active.pty?.kill();
+    (active.pty as PtyProcess | undefined)?.kill?.();
     return publicTask(task);
   }
 
@@ -541,7 +653,7 @@ class AgentSessionService {
         this._record(task, 'interrupted');
       }
       active.forceInterrupted = true;
-      try { active.pty?.kill(); } catch { /* best effort */ }
+      try { (active.pty as PtyProcess | undefined)?.kill?.(); } catch { /* best effort */ }
     }
     this.active.clear();
     this.queue = [];
@@ -567,7 +679,7 @@ class AgentSessionService {
         this._emitTask(task);
       }
       active.stopRequested = true;
-      try { active.pty?.write('\u0003'); } catch { /* best effort */ }
+      try { (active.pty as PtyProcess | undefined)?.write?.('\u0003'); } catch { /* best effort */ }
     }
     this._persist();
     const deadline = Date.now() + Math.max(0, timeoutMs);
@@ -582,13 +694,11 @@ class AgentSessionService {
         this._emitTask(task);
       }
       active.forceInterrupted = true;
-      try { active.pty?.kill(); } catch { /* best effort */ }
+      try { (active.pty as PtyProcess | undefined)?.kill?.(); } catch { /* best effort */ }
     }
     this.active.clear();
     this._persist();
   }
 }
 
-module.exports = AgentSessionService;
-module.exports.slugify = slugify;
-module.exports.ACTIVE_STATUSES = ACTIVE_STATUSES;
+
