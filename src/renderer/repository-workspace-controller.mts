@@ -1,5 +1,55 @@
-/* exported RepositoryWorkspaceController */
-class RepositoryWorkspaceController {
+export interface RepositoryEntry {
+  path: string;
+  name?: string;
+}
+
+export interface RepositoryWorkspaceCallbacks {
+  syncRemoteBusyUI: () => void;
+  restoreWorkspaceMode: (repoPath: string) => void;
+  loadStashes: (repoPath: string) => Promise<unknown>;
+  loadTags: (repoPath: string) => Promise<unknown>;
+  loadWorktreeAgents?: (repo: RepositoryEntry) => Promise<unknown>;
+  updateStatus: (repoPath: string, loadSession: unknown) => Promise<unknown>;
+  syncCurrentRepositoryState: (repoPath: string) => string | null | undefined;
+}
+
+export interface RepositoryWorkspaceComponents {
+  welcome: { hide: () => void; markStep?: (step: string) => void };
+  graphView: { load: (repoPath: string) => Promise<void>; select: (hash: string) => void };
+  branchList: { load: (repoPath: string, loadSession: unknown) => Promise<void> };
+  changes: { load: (repoPath: string) => Promise<void> };
+  pullRequests: { load: (repoPath: string, loadSession: unknown) => Promise<void> };
+  diffViewer: { clear: () => void };
+  statusBar: { setBranch: (label: string) => void; setRepo: (name: string) => void };
+  conflict: { open: (operationState: unknown) => Promise<void> };
+}
+
+type WorkspaceBridge = {
+  platform?: string;
+} & Record<string, unknown>;
+
+export interface RepositoryWorkspaceDependencies {
+  bridge: WorkspaceBridge;
+  document: Document;
+  translate: (key: string, options?: Record<string, unknown>) => string;
+  state: { repo: RepositoryEntry | null };
+  components: RepositoryWorkspaceComponents;
+  createLoadSession: (bridge: WorkspaceBridge, repoPath: string) => {
+    operationState: () => Promise<{ type?: string }>;
+  };
+  callbacks: RepositoryWorkspaceCallbacks;
+}
+
+export class RepositoryWorkspaceController {
+  bridge: WorkspaceBridge;
+  document: Document;
+  translate: (key: string, options?: Record<string, unknown>) => string;
+  state: { repo: RepositoryEntry | null };
+  components: RepositoryWorkspaceComponents;
+  createLoadSession: RepositoryWorkspaceDependencies['createLoadSession'];
+  callbacks: RepositoryWorkspaceCallbacks;
+  loadToken: number;
+
   constructor({
     bridge,
     document,
@@ -8,7 +58,7 @@ class RepositoryWorkspaceController {
     components,
     createLoadSession,
     callbacks
-  }) {
+  }: RepositoryWorkspaceDependencies) {
     this.bridge = bridge;
     this.document = document;
     this.translate = translate;
@@ -19,19 +69,19 @@ class RepositoryWorkspaceController {
     this.loadToken = 0;
   }
 
-  pathKey(value) {
+  pathKey(value: unknown): string {
     const normalized = String(value);
     return this.bridge?.platform === 'win32'
       ? normalized.toLocaleLowerCase('en-US')
       : normalized;
   }
 
-  isCurrentRepository(repoPath) {
+  isCurrentRepository(repoPath: string): boolean {
     const current = this.state.repo?.path;
     return Boolean(current) && this.pathKey(repoPath) === this.pathKey(current);
   }
 
-  async open(repo, options = {}) {
+  async open(repo: RepositoryEntry, options: { selectHash?: string } = {}): Promise<void> {
     const loadToken = ++this.loadToken;
     const loadSession = this.createLoadSession(this.bridge, repo.path);
     this.state.repo = repo;
@@ -78,7 +128,7 @@ class RepositoryWorkspaceController {
     }
   }
 
-  setLoading(loading) {
+  setLoading(loading: boolean): void {
     const workspace = this.document.getElementById('workspace');
     workspace?.classList.toggle('is-project-loading', loading);
     workspace?.setAttribute('aria-busy', String(loading));
@@ -91,7 +141,7 @@ class RepositoryWorkspaceController {
     this.document.getElementById('detail-panel')?.setAttribute('aria-busy', String(loading));
   }
 
-  setInteractive() {
+  setInteractive(): void {
     const workspace = this.document.getElementById('workspace');
     if (workspace) workspace.dataset.loadState = 'interactive';
     this.document
@@ -101,10 +151,17 @@ class RepositoryWorkspaceController {
     this.document.getElementById('detail-panel')?.setAttribute('aria-busy', 'false');
   }
 
-  destroy() {
+  destroy(): void {
     this.loadToken += 1;
     this.setLoading(false);
   }
 }
 
-if (typeof module !== 'undefined') module.exports = RepositoryWorkspaceController;
+if (typeof window !== 'undefined') {
+  (window as unknown as { RepositoryWorkspaceController: typeof RepositoryWorkspaceController }).RepositoryWorkspaceController = RepositoryWorkspaceController;
+}
+
+declare const module: { exports: unknown } | undefined;
+if (typeof module !== 'undefined' && (module as { exports?: unknown }).exports) {
+  (module as { exports: unknown }).exports = RepositoryWorkspaceController;
+}

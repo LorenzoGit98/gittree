@@ -1,5 +1,55 @@
-/* exported WorkspaceStateController */
-class WorkspaceStateController {
+export type WorkspaceMode = 'history' | 'changes' | 'pullRequests';
+export type InspectorState = 'open' | 'closed' | 'maximized';
+
+export interface WorkspaceStateDependencies {
+  document: Document;
+  storage: Storage;
+  translate: (key: string) => string;
+  panelMotion: {
+    transition: (
+      name: string,
+      options: {
+        opening: boolean;
+        animate: boolean;
+        applyState: () => void;
+      }
+    ) => void;
+  };
+  state: { repo?: { path?: string } | null };
+  components: Record<string, { setActive?: (active: boolean) => void; setInspectorExpanded?: (expanded: boolean) => void } | undefined>;
+  viewportWidth: () => number;
+  computedStyle: (element: Element) => CSSStyleDeclaration;
+  setTimer?: (callback: () => void, delay: number) => unknown;
+  clearTimer?: (timer: unknown) => void;
+  onModeChange?: (mode: WorkspaceMode) => void;
+  onInspectorStateChange?: (state: InspectorState) => void;
+}
+
+interface SidebarSectionElements {
+  header: HTMLElement;
+  body: HTMLElement;
+  arrow: HTMLElement;
+}
+
+export class WorkspaceStateController {
+  document: Document;
+  storage: Storage;
+  translate: (key: string) => string;
+  panelMotion: WorkspaceStateDependencies['panelMotion'];
+  state: WorkspaceStateDependencies['state'];
+  components: WorkspaceStateDependencies['components'];
+  viewportWidth: () => number;
+  computedStyle: (element: Element) => CSSStyleDeclaration;
+  setTimer: (callback: () => void, delay: number) => unknown;
+  clearTimer: (timer: unknown) => void;
+  onModeChange: (mode: WorkspaceMode) => void;
+  onInspectorStateChange: (state: InspectorState) => void;
+  mode: WorkspaceMode;
+  inspectorState: InspectorState;
+  bindings: Array<{ element: HTMLElement; eventName: string; listener: EventListenerOrEventListenerObject }>;
+  restoreTimers: Set<unknown>;
+  mounted: boolean;
+
   constructor({
     document,
     storage,
@@ -10,10 +60,10 @@ class WorkspaceStateController {
     viewportWidth,
     computedStyle,
     setTimer = (callback, delay) => setTimeout(callback, delay),
-    clearTimer = timer => clearTimeout(timer),
+    clearTimer = timer => clearTimeout(timer as ReturnType<typeof setTimeout>),
     onModeChange = () => {},
     onInspectorStateChange = () => {}
-  }) {
+  }: WorkspaceStateDependencies) {
     this.document = document;
     this.storage = storage;
     this.translate = translate;
@@ -33,7 +83,7 @@ class WorkspaceStateController {
     this.mounted = false;
   }
 
-  mount() {
+  mount(): void {
     if (this.mounted) return;
     this.mounted = true;
     this.bindWorkspaceModes();
@@ -51,35 +101,35 @@ class WorkspaceStateController {
     this.bindPersistentSidebarSections();
   }
 
-  bind(element, eventName, listener) {
+  bind(element: HTMLElement | null, eventName: string, listener: EventListenerOrEventListenerObject): void {
     if (!element) return;
     element.addEventListener(eventName, listener);
     this.bindings.push({ element, eventName, listener });
   }
 
-  bindWorkspaceModes() {
-    this.document.querySelectorAll('[data-workspace-mode]').forEach(button => {
+  bindWorkspaceModes(): void {
+    this.document.querySelectorAll<HTMLElement>('[data-workspace-mode]').forEach(button => {
       this.bind(button, 'click', () => this.setMode(button.dataset.workspaceMode));
     });
   }
 
-  modeKey(repoPath = this.state.repo?.path) {
+  modeKey(repoPath: string | undefined | null = this.state.repo?.path): string {
     return `gittree.workspace.mode:${repoPath || ''}`;
   }
 
-  restoreMode(repoPath) {
+  restoreMode(repoPath: string): WorkspaceMode {
     const savedMode = this.storage.getItem(this.modeKey(repoPath)) || 'history';
     this.setMode(savedMode, false);
     return this.mode;
   }
 
-  setMode(mode, persist = true) {
-    const safeMode = ['history', 'changes', 'pullRequests'].includes(mode)
-      ? mode
+  setMode(mode: string, persist = true): void {
+    const safeMode: WorkspaceMode = (['history', 'changes', 'pullRequests'] as const).includes(mode as WorkspaceMode)
+      ? mode as WorkspaceMode
       : 'history';
     this.mode = safeMode;
     this.onModeChange(safeMode);
-    this.document.querySelectorAll('[data-workspace-mode]').forEach(button => {
+    this.document.querySelectorAll<HTMLElement>('[data-workspace-mode]').forEach(button => {
       const active = button.dataset.workspaceMode === safeMode;
       button.classList.toggle('active', active);
       button.setAttribute('aria-selected', String(active));
@@ -106,20 +156,20 @@ class WorkspaceStateController {
         ? 'changes.title'
         : 'pullRequests.title';
     const title = this.document.getElementById('workspace-title');
-    const eyebrow = title.querySelector('.eyebrow');
-    const heading = title.querySelector('h2');
+    const eyebrow = title.querySelector('.eyebrow') as HTMLElement;
+    const heading = title.querySelector('h2') as HTMLElement;
     eyebrow.dataset.i18n = eyebrowKey;
     heading.dataset.i18n = titleKey;
     eyebrow.textContent = this.translate(eyebrowKey);
     heading.textContent = this.translate(titleKey);
-    this.components.changes?.setActive(safeMode === 'changes');
-    this.components.pullRequests?.setActive(safeMode === 'pullRequests');
+    this.components.changes?.setActive?.(safeMode === 'changes');
+    this.components.pullRequests?.setActive?.(safeMode === 'pullRequests');
     if (persist && this.state.repo) {
       this.storage.setItem(this.modeKey(), safeMode);
     }
   }
 
-  bindSidebar() {
+  bindSidebar(): void {
     const toggle = () => {
       const workspace = this.document.getElementById('workspace-body');
       this.setSidebarCollapsed(!workspace.classList.contains('sidebar-collapsed'));
@@ -128,7 +178,7 @@ class WorkspaceStateController {
     this.bind(this.document.getElementById('btn-collapse-sidebar'), 'click', toggle);
   }
 
-  setSidebarCollapsed(collapsed, persist = true) {
+  setSidebarCollapsed(collapsed: boolean, persist = true): void {
     const workspace = this.document.getElementById('workspace-body');
     const toggleButton = this.document.getElementById('btn-toggle-sidebar');
     const changed = workspace.classList.contains('sidebar-collapsed') !== collapsed;
@@ -146,7 +196,7 @@ class WorkspaceStateController {
     }
   }
 
-  bindInspector() {
+  bindInspector(): void {
     this.bind(this.document.getElementById('btn-toggle-inspector'), 'click', () => {
       const inspector = this.document.getElementById('detail-panel');
       const hiddenByResponsiveLayout = this.inspectorState !== 'closed' &&
@@ -165,18 +215,20 @@ class WorkspaceStateController {
     this.bind(this.document.getElementById('btn-maximize-inspector'), 'click', () => {
       this.toggleInspectorMaximized();
     });
-    this.bind(this.document.querySelector('.detail-panel-header'), 'dblclick', event => {
-      if (event.target.closest('button')) return;
+    this.bind(this.document.querySelector('.detail-panel-header') as HTMLElement | null, 'dblclick', event => {
+      if ((event.target as HTMLElement).closest('button')) return;
       this.toggleInspectorMaximized();
     });
   }
 
-  toggleInspectorMaximized() {
+  toggleInspectorMaximized(): void {
     this.setInspectorState(this.inspectorState === 'maximized' ? 'open' : 'maximized');
   }
 
-  setInspectorState(state, persist = true) {
-    const safeState = ['open', 'closed', 'maximized'].includes(state) ? state : 'open';
+  setInspectorState(state: string, persist = true): void {
+    const safeState: InspectorState = (['open', 'closed', 'maximized'] as const).includes(state as InspectorState)
+      ? state as InspectorState
+      : 'open';
     const previousState = this.inspectorState;
     const workspace = this.document.getElementById('workspace-body');
     const toggleButton = this.document.getElementById('btn-toggle-inspector');
@@ -198,13 +250,13 @@ class WorkspaceStateController {
       }
     });
 
-    const maximizeIcon = maximizeButton.querySelector('i');
+    const maximizeIcon = maximizeButton.querySelector('i') as HTMLElement;
     maximizeIcon.className = isMaximized ? 'ph ph-arrows-in-simple' : 'ph ph-arrows-out-simple';
     maximizeButton.dataset.i18nTitle = isMaximized ? 'details.restore' : 'details.maximize';
     maximizeButton.title = this.translate(maximizeButton.dataset.i18nTitle);
 
     if (previousState !== safeState) {
-      this.components.diffViewer?.setInspectorExpanded(isMaximized);
+      this.components.diffViewer?.setInspectorExpanded?.(isMaximized);
       if (previousState === 'maximized' && !isMaximized) {
         this.animatePanelRestore(workspace);
       }
@@ -214,7 +266,7 @@ class WorkspaceStateController {
     }
   }
 
-  animatePanelRestore(workspace) {
+  animatePanelRestore(workspace: HTMLElement): void {
     workspace.classList.add('is-restoring');
     const timer = this.setTimer(() => {
       this.restoreTimers.delete(timer);
@@ -223,22 +275,22 @@ class WorkspaceStateController {
     this.restoreTimers.add(timer);
   }
 
-  bindPersistentSidebarSections() {
+  bindPersistentSidebarSections(): void {
     const storageKey = 'gittree.sidebar.sections';
-    let savedSections = null;
+    let savedSections: Set<string> | null = null;
     try {
-      const parsed = JSON.parse(this.storage.getItem(storageKey));
-      if (Array.isArray(parsed)) savedSections = new Set(parsed);
+      const parsed: unknown = JSON.parse(this.storage.getItem(storageKey) ?? 'null');
+      if (Array.isArray(parsed)) savedSections = new Set(parsed as string[]);
     } catch {
       // Invalid stored sections are ignored.
     }
 
-    const headers = [...this.document.querySelectorAll('.sidebar-section-header.collapsible')];
+    const headers = [...this.document.querySelectorAll<HTMLElement>('.sidebar-section-header.collapsible')];
     headers.forEach(header => {
       const section = header.parentElement;
       const sectionId = section.dataset.section;
-      const body = section.querySelector('.sidebar-section-body');
-      const arrow = header.querySelector('.collapse-arrow');
+      const body = section.querySelector('.sidebar-section-body') as HTMLElement;
+      const arrow = header.querySelector('.collapse-arrow') as HTMLElement;
       if (!sectionId || !body || !arrow) return;
 
       const collapsed = savedSections
@@ -257,14 +309,14 @@ class WorkspaceStateController {
     });
   }
 
-  applySidebarSectionState({ header, body, arrow }, collapsed) {
+  applySidebarSectionState({ header, body, arrow }: SidebarSectionElements, collapsed: boolean): void {
     body.classList.toggle('collapsed', collapsed);
     arrow.classList.toggle('collapsed', collapsed);
     header.classList.toggle('collapsed', collapsed);
     header.setAttribute('aria-expanded', String(!collapsed));
   }
 
-  destroy() {
+  destroy(): void {
     for (const { element, eventName, listener } of this.bindings) {
       element.removeEventListener(eventName, listener);
     }
@@ -275,4 +327,11 @@ class WorkspaceStateController {
   }
 }
 
-if (typeof module !== 'undefined') module.exports = WorkspaceStateController;
+if (typeof window !== 'undefined') {
+  (window as unknown as { WorkspaceStateController: typeof WorkspaceStateController }).WorkspaceStateController = WorkspaceStateController;
+}
+
+declare const module: { exports: unknown } | undefined;
+if (typeof module !== 'undefined' && (module as { exports?: unknown }).exports) {
+  (module as { exports: unknown }).exports = WorkspaceStateController;
+}
