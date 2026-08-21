@@ -2,7 +2,7 @@
   "name": "gittree",
   "version": "0.21.4",
   "description": "A fast, open-source Git desktop client for visual history and local-first repository management.",
-  "main": "src/main/main.js",
+  "main": "src/main/main.mts",
   "scripts": {
     "start": "electron .",
     "postinstall": "electron-builder install-app-deps",

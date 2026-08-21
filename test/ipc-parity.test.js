@@ -20,8 +20,14 @@ function readIpcFile(name) {
 }
 
 test('every preload invoke has exactly one registered main-process handler', () => {
-  const preload = fs.readFileSync(path.join(root, 'src', 'preload.js'), 'utf8');
-  const main = fs.readFileSync(path.join(root, 'src', 'main', 'main.js'), 'utf8');
+  const preloadPath = fs.existsSync(path.join(root, 'src', 'preload.mts'))
+    ? path.join(root, 'src', 'preload.mts')
+    : path.join(root, 'src', 'preload.js');
+  const preload = fs.readFileSync(preloadPath, 'utf8');
+  const mainPath = fs.existsSync(path.join(root, 'src', 'main', 'main.mts'))
+    ? path.join(root, 'src', 'main', 'main.mts')
+    : path.join(root, 'src', 'main', 'main.js');
+  const main = fs.readFileSync(mainPath, 'utf8');
   const gitHandlers = readIpcFile('git-handlers');
   const hostingHandlers = readIpcFile('hosting-handlers');
   const repositoryHandlers = readIpcFile('repository-handlers');
@@ -61,7 +67,10 @@ test('shared IPC channel contract matches the preload invoke surface', () => {
   const declared = [...new Set(
     matches(shared, /['"]([a-z]+:[^'"]+)['"]/g)
   )];
-  const preload = fs.readFileSync(path.join(root, 'src', 'preload.js'), 'utf8');
+  const preloadPath = fs.existsSync(path.join(root, 'src', 'preload.mts'))
+    ? path.join(root, 'src', 'preload.mts')
+    : path.join(root, 'src', 'preload.js');
+  const preload = fs.readFileSync(preloadPath, 'utf8');
   const invoked = matches(preload, /ipcRenderer\.invoke\(\s*'([^']+)'/g);
 
   assert.equal(declared.length, 148);
@@ -70,7 +79,10 @@ test('shared IPC channel contract matches the preload invoke surface', () => {
 });
 
 test('all managed Git channels use the validating registrar', () => {
-  const preload = fs.readFileSync(path.join(root, 'src', 'preload.js'), 'utf8');
+  const preloadPath = fs.existsSync(path.join(root, 'src', 'preload.mts'))
+    ? path.join(root, 'src', 'preload.mts')
+    : path.join(root, 'src', 'preload.js');
+  const preload = fs.readFileSync(preloadPath, 'utf8');
   const gitHandlers = readIpcFile('git-handlers');
   const managedGitChannels = matches(preload, /ipcRenderer\.invoke\(\s*'(git:[^']+)'/g)
     .filter(channel => !['git:is-repo', 'git:clone'].includes(channel));
