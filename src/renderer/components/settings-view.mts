@@ -1,9 +1,67 @@
-/* exported SettingsView */
-class SettingsView {
-  constructor(app) {
+interface AgentSettingsPayload {
+  agentsEnabled?: boolean;
+  worktreeRoot?: string;
+  maxConcurrent?: number;
+  enabledAdapters?: string[];
+}
+
+interface AiSettingsPayload {
+  provider?: string;
+  baseUrl?: string;
+  model?: string;
+  keyConfigured?: boolean;
+  language?: string;
+}
+
+interface SettingsProfile {
+  id: string;
+  label: string;
+  name: string;
+  email: string;
+  source?: string;
+}
+
+interface AgentAdapterInfo {
+  id: string;
+  label: string;
+  version?: string;
+  available?: boolean;
+}
+
+type SettingsApp = {
+  state: { repo?: { path?: string } | null };
+  showToast: (message: unknown, type?: string) => void;
+  refresh: (options?: Record<string, unknown>) => Promise<void>;
+  pushInspectorPayload?: () => void;
+  confirmDialog: (title: string, message: string, actionLabel: string, danger?: boolean) => Promise<unknown>;
+  shortcutLabel: (action: string) => string;
+  readToolbarVisibility: () => Record<string, boolean>;
+  applyToolbarVisibility: () => void;
+  components: {
+    branchList?: { metadata?: Record<string, unknown> | null; load: (repoPath: string) => void };
+  } & Record<string, unknown>;
+};
+
+export class SettingsView {
+  app: SettingsApp;
+  overlay: HTMLElement;
+  dialog: HTMLElement;
+  autoFetchStorageKey: string;
+  profilesStorageKey: string;
+  assignmentsStorageKey: string;
+  inFlight: Set<string>;
+  timer: number | null;
+  renderGeneration: number;
+  updateState: Record<string, unknown> | null;
+  unsubscribeUpdates: () => void;
+  activeSection: string | null;
+  // Present in the original source as an unresolved call site; kept as-is.
+  declare confirmVaultReset: (() => Promise<unknown>) | undefined;
+
+  constructor(app: SettingsApp) {
     this.app = app;
-    this.overlay = document.getElementById('modal-overlay');
-    this.dialog = document.getElementById('modal-dialog');
+    this.overlay = document.getElementById('modal-overlay') as HTMLElement;
+    this.dialog = document.getElementById('modal-dialog') as HTMLElement;
     this.autoFetchStorageKey = 'gittree.settings.autoFetch';
     this.profilesStorageKey = 'gittree.settings.gitProfiles';
     this.assignmentsStorageKey = 'gittree.settings.profileAssignments';
@@ -11,7 +69,8 @@ class SettingsView {
     this.timer = null;
     this.renderGeneration = 0;
     this.updateState = null;
-    this.unsubscribeUpdates = window.gitTree.onUpdateState(state => this.handleUpdateState(state));
+    this.activeSection = null;
+    this.unsubscribeUpdates = window.gitTree.onUpdateState((state: Record<string, unknown>) => this.handleUpdateState(state));
     document.addEventListener('keydown', event => {
       if (event.key === 'Escape' && this.dialog.classList.contains('settings-dialog')) {
         event.preventDefault();
@@ -20,12 +79,12 @@ class SettingsView {
     });
   }
 
-  init() {
+  init(): void {
     if (this.timer) return;
     this.timer = window.setInterval(() => this.tick(), 30000);
   }
 
-  async open(section = null, { scope = 'full' } = {}) {
+  async open(section: string | null = null, { scope = 'full' }: { scope?: string } = {}): Promise<void> {
     const repo = this.app.state.repo;
     const generation = this.renderGeneration += 1;
     const alreadyOpen = !this.overlay.classList.contains('is-hidden')
@@ -40,20 +99,20 @@ class SettingsView {
       this.overlay.classList.remove('is-hidden');
     }
     try {
-      let metadata = this.app.components.branchList?.metadata;
+      let metadata = this.app.components.branchList?.metadata as Record<string, unknown> | null | undefined;
       if (repo && !metadata) {
-        const response = await window.gitTree.getBranchMetadata(repo.path);
-        metadata = response?.error ? null : response;
+        const response = await window.gitTree.getBranchMetadata(repo.path) as { error?: string } | undefined;
+        metadata = response?.error ? null : response as Record<string, unknown>;
       }
       const remotes = repo ? await this.readRemotes(repo.path) : [];
-      const agentSettings = scope === 'about'
+      const agentSettings = (scope === 'about'
         ? null
-        : await window.gitTree.getAgentSettings?.().catch(() => null);
-      const aiSettings = scope === 'about'
+        : await window.gitTree.getAgentSettings?.().catch(() => null)) as AgentSettingsPayload | null;
+      const aiSettings = (scope === 'about'
         ? null
-        : await window.gitTree.getAiSettings?.().catch(() => null);
-    const schedules = this.readObject(this.autoFetchStorageKey);
-    let profiles = this.readArray(this.profilesStorageKey);
+        : await window.gitTree.getAiSettings?.().catch(() => null)) as AiSettingsPayload | null;
+    const schedules: Record<string, unknown> = this.readObject(this.autoFetchStorageKey);
+    let profiles: SettingsProfile[] = this.readArray<SettingsProfile>(this.profilesStorageKey);
     const assignments = this.readObject(this.assignmentsStorageKey);
     const identity = repo ? await this.readRepositoryIdentity(repo.path) : null;
     if (repo && identity?.configured) {
@@ -65,7 +124,7 @@ class SettingsView {
       }
     }
     const repoSchedule = repo
-      ? this.readProjectSchedule(schedules[repo.path], metadata)
+      ? this.readProjectSchedule(schedules[repo.path] as Record<string, unknown> | undefined, metadata)
       : {};
     const assignedProfile = repo ? assignments[repo.path] : '';
     const toolbarVisibility = this.app.readToolbarVisibility();
@@ -356,9 +415,9 @@ class SettingsView {
             </div>
           </div>
           <div class="settings-profile-list">
-            ${profiles.map(profile => this.renderProfile(
+            ${(profiles as SettingsProfile[]).map(profile => this.renderProfile(
                 profile,
-                assignedProfile,
+                assignedProfile as string | undefined,
                 Boolean(repo)
               )).join('') || `<div class="settings-empty">${this.esc(t('settings.noProfiles'))}</div>`}
           </div>
@@ -434,47 +493,47 @@ class SettingsView {
     this.syncAppearanceState();
     this.populateVersion();
     this.selectSection(scope === 'about' ? 'about' : (section || this.activeSection || 'appearance'));
-    this.dialog.querySelector('[data-settings-close]')?.focus();
+    this.dialog.querySelector<HTMLElement>('[data-settings-close]')?.focus();
     if (scope !== 'about') this.hydrateAgentAdapters(agentSettings, generation);
     } catch (error) {
       if (this.dialog.classList.contains('settings-dialog')) this.close();
-      this.app.showToast(error?.message || t('common.error'), 'error');
+      this.app.showToast((error as Error)?.message || t('common.error'), 'error');
     }
   }
 
-  renderNavigationItem(section, icon, label) {
+  renderNavigationItem(section: string, icon: string, label: string): string {
     return `<button class="settings-nav-item" type="button" data-settings-nav="${this.esc(section)}">
       <i class="ph ph-${this.esc(icon)}" aria-hidden="true"></i>
       <span>${this.esc(label)}</span>
     </button>`;
   }
 
-  applyScope(scope) {
+  applyScope(scope: string): void {
     const aboutOnly = scope === 'about';
     this.dialog.classList.toggle('settings-dialog-about', aboutOnly);
     if (!aboutOnly) return;
     this.dialog.querySelectorAll('[data-settings-section]').forEach(section => {
-      if (section.dataset.settingsSection !== 'about') section.remove();
+      if ((section as HTMLElement).dataset.settingsSection !== 'about') section.remove();
     });
     this.dialog.querySelectorAll('[data-settings-full-only]').forEach(element => element.remove());
   }
 
-  close() {
+  close(): void {
     this.overlay.classList.add('is-hidden');
     this.overlay.onclick = null;
     this.dialog.className = 'confirm-dialog';
     this.dialog.innerHTML = '';
   }
 
-  async populateVersion() {
+  async populateVersion(): Promise<void> {
     const el = document.getElementById('about-version');
     if (el && window.gitTree.getAppVersion) {
       const v = await window.gitTree.getAppVersion();
-      el.textContent = v;
+      el.textContent = v as string;
     }
     const gitStatus = document.getElementById('about-git-version');
     if (gitStatus && window.gitTree.getGitVersion) {
-      const info = await window.gitTree.getGitVersion();
+      const info = await window.gitTree.getGitVersion() as { supported?: boolean; version?: string; minimum?: string } | undefined;
       if (info && !info.supported) {
         gitStatus.textContent = t('settings.gitVersionWarning', {
           version: info.version || '—',
@@ -485,7 +544,7 @@ class SettingsView {
     }
   }
 
-  renderThemeCard(theme) {
+  renderThemeCard(theme: string): string {
     const label = t(theme === 'light' ? 'settings.themeLight' : 'settings.themeDark');
     return `<button class="settings-theme-card" type="button" data-theme-choice="${theme}" aria-pressed="false">
       <span class="settings-theme-preview settings-theme-preview-${theme}" aria-hidden="true"></span>
@@ -493,7 +552,7 @@ class SettingsView {
     </button>`;
   }
 
-  renderToneSwatch(theme, tone) {
+  renderToneSwatch(theme: string, tone: { id: string; preview: string[] }): string {
     const name = tone.id.charAt(0).toUpperCase() + tone.id.slice(1);
     return `<button class="settings-tone-swatch" type="button"
         data-tone-theme="${theme}" data-tone-choice="${this.esc(tone.id)}"
@@ -505,20 +564,20 @@ class SettingsView {
     </button>`;
   }
 
-  syncAppearanceState() {
+  syncAppearanceState(): void {
     const current = document.documentElement.dataset.theme;
-    this.dialog.querySelectorAll('[data-theme-choice]').forEach(button => {
-      const active = button.dataset.themeChoice === current;
+    this.dialog.querySelectorAll<HTMLElement>('[data-theme-choice]').forEach(button => {
+      const active = (button as HTMLElement).dataset.themeChoice === current;
       button.classList.toggle('is-active', active);
       button.setAttribute('aria-pressed', String(active));
     });
-    this.dialog.querySelectorAll('[data-tone-choice]').forEach(button => {
-      const toneTheme = button.dataset.toneTheme;
-      const toneId = button.dataset.toneChoice;
-      const tone = (Theme.tones[toneTheme] || []).find(t => t.id === toneId);
+    this.dialog.querySelectorAll<HTMLElement>('[data-tone-choice]').forEach(button => {
+      const toneTheme = (button as HTMLElement).dataset.toneTheme;
+      const toneId = (button as HTMLElement).dataset.toneChoice;
+      const tone = ((Theme.tones as unknown as Record<string, Array<{ id: string; preview: string[] }>>)[toneTheme] || []).find(item => item.id === toneId);
       const chips = button.querySelectorAll('.settings-tone-chips i');
       tone?.preview.forEach((color, index) => {
-        if (chips[index]) chips[index].style.background = color;
+        if (chips[index]) (chips[index] as HTMLElement).style.background = color;
       });
       const active = Theme.getTone(toneTheme) === toneId;
       button.classList.toggle('is-active', active);
@@ -526,10 +585,10 @@ class SettingsView {
     });
   }
 
-  renderProjectSchedule(schedule = {}, metadata = {}) {
+  renderProjectSchedule(schedule: Record<string, unknown> = {}, metadata: Record<string, unknown> | null | undefined = {}): string {
     const enabled = Boolean(schedule.enabled);
     const interval = Number(schedule.intervalMinutes) || 15;
-    const remotes = metadata.remotes || [];
+    const remotes = (metadata?.remotes as Array<{ name?: string }> | undefined) || [];
     return `<div class="settings-project-controls">
       <label class="settings-switch">
         <input type="checkbox" data-auto-fetch-project${enabled ? ' checked' : ''}>
@@ -559,7 +618,7 @@ class SettingsView {
     </div>`;
   }
 
-  renderToolbarRow(key, label, detail, checked) {
+  renderToolbarRow(key: string, label: string, detail: string, checked: boolean): string {
     return `<div class="settings-toolbar-row">
       <div class="settings-toolbar-copy">
         <strong>${this.esc(label)}</strong>
@@ -572,16 +631,16 @@ class SettingsView {
     </div>`;
   }
 
-  async readRemotes(repoPath) {
+  async readRemotes(repoPath: string): Promise<Array<{ name?: string; refs?: { push?: string; fetch?: string } }>> {
     try {
-      const result = await window.gitTree.getRemotes(repoPath);
+      const result = await window.gitTree.getRemotes(repoPath) as Array<{ name?: string; refs?: { push?: string; fetch?: string } }>;
       return Array.isArray(result) ? result : [];
     } catch {
       return [];
     }
   }
 
-  renderRemoteRow(remote) {
+  renderRemoteRow(remote: { name?: string; refs?: { push?: string; fetch?: string } }): string {
     const url = remote.refs?.push || remote.refs?.fetch || '';
     return `<div class="settings-remote-row" data-remote-name="${this.esc(remote.name)}">
       <i class="ph ph-cloud" aria-hidden="true"></i>
@@ -603,7 +662,7 @@ class SettingsView {
     </div>`;
   }
 
-  async refreshRemotesList(repo) {
+  async refreshRemotesList(repo: { path?: string }): Promise<void> {
     const container = this.dialog.querySelector('#settings-remotes-list');
     if (!container || !repo) return;
     const remotes = await this.readRemotes(repo.path);
@@ -612,33 +671,34 @@ class SettingsView {
     this.bindRemotes(repo);
   }
 
-  bindRemotes(repo) {
+  bindRemotes(repo: { path?: string } | null): void {
     if (!repo) return;
     const list = this.dialog.querySelector('#settings-remotes-list');
-    const form = this.dialog.querySelector('#settings-remote-form');
+    const form = this.dialog.querySelector('#settings-remote-form') as HTMLFormElement | null;
     if (form) {
       form.onsubmit = async event => {
         event.preventDefault();
-        const name = form.elements.name.value.trim();
-        const url = form.elements.url.value.trim();
+        const elements = form.elements as unknown as Record<string, HTMLInputElement>;
+        const name = elements.name.value.trim();
+        const url = elements.url.value.trim();
         if (!name || !url) return;
-        const result = await window.gitTree.addRemote(repo.path, name, url);
+        const result = await window.gitTree.addRemote(repo.path, name, url) as { error?: string };
         if (result?.error) {
           this.app.showToast(result.error, 'error');
           return;
         }
-        form.elements.name.value = '';
-        form.elements.url.value = '';
+        elements.name.value = '';
+        elements.url.value = '';
         await this.refreshRemotesList(repo);
         this.app.components.branchList?.load(repo.path);
         this.app.showToast(t('settings.remoteAdded', { remote: name }), 'success');
       };
     }
     list?.querySelectorAll('[data-remote-name]').forEach(row => {
-      const name = row.dataset.remoteName;
-      row.querySelectorAll('[data-action]').forEach(button => {
+      const name = (row as HTMLElement).dataset.remoteName;
+      row.querySelectorAll<HTMLElement>('[data-action]').forEach(button => {
         button.onclick = async () => {
-          const action = button.dataset.action;
+          const action = (button as HTMLElement).dataset.action;
           if (action === 'remove') {
             const confirmed = await this.app.confirmDialog(
               t('settings.removeRemoteTitle'),
@@ -647,7 +707,7 @@ class SettingsView {
               true
             );
             if (!confirmed) return;
-            const result = await window.gitTree.removeRemote(repo.path, name);
+            const result = await window.gitTree.removeRemote(repo.path, name) as { error?: string };
             if (result?.error) {
               this.app.showToast(result.error, 'error');
               return;
@@ -662,7 +722,7 @@ class SettingsView {
               name
             );
             if (!nextName || nextName === name) return;
-            const result = await window.gitTree.renameRemote(repo.path, name, nextName);
+            const result = await window.gitTree.renameRemote(repo.path, name, nextName) as { error?: string };
             if (result?.error) {
               this.app.showToast(result.error, 'error');
               return;
@@ -677,7 +737,7 @@ class SettingsView {
               row.querySelector('.settings-remote-url')?.textContent || ''
             );
             if (!url) return;
-            const result = await window.gitTree.setRemoteUrl(repo.path, name, url);
+            const result = await window.gitTree.setRemoteUrl(repo.path, name, url) as { error?: string };
             if (result?.error) {
               this.app.showToast(result.error, 'error');
               return;
@@ -690,7 +750,7 @@ class SettingsView {
     });
   }
 
-  remotePrompt(title, label, value) {
+  remotePrompt(title: string, label: string, value: string): Promise<string | null> {
     return new Promise(resolve => {
       const overlay = document.createElement('div');
       overlay.className = 'repository-picker-overlay';
@@ -716,40 +776,40 @@ class SettingsView {
             </footer>
           </form>
         </section>`;
-      const finish = result => {
+      const finish = (result: string | null) => {
         overlay.remove();
         document.removeEventListener('keydown', keydown);
         resolve(result);
       };
-      const keydown = event => {
+      const keydown = (event: KeyboardEvent) => {
         if (event.key === 'Escape') finish(null);
       };
       document.body.appendChild(overlay);
       overlay.addEventListener('mousedown', event => {
         if (event.target === overlay) finish(null);
       });
-      overlay.querySelector('[data-action="cancel"]').onclick = () => finish(null);
+      overlay.querySelector<HTMLElement>('[data-action="cancel"]').onclick = () => finish(null);
       overlay.querySelector('form').onsubmit = event => {
         event.preventDefault();
-        const input = overlay.querySelector('input');
+        const input = overlay.querySelector<HTMLInputElement>('input');
         const resultValue = input.value.trim();
         if (!resultValue) return;
         finish(resultValue);
       };
       document.addEventListener('keydown', keydown);
-      overlay.querySelector('input').focus();
-      overlay.querySelector('input').select();
+      overlay.querySelector<HTMLInputElement>('input').focus();
+      overlay.querySelector<HTMLInputElement>('input').select();
     });
   }
 
-  focusSection(section) {
+  focusSection(section: string): void {
     this.selectSection(section);
-    const target = this.dialog.querySelector(`[data-settings-section="${section}"]`);
+    const target = this.dialog.querySelector<HTMLElement>(`[data-settings-section="${section}"]`);
     target?.focus({ preventScroll: true });
   }
 
-  selectSection(section) {
-    const sections = [...this.dialog.querySelectorAll('[data-settings-section]')];
+  selectSection(section: string): void {
+    const sections = [...this.dialog.querySelectorAll<HTMLElement>('[data-settings-section]')];
     if (!sections.length) return;
     const selected = sections.some(item => item.dataset.settingsSection === section)
       ? section
@@ -762,14 +822,14 @@ class SettingsView {
       item.setAttribute('tabindex', active ? '-1' : '0');
     });
     this.dialog.querySelectorAll('[data-settings-nav]').forEach(button => {
-      const active = button.dataset.settingsNav === selected;
+      const active = (button as HTMLElement).dataset.settingsNav === selected;
       button.classList.toggle('is-active', active);
       button.toggleAttribute('aria-current', active);
     });
     this.dialog.querySelector('.settings-scroll')?.scrollTo({ top: 0 });
   }
 
-  renderProfile(profile, assignedProfile, hasRepository) {
+  renderProfile(profile: SettingsProfile, assignedProfile: string | undefined, hasRepository: boolean): string {
     const assigned = profile.id === assignedProfile;
     return `<div class="settings-profile${assigned ? ' is-assigned' : ''}">
       <div class="settings-profile-avatar" aria-hidden="true">
@@ -795,7 +855,7 @@ class SettingsView {
     </div>`;
   }
 
-  renderShortcut(label, action, description) {
+  renderShortcut(label: string, action: string, description: string): string {
     return `<div class="settings-shortcut-row">
       <span class="settings-shortcut-copy">
         <strong>${this.esc(label)}</strong>
@@ -805,11 +865,11 @@ class SettingsView {
     </div>`;
   }
 
-  async exportDiagnostics(button, status) {
+  async exportDiagnostics(button: HTMLButtonElement, status: HTMLElement): Promise<void> {
     button.disabled = true;
     status.textContent = t('settings.exportingDiagnostics');
     try {
-      const result = await window.gitTree.exportDiagnostics();
+      const result = await window.gitTree.exportDiagnostics() as { canceled?: boolean; error?: string };
       if (result?.canceled) {
         status.textContent = '';
         return;
@@ -822,7 +882,7 @@ class SettingsView {
       status.textContent = t('settings.diagnosticsExported');
       this.app.showToast(t('settings.diagnosticsExported'), 'success');
     } catch (error) {
-      const message = error?.message || t('settings.diagnosticsFailed');
+      const message = (error as Error)?.message || t('settings.diagnosticsFailed');
       status.textContent = message;
       this.app.showToast(message, 'error');
     } finally {
@@ -830,9 +890,9 @@ class SettingsView {
     }
   }
 
-  bindSettingsEvents(repo) {
-    this.dialog.querySelector('[data-settings-close]').onclick = () => this.close();
-    this.dialog.querySelectorAll('[data-settings-nav]').forEach(button => {
+  bindSettingsEvents(repo: { path?: string } | null): void {
+    (this.dialog.querySelector('[data-settings-close]') as HTMLElement).onclick = () => this.close();
+    this.dialog.querySelectorAll<HTMLElement>('[data-settings-nav]').forEach(button => {
       button.onclick = () => this.selectSection(button.dataset.settingsNav);
     });
     this.overlay.onclick = event => {
@@ -841,42 +901,42 @@ class SettingsView {
 
     const repoLink = this.dialog.querySelector('#about-repo-link');
     if (repoLink) {
-      repoLink.onclick = event => {
+      (repoLink as HTMLElement).onclick = event => {
         event.preventDefault();
         window.gitTree.openExternal('https://github.com/giannoccarol/gittree');
       };
     }
 
-    const exportDiagnosticsButton = this.dialog.querySelector('#btn-export-diagnostics');
+    const exportDiagnosticsButton = this.dialog.querySelector('#btn-export-diagnostics') as HTMLButtonElement | null;
     const exportDiagnosticsStatus = this.dialog.querySelector('#export-diagnostics-status');
     if (exportDiagnosticsButton && exportDiagnosticsStatus) {
       exportDiagnosticsButton.onclick = () => this.exportDiagnostics(
         exportDiagnosticsButton,
-        exportDiagnosticsStatus
+        exportDiagnosticsStatus as HTMLElement
       );
     }
 
-    const vaultResetButton = this.dialog.querySelector('#settings-vault-reset');
+    const vaultResetButton = this.dialog.querySelector('#settings-vault-reset') as HTMLButtonElement | null;
     if (vaultResetButton) {
       vaultResetButton.onclick = async () => {
         if (!await this.confirmVaultReset()) return;
-        const result = await window.gitTree.resetHostingVault();
+        const result = await window.gitTree.resetHostingVault() as { error?: string };
         if (result?.error) { this.app.showToast(result.error, 'error'); return; }
         this.app.showToast(t('settings.vaultResetDone'), 'success');
       };
     }
 
-    this.dialog.querySelectorAll('[data-theme-choice]').forEach(button => {
+    this.dialog.querySelectorAll<HTMLElement>('[data-theme-choice]').forEach(button => {
       button.onclick = () => {
-        Theme.apply(button.dataset.themeChoice, true);
+        Theme.apply((button as HTMLElement).dataset.themeChoice, true);
         this.syncAppearanceState();
         this.app.pushInspectorPayload?.();
       };
     });
-    this.dialog.querySelectorAll('[data-tone-choice]').forEach(button => {
+    this.dialog.querySelectorAll<HTMLElement>('[data-tone-choice]').forEach(button => {
       button.onclick = () => {
-        const toneTheme = button.dataset.toneTheme;
-        Theme.setTone(toneTheme, button.dataset.toneChoice);
+        const toneTheme = (button as HTMLElement).dataset.toneTheme;
+        Theme.setTone(toneTheme, (button as HTMLElement).dataset.toneChoice);
         if (document.documentElement.dataset.theme !== toneTheme) {
           Theme.apply(toneTheme, true);
         }
@@ -885,7 +945,7 @@ class SettingsView {
       };
     });
 
-    this.dialog.querySelectorAll('[data-toolbar-toggle]').forEach(input => {
+    this.dialog.querySelectorAll<HTMLInputElement>('[data-toolbar-toggle]').forEach(input => {
       input.onchange = () => {
         const visibility = this.app.readToolbarVisibility();
         visibility[input.dataset.toolbarToggle] = input.checked;
@@ -899,23 +959,24 @@ class SettingsView {
     const projectRemote = this.dialog.querySelector('[data-auto-fetch-project-remote]');
     const saveProject = () => this.saveProjectSchedule(
       repo,
-      projectRemote?.value,
-      projectToggle?.checked,
-      projectInterval?.value
+      (projectRemote as HTMLSelectElement | null)?.value,
+      (projectToggle as HTMLInputElement | null)?.checked,
+      (projectInterval as HTMLSelectElement | null)?.value
     );
-    if (projectToggle) projectToggle.onchange = saveProject;
-    if (projectInterval) projectInterval.onchange = saveProject;
-    if (projectRemote) projectRemote.onchange = saveProject;
+    if (projectToggle) (projectToggle as HTMLInputElement).onchange = saveProject;
+    if (projectInterval) (projectInterval as HTMLSelectElement).onchange = saveProject;
+    if (projectRemote) (projectRemote as HTMLSelectElement).onchange = saveProject;
 
-    this.dialog.querySelector('#settings-account-form').onsubmit = event => {
+    (this.dialog.querySelector('#settings-account-form') as HTMLFormElement).onsubmit = event => {
       event.preventDefault();
-      const form = event.currentTarget;
+      const form = event.currentTarget as HTMLFormElement;
+      const elements = form.elements as unknown as Record<string, HTMLInputElement>;
       const profiles = this.readArray(this.profilesStorageKey);
       profiles.push({
         id: crypto.randomUUID(),
-        label: form.elements.label.value.trim(),
-        name: form.elements.name.value.trim(),
-        email: form.elements.email.value.trim()
+        label: elements.label.value.trim(),
+        name: elements.name.value.trim(),
+        email: elements.email.value.trim()
       });
       localStorage.setItem(this.profilesStorageKey, JSON.stringify(profiles));
       this.open();
@@ -924,16 +985,16 @@ class SettingsView {
     this.bindRemotes(repo);
     const rootButton = this.dialog.querySelector('#settings-agent-root');
     if (rootButton) {
-      rootButton.onclick = async () => {
-        const result = await window.gitTree.chooseAgentWorktreeRoot();
+      (rootButton as HTMLElement).onclick = async () => {
+        const result = await window.gitTree.chooseAgentWorktreeRoot() as { error?: string; worktreeRoot?: string };
         if (result?.error) return this.app.showToast(result.error, 'error');
-        if (result?.worktreeRoot) this.dialog.querySelector('#agent-root-value').textContent = result.worktreeRoot;
+        if (result?.worktreeRoot) (this.dialog.querySelector('#agent-root-value') as HTMLElement).textContent = result.worktreeRoot;
       };
     }
-    const agentsEnabled = this.dialog.querySelector('#settings-agents-enabled');
+    const agentsEnabled = this.dialog.querySelector('#settings-agents-enabled') as HTMLInputElement | null;
     if (agentsEnabled) {
       agentsEnabled.onchange = async () => {
-        const result = await window.gitTree.setAgentSessionsEnabled(agentsEnabled.checked);
+        const result = await window.gitTree.setAgentSessionsEnabled(agentsEnabled.checked) as { error?: string };
         if (result?.error) {
           agentsEnabled.checked = !agentsEnabled.checked;
           this.app.showToast(result.error, 'error');
@@ -942,25 +1003,25 @@ class SettingsView {
         window.dispatchEvent(new CustomEvent('gittree:agent-settings-changed', { detail: result }));
       };
     }
-    const concurrency = this.dialog.querySelector('#settings-agent-concurrency');
+    const concurrency = this.dialog.querySelector('#settings-agent-concurrency') as HTMLInputElement | null;
     if (concurrency) {
       concurrency.onchange = async () => {
-        const result = await window.gitTree.setAgentConcurrency(Number(concurrency.value));
+        const result = await window.gitTree.setAgentConcurrency(Number(concurrency.value)) as { error?: string; maxConcurrent?: number };
         if (result?.error) this.app.showToast(result.error, 'error');
         else concurrency.value = String(result.maxConcurrent);
       };
     }
     this.bindAgentAdapters();
-    this.dialog.querySelectorAll('[data-profile-apply]').forEach(button => {
+    this.dialog.querySelectorAll<HTMLElement>('[data-profile-apply]').forEach(button => {
       button.onclick = async () => {
-        const profile = this.readArray(this.profilesStorageKey)
+        const profile = (this.readArray(this.profilesStorageKey) as SettingsProfile[])
           .find(item => item.id === button.dataset.profileApply);
         if (!repo || !profile) return;
         const result = await window.gitTree.setIdentity(repo.path, {
           name: profile.name,
           email: profile.email,
           scope: 'local'
-        });
+        }) as { error?: string };
         if (result?.error) {
           this.app.showToast(result.error, 'error');
           return;
@@ -972,10 +1033,10 @@ class SettingsView {
         await this.open();
       };
     });
-    this.dialog.querySelectorAll('[data-profile-delete]').forEach(button => {
+    this.dialog.querySelectorAll<HTMLElement>('[data-profile-delete]').forEach(button => {
       button.onclick = () => {
         const id = button.dataset.profileDelete;
-        const profiles = this.readArray(this.profilesStorageKey).filter(item => item.id !== id);
+        const profiles = (this.readArray(this.profilesStorageKey) as SettingsProfile[]).filter(item => item.id !== id);
         const assignments = this.readObject(this.assignmentsStorageKey);
         Object.keys(assignments).forEach(path => {
           if (assignments[path] === id) delete assignments[path];
@@ -986,7 +1047,7 @@ class SettingsView {
       };
     });
 
-    const checkUpdateBtn = this.dialog.querySelector('#btn-check-update');
+    const checkUpdateBtn = this.dialog.querySelector('#btn-check-update') as HTMLButtonElement | null;
     const checkUpdateStatus = this.dialog.querySelector('#check-update-status');
 
     if (checkUpdateBtn) {
@@ -997,13 +1058,13 @@ class SettingsView {
           return;
         }
         if (status === 'available') {
-          const result = await window.gitTree.downloadUpdate();
+          const result = await window.gitTree.downloadUpdate() as { state?: Record<string, unknown>; error?: string };
           this.handleUpdateState(result?.state || { status: 'error', error: result?.error });
           return;
         }
         checkUpdateBtn.disabled = true;
         checkUpdateStatus.textContent = t('settings.checking');
-        const result = await window.gitTree.checkForUpdates();
+        const result = await window.gitTree.checkForUpdates() as { state?: Record<string, unknown>; error?: string };
         this.handleUpdateState(result?.state || { status: 'error', error: result?.error });
       };
     }
@@ -1011,27 +1072,27 @@ class SettingsView {
     this.bindAiSettings();
   }
 
-  bindAiSettings() {
-    const provider = this.dialog.querySelector('#settings-ai-provider');
+  bindAiSettings(): void {
+    const provider = this.dialog.querySelector('#settings-ai-provider') as HTMLSelectElement | null;
     if (!provider) return;
     const syncFields = () => this.syncAiFields();
     provider.onchange = syncFields;
     syncFields();
 
-    this.dialog.querySelector('#btn-ai-save').onclick = async () => {
+    (this.dialog.querySelector('#btn-ai-save') as HTMLElement).onclick = async () => {
       const result = await window.gitTree.setAiSettings({
         provider: provider.value,
-        baseUrl: this.dialog.querySelector('#settings-ai-base-url').value,
-        model: this.dialog.querySelector('#settings-ai-model').value,
-        language: this.dialog.querySelector('#settings-ai-language').value
-      });
+        baseUrl: (this.dialog.querySelector('#settings-ai-base-url') as HTMLInputElement).value,
+        model: (this.dialog.querySelector('#settings-ai-model') as HTMLInputElement).value,
+        language: (this.dialog.querySelector('#settings-ai-language') as HTMLSelectElement).value
+      }) as { error?: string };
       if (result?.error) this.app.showToast(result.error, 'error');
       else this.app.showToast(t('ai.saved'), 'success');
     };
 
-    this.dialog.querySelector('#btn-ai-key-save').onclick = async () => {
-      const input = this.dialog.querySelector('#settings-ai-key');
-      const result = await window.gitTree.setAiKey(input.value);
+    (this.dialog.querySelector('#btn-ai-key-save') as HTMLElement).onclick = async () => {
+      const input = this.dialog.querySelector('#settings-ai-key') as HTMLInputElement;
+      const result = await window.gitTree.setAiKey(input.value) as { error?: string };
       if (result?.error) {
         this.app.showToast(result.error, 'error');
         return;
@@ -1041,18 +1102,18 @@ class SettingsView {
       this.app.showToast(t('ai.keySaved'), 'success');
     };
 
-    this.dialog.querySelector('#btn-ai-key-remove').onclick = async () => {
+    (this.dialog.querySelector('#btn-ai-key-remove') as HTMLElement).onclick = async () => {
       await window.gitTree.clearAiKey();
       this.syncAiKeyStatus(false);
       this.app.showToast(t('ai.keyRemoved'), 'success');
     };
 
-    this.dialog.querySelector('#btn-ai-test').onclick = async () => {
-      const button = this.dialog.querySelector('#btn-ai-test');
-      const status = this.dialog.querySelector('#ai-test-status');
+    (this.dialog.querySelector('#btn-ai-test') as HTMLElement).onclick = async () => {
+      const button = this.dialog.querySelector('#btn-ai-test') as HTMLButtonElement;
+      const status = this.dialog.querySelector('#ai-test-status') as HTMLElement;
       button.disabled = true;
       status.textContent = t('ai.testing');
-      const result = await window.gitTree.testAiConnection();
+      const result = await window.gitTree.testAiConnection() as { error?: string };
       button.disabled = false;
       if (result?.error) {
         status.textContent = `${t('ai.testFailed')}: ${result.error}`;
@@ -1064,16 +1125,16 @@ class SettingsView {
     this.hydrateOpencodeStatus();
   }
 
-  syncAiFields() {
-    const provider = this.dialog.querySelector('#settings-ai-provider')?.value;
+  syncAiFields(): void {
+    const provider = (this.dialog.querySelector('#settings-ai-provider') as HTMLSelectElement | null)?.value;
     const status = this.dialog.querySelector('#ai-opencode-status');
     const modelHelp = this.dialog.querySelector('#ai-model-help');
     if (!provider) return;
-    const show = field => {
+    const show = (field: string) => {
       this.dialog.querySelectorAll(`[data-ai-field="${field}"]`)
         .forEach(row => row.classList.toggle('is-hidden', false));
     };
-    const hide = field => {
+    const hide = (field: string) => {
       this.dialog.querySelectorAll(`[data-ai-field="${field}"]`)
         .forEach(row => row.classList.toggle('is-hidden', true));
     };
@@ -1096,33 +1157,33 @@ class SettingsView {
     }
   }
 
-  syncAiKeyStatus(configured) {
+  syncAiKeyStatus(configured: boolean): void {
     const status = this.dialog.querySelector('#ai-key-status');
-    const remove = this.dialog.querySelector('#btn-ai-key-remove');
+    const remove = this.dialog.querySelector('#btn-ai-key-remove') as HTMLButtonElement | null;
     if (status) {
       status.textContent = configured ? t('ai.apiKeySaved') : t('ai.apiKeyMissing');
     }
     if (remove) remove.disabled = !configured;
   }
 
-  async hydrateOpencodeStatus() {
+  async hydrateOpencodeStatus(): Promise<void> {
     const status = this.dialog.querySelector('#ai-opencode-status');
     if (!status) return;
-    const adapters = await window.gitTree.detectAgentAdapters?.().catch(() => []);
+    const adapters = await window.gitTree.detectAgentAdapters?.().catch(() => []) as Array<{ id?: string; available?: boolean; version?: string }> | undefined;
     const opencode = (Array.isArray(adapters) ? adapters : [])
       .find(adapter => adapter?.id === 'opencode');
-    if (this.dialog.querySelector('#settings-ai-provider')?.value !== 'opencode') return;
+    if ((this.dialog.querySelector('#settings-ai-provider') as HTMLSelectElement | null)?.value !== 'opencode') return;
     status.textContent = opencode?.available
       ? t('ai.opencodeDetected', { version: opencode.version || '' })
       : t('ai.opencodeMissing');
   }
 
-  async refreshUpdateState() {
-    const state = await window.gitTree.getUpdateState();
+  async refreshUpdateState(): Promise<void> {
+    const state = await window.gitTree.getUpdateState() as Record<string, unknown>;
     if (state) this.handleUpdateState(state);
   }
 
-  renderAgentAdapterRow(adapter, agentSettings) {
+  renderAgentAdapterRow(adapter: AgentAdapterInfo, agentSettings: { enabledAdapters?: string[] } | null): string {
     return `<label class="settings-toolbar-row">
       <div class="settings-toolbar-copy"><strong>${this.esc(adapter.label)}</strong><small>${this.esc(adapter.version || t(adapter.available ? 'agents.detected' : 'agents.cliNotFound'))}</small></div>
       <span class="agent-adapter-state ${adapter.available ? 'is-available' : ''}">${this.esc(t(adapter.available ? 'agents.detected' : 'agents.unavailable'))}</span>
@@ -1130,8 +1191,8 @@ class SettingsView {
     </label>`;
   }
 
-  async hydrateAgentAdapters(agentSettings, generation) {
-    const adapters = await window.gitTree.detectAgentAdapters?.().catch(() => []);
+  async hydrateAgentAdapters(agentSettings: unknown, generation: number): Promise<void> {
+    const adapters = await window.gitTree.detectAgentAdapters?.().catch(() => []) as AgentAdapterInfo[] | undefined;
     if (generation !== this.renderGeneration) return;
     const container = this.dialog.querySelector('.agent-adapter-settings');
     if (!container) return;
@@ -1141,34 +1202,34 @@ class SettingsView {
     this.bindAgentAdapters();
   }
 
-  bindAgentAdapters() {
-    this.dialog.querySelectorAll('[data-agent-adapter]').forEach(input => {
+  bindAgentAdapters(): void {
+    this.dialog.querySelectorAll<HTMLInputElement>('[data-agent-adapter]').forEach(input => {
       input.onchange = async () => {
-        const enabled = [...this.dialog.querySelectorAll('[data-agent-adapter]')]
+        const enabled = [...this.dialog.querySelectorAll<HTMLInputElement>('[data-agent-adapter]')]
           .filter(item => item.checked)
-          .map(item => item.dataset.agentAdapter);
-        const result = await window.gitTree.setEnabledAgentAdapters(enabled);
+          .map(item => (item as HTMLElement).dataset.agentAdapter);
+        const result = await window.gitTree.setEnabledAgentAdapters(enabled) as { error?: string };
         if (result?.error) {
-          input.checked = !input.checked;
+          (input as HTMLInputElement).checked = !(input as HTMLInputElement).checked;
           this.app.showToast(result.error, 'error');
         }
       };
     });
   }
 
-  handleUpdateState(state) {
+  handleUpdateState(state: Record<string, unknown>): void {
     if (!state) return;
     this.updateState = state;
-    const button = this.dialog.querySelector('#btn-check-update');
-    const status = this.dialog.querySelector('#check-update-status');
+    const button = this.dialog.querySelector('#btn-check-update') as HTMLButtonElement | null;
+    const status = this.dialog.querySelector('#check-update-status') as HTMLElement | null;
     this.applyUpdateState(status, button, state);
   }
 
-  applyUpdateState(statusEl, button, state) {
+  applyUpdateState(statusEl: HTMLElement | null, button: HTMLButtonElement | null, state: Record<string, unknown>): void {
     if (!statusEl || !button) return;
     const status = state?.status;
     const label = button.querySelector('span');
-    button.disabled = ['checking', 'downloading', 'disabled'].includes(status);
+    button.disabled = ['checking', 'downloading', 'disabled'].includes(status as string);
     switch (status) {
       case 'checking':
         statusEl.textContent = t('settings.checking');
@@ -1185,7 +1246,7 @@ class SettingsView {
         if (label) label.textContent = t('settings.installUpdate');
         break;
       case 'error':
-        statusEl.textContent = state.error || t('common.error');
+        statusEl.textContent = String(state.error || t('common.error'));
         if (label) label.textContent = t('settings.checkUpdate');
         break;
       case 'disabled':
@@ -1197,9 +1258,9 @@ class SettingsView {
     }
   }
 
-  saveProjectSchedule(repo, remote, enabled, intervalMinutes) {
+  saveProjectSchedule(repo: { path?: string } | null, remote: string, enabled: boolean, intervalMinutes: string | number): void {
     if (!repo || !remote) return;
-    const schedules = this.readObject(this.autoFetchStorageKey);
+    const schedules: Record<string, unknown> = this.readObject(this.autoFetchStorageKey);
     const minutes = Math.min(60, Math.max(1, Number(intervalMinutes) || 15));
     schedules[repo.path] = {
       enabled: Boolean(enabled),
@@ -1210,16 +1271,21 @@ class SettingsView {
     localStorage.setItem(this.autoFetchStorageKey, JSON.stringify(schedules));
   }
 
-  async readRepositoryIdentity(repoPath) {
+  async readRepositoryIdentity(repoPath: string): Promise<{ configured?: boolean; name?: string; email?: string; nameSource?: string; error?: string } | null> {
     try {
-      const identity = await window.gitTree.getIdentity(repoPath);
-      return identity?.error ? null : identity;
+      const identity = await window.gitTree.getIdentity(repoPath) as { error?: string } | undefined;
+      return identity?.error ? null : (identity as { configured?: boolean; name?: string; email?: string; nameSource?: string });
     } catch {
       return null;
     }
   }
 
-  importConfiguredProfile(profiles, assignments, repoPath, identity) {
+  importConfiguredProfile(
+    profiles: SettingsProfile[],
+    assignments: Record<string, unknown>,
+    repoPath: string,
+    identity: { name?: string; email?: string; nameSource?: string }
+  ): { profiles: SettingsProfile[]; changed: boolean } {
     const name = String(identity.name || '').trim();
     const email = String(identity.email || '').trim();
     if (!name || !email) return { profiles, changed: false };
@@ -1255,24 +1321,25 @@ class SettingsView {
     return { profiles, changed };
   }
 
-  async tick(now = Date.now()) {
-    const schedules = this.readObject(this.autoFetchStorageKey);
+  async tick(now = Date.now()): Promise<void> {
+    const schedules: Record<string, unknown> = this.readObject(this.autoFetchStorageKey);
     let changed = false;
-    const refreshedRepositories = new Set();
-    for (const [repoPath, schedule] of Object.entries(schedules)) {
+    const refreshedRepositories = new Set<string>();
+    for (const [repoPath, rawSchedule] of Object.entries(schedules)) {
+      const schedule = rawSchedule as { enabled?: boolean; nextRunAt?: number; intervalMinutes?: number; remote?: string } | undefined;
       if (!schedule || !schedule.enabled || schedule.nextRunAt > now) continue;
       const key = repoPath;
       if (this.inFlight.has(key)) continue;
       this.inFlight.add(key);
       try {
-        const result = await window.gitTree.fetch(repoPath, schedule.remote);
+        const result = await window.gitTree.fetch(repoPath, schedule.remote) as { error?: string };
         if (result?.error && this.app.state.repo?.path === repoPath) {
           this.app.showToast(result.error, 'error');
         }
         if (!result?.error) refreshedRepositories.add(repoPath);
       } catch (error) {
         if (this.app.state.repo?.path === repoPath) {
-          this.app.showToast(error.message, 'error');
+          this.app.showToast((error as Error).message, 'error');
         }
       } finally {
         schedule.nextRunAt = Date.now() + (schedule.intervalMinutes * 60000);
@@ -1286,43 +1353,50 @@ class SettingsView {
     }
   }
 
-  readProjectSchedule(value, metadata = {}) {
-    if (value && typeof value.enabled === 'boolean') return value;
-    const legacy = Object.values(value || {}).find(item => item?.enabled);
+  readProjectSchedule(value: unknown, metadata: Record<string, unknown> | null | undefined = {}): Record<string, unknown> {
+    if (value && typeof (value as Record<string, unknown>).enabled === 'boolean') return value as Record<string, unknown>;
+    const legacy = Object.values(value || {}).find(item => (item as Record<string, unknown>)?.enabled) as Record<string, unknown> | undefined;
     if (legacy) return {
       enabled: true,
       intervalMinutes: legacy.intervalMinutes || 15,
-      remote: legacy.remote || (metadata.remotes || [])[0]?.name || '',
+      remote: legacy.remote || (((metadata?.remotes as Array<{ name?: string }> | undefined) || [])[0]?.name || ''),
       nextRunAt: legacy.nextRunAt || Date.now()
     };
     return {
       enabled: false,
       intervalMinutes: 15,
-      remote: (metadata.remotes || [])[0]?.name || ''
+      remote: (((metadata?.remotes as Array<{ name?: string }> | undefined) || [])[0]?.name || '')
     };
   }
 
-  readArray(key) {
+  readArray<T = Record<string, unknown>>(key: string): T[] {
     try {
-      const value = JSON.parse(localStorage.getItem(key));
-      return Array.isArray(value) ? value : [];
+      const value: unknown = JSON.parse(localStorage.getItem(key) ?? 'null');
+      return Array.isArray(value) ? value as T[] : [];
     } catch {
       return [];
     }
   }
 
-  readObject(key) {
+  readObject(key: string): Record<string, unknown> {
     try {
-      const value = JSON.parse(localStorage.getItem(key));
-      return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+      const value: unknown = JSON.parse(localStorage.getItem(key) ?? 'null');
+      return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
     } catch {
       return {};
     }
   }
 
-  esc(value) {
+  esc(value: unknown): string {
     return HtmlEncoder.encode(value);
   }
 }
 
-if (typeof module !== 'undefined') module.exports = SettingsView;
+if (typeof window !== 'undefined') {
+  (window as unknown as { SettingsView: typeof SettingsView }).SettingsView = SettingsView;
+}
+
+declare const module: { exports: unknown } | undefined;
+if (typeof module !== 'undefined' && (module as { exports?: unknown }).exports) {
+  (module as { exports: unknown }).exports = SettingsView;
+}
