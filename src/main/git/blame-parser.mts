@@ -1,6 +1,14 @@
-function parseBlamePorcelain(text) {
-  const rows = [];
-  let current = null;
+export interface BlameRow {
+  hash: string;
+  originalLine: number;
+  finalLine: number;
+  author: string;
+  summary: string;
+}
+
+export function parseBlamePorcelain(text: unknown): BlameRow[] {
+  const rows: BlameRow[] = [];
+  let current: BlameRow | null = null;
   for (const line of String(text || '').split(/\r?\n/)) {
     const hashMatch = line.match(/^([0-9a-f]{40}) (\d+) (\d+)(?: (\d+))?$/);
     if (hashMatch) {
@@ -25,5 +33,3 @@ function parseBlamePorcelain(text) {
   }
   return rows;
 }
-
-module.exports = { parseBlamePorcelain };

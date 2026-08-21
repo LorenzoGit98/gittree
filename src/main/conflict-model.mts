@@ -1,28 +1,44 @@
-const crypto = require('node:crypto');
+import { createHash } from 'node:crypto';
 
-const MAX_CONFLICT_RESULT_BYTES = 50 * 1024 * 1024;
+export const MAX_CONFLICT_RESULT_BYTES = 50 * 1024 * 1024;
 
-function splitLinesWithEndings(content) {
+export interface ConflictBlock {
+  id: string;
+  startLine: number;
+  endLine: number;
+  base: string | null;
+  current: string;
+  incoming: string;
+  smartCombination: string | null;
+  startOffset: number;
+  endOffset: number;
+}
+
+function splitLinesWithEndings(content: unknown): string[] {
   return String(content || '').match(/[^\r\n]*(?:\r\n|\n|\r|$)/g)?.filter(Boolean) || [];
 }
 
-function safeCombination(base, current, incoming) {
+function safeCombination(
+  base: string | null,
+  current: string,
+  incoming: string
+): string | null {
   if (current === incoming) return current;
   if (base !== null && current === base) return incoming;
   if (base !== null && incoming === base) return current;
   return null;
 }
 
-function parseConflictBlocks(content) {
+export function parseConflictBlocks(content: unknown): ConflictBlock[] {
   const lines = splitLinesWithEndings(content);
-  const offsets = [];
+  const offsets: number[] = [];
   let offset = 0;
   for (const line of lines) {
     offsets.push(offset);
     offset += line.length;
   }
 
-  const blocks = [];
+  const blocks: ConflictBlock[] = [];
   for (let start = 0; start < lines.length; start += 1) {
     if (!/^<<<<<<<(?:\s|$)/.test(lines[start])) continue;
     let baseMarker = -1;
@@ -49,8 +65,7 @@ function parseConflictBlocks(content) {
     const startOffset = offsets[start];
     const endOffset = offsets[end] + lines[end].length;
     blocks.push({
-      id: crypto
-        .createHash('sha256')
+      id: createHash('sha256')
         .update(`${startOffset}\0${current}\0${incoming}`)
         .digest('hex'),
       startLine: start + 1,
@@ -67,13 +82,13 @@ function parseConflictBlocks(content) {
   return blocks;
 }
 
-function hasUnresolvedMarkers(content) {
+export function hasUnresolvedMarkers(content: unknown): boolean {
   return parseConflictBlocks(content).length > 0 ||
     /^(?:<<<<<<<|>>>>>>>)(?:\s|$)/m.test(String(content || ''));
 }
 
-function conflictSnapshot(buffers) {
-  const hash = crypto.createHash('sha256');
+export function conflictSnapshot(buffers: Array<Buffer | string | null | undefined>): string {
+  const hash = createHash('sha256');
   for (const buffer of buffers) {
     const value = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer || '');
     hash.update(String(value.length));
@@ -84,10 +99,4 @@ function conflictSnapshot(buffers) {
   return hash.digest('hex');
 }
 
-module.exports = {
-  MAX_CONFLICT_RESULT_BYTES,
-  conflictSnapshot,
-  hasUnresolvedMarkers,
-  parseConflictBlocks,
-  safeCombination
-};
+export { safeCombination };

@@ -1,9 +1,23 @@
-function parseRemoteUrl(remoteUrl) {
+import type { HostingProviderId } from '../shared/hosting.mts';
+
+export type { HostingProviderId };
+
+export interface RemoteInfo {
+  provider: HostingProviderId | null;
+  host: string;
+  ownerPath: string;
+  repository: string;
+  webBase: string;
+  organization?: string;
+  project?: string;
+}
+
+export function parseRemoteUrl(remoteUrl: unknown): RemoteInfo | null {
   if (typeof remoteUrl !== 'string' || !remoteUrl.trim()) return null;
 
   const value = remoteUrl.trim();
-  let host;
-  let repositoryPath;
+  let host: string;
+  let repositoryPath: string;
 
   const scpMatch = value.match(/^(?:[^@]+@)?([^:]+):(.+)$/);
   if (scpMatch && !value.includes('://')) {
@@ -29,9 +43,9 @@ function parseRemoteUrl(remoteUrl) {
   const azureLegacy = normalizedHost.endsWith('.visualstudio.com')
     && normalizedHost !== 'vs-ssh.visualstudio.com';
   if (azureSsh || azureCloud || azureLegacy) {
-    let organization;
-    let project;
-    let repository;
+    let organization: string | undefined;
+    let project: string | undefined;
+    let repository: string | null | undefined;
     if (azureSsh && segments[0]?.toLowerCase() === 'v3') {
       [, organization, project, repository] = segments;
     } else if (azureCloud) {
@@ -58,7 +72,7 @@ function parseRemoteUrl(remoteUrl) {
 
   const repository = segments.pop();
   const ownerPath = segments.join('/');
-  let provider = null;
+  let provider: HostingProviderId | null = null;
   if (normalizedHost.includes('github')) provider = 'github';
   else if (normalizedHost.includes('gitlab')) provider = 'gitlab';
   else if (normalizedHost === 'bitbucket.org' || normalizedHost.includes('bitbucket')) provider = 'bitbucket';
@@ -67,12 +81,16 @@ function parseRemoteUrl(remoteUrl) {
     provider,
     host: normalizedHost,
     ownerPath,
-    repository,
+    repository: repository as string,
     webBase: `https://${normalizedHost}/${ownerPath}/${repository}`
   };
 }
 
-function buildPullRequestUrl(remote, sourceBranch, targetBranch) {
+export function buildPullRequestUrl(
+  remote: RemoteInfo | null | undefined,
+  sourceBranch: string | null | undefined,
+  targetBranch: string | null | undefined
+): string | null {
   if (!remote?.provider || !sourceBranch || !targetBranch) return null;
 
   const source = encodeURIComponent(sourceBranch);
@@ -91,8 +109,3 @@ function buildPullRequestUrl(remote, sourceBranch, targetBranch) {
   }
   return null;
 }
-
-module.exports = {
-  parseRemoteUrl,
-  buildPullRequestUrl
-};

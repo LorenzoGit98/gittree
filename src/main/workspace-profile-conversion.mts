@@ -1,20 +1,36 @@
-const fs = require('node:fs');
-const path = require('node:path');
+import * as nodeFs from 'node:fs';
+import * as path from 'node:path';
 
-function readPreviousWorkspace(fileSystem, configPath) {
+type FileSystemLike = typeof nodeFs;
+
+export interface ConversionResult {
+  converted: boolean;
+  source?: string;
+  error?: string;
+}
+
+export interface ConvertWorkspaceProfileOptions {
+  currentConfigPath: string;
+  previousConfigPath?: string | null;
+  fileSystem?: FileSystemLike;
+  processId?: number;
+  timestamp?: number;
+}
+
+function readPreviousWorkspace(fileSystem: FileSystemLike, configPath: string): string | null {
   const source = fileSystem.readFileSync(configPath, 'utf8');
   const parsed = JSON.parse(source);
   if (!parsed || !Array.isArray(parsed.repos) || parsed.repos.length === 0) return null;
   return source;
 }
 
-function convertWorkspaceProfile({
+export function convertWorkspaceProfile({
   currentConfigPath,
   previousConfigPath,
-  fileSystem = fs,
+  fileSystem = nodeFs,
   processId = process.pid,
   timestamp = Date.now()
-}) {
+}: ConvertWorkspaceProfileOptions): ConversionResult {
   if (fileSystem.existsSync(currentConfigPath)) return { converted: false };
   if (!previousConfigPath || path.resolve(previousConfigPath) === path.resolve(currentConfigPath)) {
     return { converted: false };
@@ -34,8 +50,6 @@ function convertWorkspaceProfile({
     }
     return { converted: true, source: previousConfigPath };
   } catch (error) {
-    return { converted: false, error: error.message };
+    return { converted: false, error: (error as Error).message };
   }
 }
-
-module.exports = { convertWorkspaceProfile };

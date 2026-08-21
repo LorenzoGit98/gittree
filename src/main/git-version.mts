@@ -1,17 +1,25 @@
-const { execFile } = require('child_process');
-const { promisify } = require('util');
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
-const MINIMUM_GIT_VERSION = [2, 45, 1];
+export const MINIMUM_GIT_VERSION: readonly [number, number, number] = [2, 45, 1];
 
-function parseGitVersion(output) {
+export type GitVersionTriple = readonly [number, number, number];
+
+export interface GitVersionInfo {
+  version: string;
+  supported: boolean;
+  minimum: string;
+}
+
+export function parseGitVersion(output: unknown): GitVersionTriple | null {
   const match = String(output || '').match(/git version (\d+)\.(\d+)(?:\.(\d+))?/);
   if (!match) return null;
   return [Number(match[1]), Number(match[2]), Number(match[3] || 0)];
 }
 
-function isVersionAtLeast(version, minimum) {
+export function isVersionAtLeast(version: unknown, minimum: readonly number[]): boolean {
   if (!Array.isArray(version) || version.length < 2) return false;
   for (let index = 0; index < minimum.length; index += 1) {
     const left = version[index] || 0;
@@ -22,7 +30,7 @@ function isVersionAtLeast(version, minimum) {
   return true;
 }
 
-async function getGitVersion() {
+export async function getGitVersion(): Promise<GitVersionInfo> {
   try {
     const { stdout } = await execFileAsync('git', ['--version'], { encoding: 'utf8' });
     const version = parseGitVersion(stdout);
@@ -35,10 +43,3 @@ async function getGitVersion() {
     return { version: '', supported: false, minimum: MINIMUM_GIT_VERSION.join('.') };
   }
 }
-
-module.exports = {
-  parseGitVersion,
-  isVersionAtLeast,
-  getGitVersion,
-  MINIMUM_GIT_VERSION
-};
