@@ -191,6 +191,7 @@ function run(command, args, label) {
 function runFull() {
   const steps = [
     ['lint', 'npm', ['run', 'lint']],
+    ['typecheck ratchet', 'node', ['scripts/check-ts-baseline.js']],
     ['test', 'npm', ['test']],
     ['coverage', 'npm', ['run', 'test:coverage']],
     ['design audit', 'npm', ['run', 'audit:design']],
@@ -221,6 +222,9 @@ function runScoped({ benchmarks = false } = {}) {
     if (!run('node', [eslintBin, ...scoped.lintFiles], 'lint (changed files)')) {
       process.exitCode = 1;
     }
+  }
+  if (changed.some(file => /^src\//.test(file.replaceAll('\\', '/')))) {
+    if (!run('node', ['scripts/check-ts-baseline.js'], 'typecheck ratchet')) process.exitCode = 1;
   }
   if (!run('node', ['--test', ...scoped.testFiles], 'scoped tests')) process.exitCode = 1;
   if (scoped.needsDesignAudit) {

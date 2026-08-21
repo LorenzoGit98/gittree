@@ -1,0 +1,9 @@
+{
+  "count": 1554,
+  "generatedAt": "2026-08-21T09:35:28.348Z",
+  "perDirectory": {
+    "src/main/agents": 6,
+    "src/renderer": 139,
+    "src/renderer/components": 1409
+  }
+}
