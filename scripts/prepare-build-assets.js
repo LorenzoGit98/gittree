@@ -1,6 +1,5 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
 
 const projectRoot = path.resolve(__dirname, '..');
 const source = path.join(projectRoot, 'icon.png');
