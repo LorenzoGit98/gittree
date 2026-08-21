@@ -2,10 +2,11 @@
   "name": "gittree",
   "version": "0.21.4",
   "description": "A fast, open-source Git desktop client for visual history and local-first repository management.",
-  "main": "src/main/main.mts",
+  "main": "dist/main/main.mjs",
   "scripts": {
-    "start": "electron .",
+    "start": "npm run build:compile && electron .",
     "postinstall": "electron-builder install-app-deps",
+    "build:compile": "tsc -p tsconfig.json",
     "prepare:assets": "node scripts/prepare-build-assets.js",
     "validate": "npm run test && npm run audit:design",
     "quality": "node scripts/quality.js",
@@ -30,11 +31,11 @@
     "test:coverage:scopes": "node scripts/check-coverage-scopes.js",
     "test:coverage:git": "node scripts/check-coverage-scopes.js git",
     "test:coverage:hosting": "node scripts/check-coverage-scopes.js hosting",
-    "build": "npm run prepare:assets && electron-builder --dir --publish never",
-    "dist": "npm run prepare:assets && electron-builder --publish never",
-    "dist:win": "npm run prepare:assets && electron-builder --win --publish never",
-    "dist:mac": "npm run prepare:assets && electron-builder --mac --publish never",
-    "dist:linux": "npm run prepare:assets && electron-builder --linux --publish never",
+    "build": "npm run build:compile && npm run prepare:assets && electron-builder --dir --publish never",
+    "dist": "npm run build:compile && npm run prepare:assets && electron-builder --publish never",
+    "dist:win": "npm run build:compile && npm run prepare:assets && electron-builder --win --publish never",
+    "dist:mac": "npm run build:compile && npm run prepare:assets && electron-builder --mac --publish never",
+    "dist:linux": "npm run build:compile && npm run prepare:assets && electron-builder --linux --publish never",
     "release:check": "node scripts/check-release-version.js",
     "release:assets": "node scripts/release-assets.js"
   },
@@ -60,6 +61,20 @@
   },
   "license": "MIT",
   "desktopName": "GitTree.desktop",
+  "build": {
+    "appId": "com.lorenzogit.gittree",
+    "productName": "GitTree",
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "extraResources": []
+  },
   "type": "commonjs",
   "engines": {
     "node": ">=22"
