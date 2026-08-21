@@ -143,6 +143,7 @@ export class AgentSessionService {
       getGitService: (repositoryPath: string) => {
         getWorktrees: () => Promise<Array<{ path: string; branch?: string }>>;
         createManagedWorktree: (options: Record<string, unknown>) => Promise<unknown>;
+        getStatus: () => Promise<{ files?: Array<unknown>; ahead?: number; behind?: number }>;
       };
       addTrustedRepository: (path: string) => unknown;
       [key: string]: unknown;
@@ -343,14 +344,14 @@ export class AgentSessionService {
     this._assertWorktreeAvailable(input.worktreePath as string);
     const timestamp = this.now();
     const task = {
-      id: input.id,
-      repositoryPath: this.path.resolve(input.repositoryPath),
-      worktreePath: this.path.resolve(input.worktreePath),
-      title: input.title,
-      branch: input.branch || '',
-      baseRef: input.baseRef || 'HEAD',
-      adapterId: input.adapterId,
-      setupRecipeId: input.setupRecipeId || '',
+      id: String(input.id),
+      repositoryPath: this.path.resolve(String(input.repositoryPath)),
+      worktreePath: this.path.resolve(String(input.worktreePath)),
+      title: String(input.title ?? ''),
+      branch: String(input.branch || ''),
+      baseRef: String(input.baseRef || 'HEAD'),
+      adapterId: String(input.adapterId ?? ''),
+      setupRecipeId: String(input.setupRecipeId || ''),
       status: 'queued',
       needsAttention: false,
       wip: 0,
@@ -403,7 +404,7 @@ export class AgentSessionService {
     }
   }
 
-  _assertWorktreeAvailable(worktreePath, ignoreTaskId) {
+  _assertWorktreeAvailable(worktreePath: string, ignoreTaskId?: string) {
     const target = canonical(worktreePath, this.path);
     for (const task of this.tasks.values()) {
       if (task.id !== ignoreTaskId && ACTIVE_STATUSES.has(task.status) && canonical(task.worktreePath, this.path) === target) {
