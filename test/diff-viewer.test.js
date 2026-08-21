@@ -31,9 +31,18 @@ function loadDiffViewer() {
   };
   global.window = { gitTree: {} };
   global.t = key => key;
-  global.DiffParser = require(path.join(
-    __dirname, '..', 'src', 'renderer', 'components', 'diff-parser.js'
-  ));
+  global.DiffParser = (() => {
+    try {
+      const mod = require(path.join(
+        __dirname, '..', 'src', 'renderer', 'components', 'diff-parser.mts'
+      ));
+      return mod.DiffParser || mod.default || mod;
+    } catch {
+      return require(path.join(
+        __dirname, '..', 'src', 'renderer', 'components', 'diff-parser.js'
+      ));
+    }
+  })();
   return require(filename);
 }
 
