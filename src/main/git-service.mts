@@ -1,19 +1,37 @@
-const fs = require('fs');
-const path = require('path');
-const { execFile } = require('child_process');
-const { promisify } = require('util');
-const RepositorySession = require('./git/repository-session');
-const RepositoryHistory = require('./git/repository-history');
-const RepositoryWorkingTree = require('./git/repository-working-tree');
-const RepositoryOperations = require('./git/repository-operations');
-const RepositoryWorktrees = require('./git/repository-worktrees');
-const { parseRemoteUrl } = require('./provider-links');
+import * as fs from 'node:fs';
+import * as nodePath from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import type { SimpleGit } from 'simple-git';
+import { RepositorySession } from './git/repository-session.mts';
+import { RepositoryHistory } from './git/repository-history.mts';
+import { RepositoryWorkingTree } from './git/repository-working-tree.mts';
+import { RepositoryOperations } from './git/repository-operations.mts';
+import { RepositoryWorktrees } from './git/repository-worktrees.mts';
+import { bindMethodsToQueue } from './git/queue-bound-methods.mts';
+import { parseRemoteUrl } from './provider-links.mts';
+import type { RepositoryQueue } from './git/repository-queue.mts';
 
 const execFileAsync = promisify(execFile);
 
-class GitService {
-  constructor(repoPath, { queue } = {}) {
+export class GitService {
+  private session: RepositorySession;
+
+  git: SimpleGit;
+
+  repoPath: string;
+
+  private operations: RepositoryOperations;
+
+  private workingTree: RepositoryWorkingTree;
+
+  private history: RepositoryHistory;
+
+  private worktrees: RepositoryWorktrees;
+
+  constructor(repoPath: string, { queue }: { queue?: RepositoryQueue } = {}) {
     this.session = new RepositorySession(repoPath, { queue });
+    bindMethodsToQueue(this);
     this.git = this.session.git;
     this.repoPath = this.session.path;
     this.operations = new RepositoryOperations({
@@ -524,21 +542,24 @@ class GitService {
     return this.operations.resolveGitPath(name);
   }
 
-  validateRepositoryPath(filePath, options = {}) {
+  validateRepositoryPath(
+    filePath: unknown,
+    options: { rejectSymlinks?: boolean } = {}
+  ) {
     const rejectSymlinks = options.rejectSymlinks !== false;
-    if (typeof filePath !== 'string' || !filePath || path.isAbsolute(filePath)) {
+    if (typeof filePath !== 'string' || !filePath || nodePath.isAbsolute(filePath)) {
       throw new Error('Invalid repository path');
     }
-    const repoRoot = path.resolve(this.repoPath);
-    const absolute = path.resolve(repoRoot, filePath);
-    const relative = path.relative(repoRoot, absolute);
-    if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+    const repoRoot = nodePath.resolve(this.repoPath);
+    const absolute = nodePath.resolve(repoRoot, filePath);
+    const relative = nodePath.relative(repoRoot, absolute);
+    if (!relative || relative.startsWith('..') || nodePath.isAbsolute(relative)) {
       throw new Error('Conflict path is outside the repository');
     }
     if (rejectSymlinks) {
       let current = repoRoot;
-      for (const part of relative.split(path.sep)) {
-        current = path.join(current, part);
+      for (const part of relative.split(nodePath.sep)) {
+        current = nodePath.join(current, part);
         try {
           if (fs.lstatSync(current).isSymbolicLink()) {
             throw new Error('Repository paths cannot traverse symbolic links');
@@ -550,7 +571,7 @@ class GitService {
         }
       }
     }
-    return relative.split(path.sep).join('/');
+    return relative.split(nodePath.sep).join('/');
   }
 
   async readStageBlob(stage, relativePath) {
@@ -773,7 +794,14 @@ class GitService {
     return { success: true, identity: await this.getIdentity() };
   }
 
-  async commitChanges(options = {}) {
+  async commitChanges(options: {
+    summary?: unknown;
+    body?: unknown;
+    amend?: boolean;
+    signoff?: boolean;
+    signing?: boolean;
+    authorOverride?: { name?: unknown; email?: unknown };
+  } = {}) {
     await this.assertNoPendingOperation();
     const summary = this.validateIdentityValue(options.summary, 'commit summary', 200);
     const body = typeof options.body === 'string' ? options.body.trim() : '';
@@ -1210,14 +1238,4 @@ class GitService {
   }
 }
 
-for (const methodName of Object.getOwnPropertyNames(GitService.prototype)) {
-  if (methodName === 'constructor' || methodName === 'runExclusive') continue;
-  const original = GitService.prototype[methodName];
-  if (typeof original !== 'function' || original.constructor.name !== 'AsyncFunction') continue;
-  GitService.prototype[methodName] = function (...args) {
-    if (this.session.isCurrent()) return original.apply(this, args);
-    return this.runExclusive(() => original.apply(this, args));
-  };
-}
 
-module.exports = GitService;

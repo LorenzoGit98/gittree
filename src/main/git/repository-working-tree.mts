@@ -1,20 +1,96 @@
-const fs = require('node:fs');
-const path = require('node:path');
-const crypto = require('node:crypto');
-const { execFile, spawn } = require('node:child_process');
-const { promisify } = require('node:util');
-const { parseWorkingDiff } = require('./patch-parser');
+import * as nodeFs from 'node:fs';
+import * as nodePath from 'node:path';
+import { createHash } from 'node:crypto';
+import { execFile, spawn } from 'node:child_process';
+import { promisify } from 'node:util';
+import type { SimpleGit } from 'simple-git';
+import {
+  parseWorkingDiff,
+  type WorkingDiff,
+  type WorkingDiffHunk
+} from './patch-parser.mts';
 
 const execFileAsync = promisify(execFile);
 
-class RepositoryWorkingTree {
+export interface WorkingTreeFile {
+  path: string;
+  oldPath?: string;
+  indexStatus: string;
+  worktreeStatus: string;
+  staged: boolean;
+  unstaged: boolean;
+  untracked: boolean;
+  conflicted: boolean;
+  binary: boolean;
+  submodule?: boolean;
+}
+
+export interface SubmoduleInfo {
+  path: string;
+}
+
+export interface WorkingTreeSnapshot {
+  snapshotId: string;
+  branch: string | null;
+  files: WorkingTreeFile[];
+  submodules: SubmoduleInfo[];
+  stagedCount: number;
+  unstagedCount: number;
+}
+
+export interface WorkingDiffSummary {
+  path: string;
+  staged: boolean;
+  binary: boolean;
+  hunks: Array<Omit<WorkingDiffHunk, 'raw'>>;
+}
+
+/** Successful parse or the explicit "no textual diff" sentinel. */
+export type ParsedWorkingDiff = WorkingDiff | NoDiffSentinel;
+
+export interface NoDiffSentinel {
+  path: string;
+  staged: false;
+  binary: false;
+  hunks: never[];
+  noDiff: true;
+  reason: string;
+}
+
+export interface RepositoryWorkingTreeOptions {
+  git: SimpleGit;
+  repoPath: string;
+  assertNoPendingOperation: () => Promise<void> | void;
+  validateRepositoryPath: (
+    filePath: string,
+    options?: { rejectSymlinks?: boolean }
+  ) => string;
+  getSubmodules: () => Promise<SubmoduleInfo[]>;
+}
+
+interface MutationResult {
+  success: true;
+  snapshot: WorkingTreeSnapshot;
+}
+
+export class RepositoryWorkingTree {
+  private git: SimpleGit;
+
+  private repoPath: string;
+
+  private assertNoPendingOperation: () => Promise<void> | void;
+
+  private validateRepositoryPath: RepositoryWorkingTreeOptions['validateRepositoryPath'];
+
+  private getSubmodules: () => Promise<SubmoduleInfo[]>;
+
   constructor({
     git,
     repoPath,
     assertNoPendingOperation,
     validateRepositoryPath,
     getSubmodules
-  }) {
+  }: RepositoryWorkingTreeOptions) {
     this.git = git;
     this.repoPath = repoPath;
     this.assertNoPendingOperation = assertNoPendingOperation;
@@ -46,14 +122,14 @@ class RepositoryWorkingTree {
         isClean: status.isClean()
       };
     } catch (error) {
-      throw new Error(`Failed to get status: ${error.message}`, { cause: error });
+      throw new Error(`Failed to get status: ${(error as Error).message}`, { cause: error });
     }
   }
 
-  async getWorkingTree() {
+  async getWorkingTree(): Promise<WorkingTreeSnapshot> {
     await this.assertNoPendingOperation();
     const status = await this.git.status();
-    const files = status.files.map(file => {
+    const files: WorkingTreeFile[] = status.files.map(file => {
       const indexStatus = file.index || ' ';
       const worktreeStatus = file.working_dir || ' ';
       const untracked = indexStatus === '?' && worktreeStatus === '?';
@@ -73,9 +149,9 @@ class RepositoryWorkingTree {
         binary: false
       };
     });
-    const submodulePaths = new Set();
-    let submodules = [];
-    if (fs.existsSync(path.join(this.repoPath, '.gitmodules'))) {
+    const submodulePaths = new Set<string>();
+    let submodules: SubmoduleInfo[] = [];
+    if (nodeFs.existsSync(nodePath.join(this.repoPath, '.gitmodules'))) {
       try {
         submodules = await this.getSubmodules();
         for (const submodule of submodules) submodulePaths.add(submodule.path);
@@ -87,21 +163,20 @@ class RepositoryWorkingTree {
     const fileState = await Promise.all(
       files.map(async file => {
         try {
-          const stat = await fs.promises.lstat(path.resolve(this.repoPath, file.path));
+          const stat = await nodeFs.promises.lstat(nodePath.resolve(this.repoPath, file.path));
           return [file.path, stat.size, stat.mtimeMs];
         } catch {
           return [file.path, null, null];
         }
       })
     );
-    let indexState;
+    let indexState: string;
     try {
       indexState = await this.git.raw(['diff', '--cached', '--raw', '-z']);
     } catch {
       indexState = await this.git.raw(['ls-files', '--stage', '-z']);
     }
-    const snapshotId = crypto
-      .createHash('sha256')
+    const snapshotId = createHash('sha256')
       .update(JSON.stringify({
         current: status.current,
         files: files.map(file => [file.path, file.indexStatus, file.worktreeStatus]),
@@ -119,7 +194,7 @@ class RepositoryWorkingTree {
     };
   }
 
-  async assertWorkingTreeSnapshot(snapshotId) {
+  async assertWorkingTreeSnapshot(snapshotId: unknown): Promise<void> {
     if (typeof snapshotId !== 'string' || !/^[a-f0-9]{64}$/.test(snapshotId)) {
       throw new Error('Invalid working tree snapshot');
     }
@@ -129,28 +204,28 @@ class RepositoryWorkingTree {
     }
   }
 
-  validatePathList(paths) {
+  validatePathList(paths: unknown): string[] {
     if (!Array.isArray(paths) || paths.length === 0 || paths.length > 500) {
       throw new Error('Select between 1 and 500 repository paths');
     }
     return [...new Set(paths.map(filePath => this.validateRepositoryPath(filePath)))];
   }
 
-  async stagePaths(snapshotId, paths) {
+  async stagePaths(snapshotId: string, paths: unknown): Promise<MutationResult> {
     await this.assertWorkingTreeSnapshot(snapshotId);
     const safePaths = this.validatePathList(paths);
     await this.git.add(['--', ...safePaths]);
     return { success: true, snapshot: await this.getWorkingTree() };
   }
 
-  async unstagePaths(snapshotId, paths) {
+  async unstagePaths(snapshotId: string, paths: unknown): Promise<MutationResult> {
     await this.assertWorkingTreeSnapshot(snapshotId);
     const safePaths = this.validatePathList(paths);
     try {
       await this.git.revparse(['--verify', 'HEAD']);
       await this.git.raw(['restore', '--staged', '--', ...safePaths]);
     } catch (error) {
-      if (!/unknown revision|needed a single revision|ambiguous argument/i.test(error.message)) {
+      if (!/unknown revision|needed a single revision|ambiguous argument/i.test((error as Error).message)) {
         throw error;
       }
       await this.git.raw(['rm', '--cached', '--ignore-unmatch', '--', ...safePaths]);
@@ -158,14 +233,14 @@ class RepositoryWorkingTree {
     return { success: true, snapshot: await this.getWorkingTree() };
   }
 
-  async discardPaths(snapshotId, paths) {
+  async discardPaths(snapshotId: string, paths: unknown): Promise<MutationResult> {
     await this.assertWorkingTreeSnapshot(snapshotId);
     const safePaths = this.validatePathList(paths);
     const status = await this.git.status();
     const conflicted = new Set(status.conflicted || []);
     const untracked = new Set(status.not_added || []);
-    const tracked = [];
-    const untrackedToRemove = [];
+    const tracked: string[] = [];
+    const untrackedToRemove: string[] = [];
     for (const relativePath of safePaths) {
       if (conflicted.has(relativePath)) {
         throw new Error(`Resolve the conflict in ${relativePath} before discarding it`);
@@ -177,7 +252,7 @@ class RepositoryWorkingTree {
       await this.git.raw(['restore', '--worktree', '--', ...tracked]);
     }
     for (const relativePath of untrackedToRemove) {
-      await fs.promises.rm(path.resolve(this.repoPath, relativePath), {
+      await nodeFs.promises.rm(nodePath.resolve(this.repoPath, relativePath), {
         recursive: true,
         force: true
       });
@@ -185,7 +260,7 @@ class RepositoryWorkingTree {
     return { success: true, snapshot: await this.getWorkingTree() };
   }
 
-  async getWorkingDiff(filePath, staged = false) {
+  async getWorkingDiff(filePath: string, staged = false): Promise<WorkingDiffSummary> {
     const parsed = await this.getParsedWorkingDiff(filePath, staged);
     return {
       path: parsed.path,
@@ -199,7 +274,7 @@ class RepositoryWorkingTree {
     };
   }
 
-  async getParsedWorkingDiff(filePath, staged = false) {
+  async getParsedWorkingDiff(filePath: string, staged = false): Promise<ParsedWorkingDiff> {
     const relativePath = this.validateRepositoryPath(filePath);
     const args = [
       'diff',
@@ -237,8 +312,8 @@ class RepositoryWorkingTree {
           );
           patch = result.stdout;
         } catch (error) {
-          if (error.code !== 1) throw error;
-          patch = error.stdout || '';
+          if ((error as { code?: number }).code !== 1) throw error;
+          patch = (error as { stdout?: string }).stdout || '';
         }
       } else if (statusFile && statusFile.index !== '?' && statusFile.working_dir !== '?') {
         return {
@@ -254,11 +329,11 @@ class RepositoryWorkingTree {
     return parseWorkingDiff(relativePath, Boolean(staged), patch);
   }
 
-  parseWorkingDiff(relativePath, staged, patch) {
+  parseWorkingDiff(relativePath: string, staged: boolean, patch: string): WorkingDiff {
     return parseWorkingDiff(relativePath, staged, patch);
   }
 
-  validateHunkIds(hunkIds) {
+  validateHunkIds(hunkIds: unknown): string[] {
     if (!Array.isArray(hunkIds) || hunkIds.length === 0 || hunkIds.length > 200) {
       throw new Error('Select between 1 and 200 diff hunks');
     }
@@ -269,26 +344,34 @@ class RepositoryWorkingTree {
     return unique;
   }
 
-  async stageHunks(snapshotId, filePath, hunkIds) {
+  async stageHunks(snapshotId: string, filePath: string, hunkIds: unknown): Promise<MutationResult> {
     return this.applyWorkingHunks(snapshotId, filePath, hunkIds, false);
   }
 
-  async unstageHunks(snapshotId, filePath, hunkIds) {
+  async unstageHunks(snapshotId: string, filePath: string, hunkIds: unknown): Promise<MutationResult> {
     return this.applyWorkingHunks(snapshotId, filePath, hunkIds, true);
   }
 
-  async applyWorkingHunks(snapshotId, filePath, hunkIds, reverse) {
+  async applyWorkingHunks(
+    snapshotId: string,
+    filePath: string,
+    hunkIds: unknown,
+    reverse: boolean
+  ): Promise<MutationResult> {
     await this.assertWorkingTreeSnapshot(snapshotId);
     const relativePath = this.validateRepositoryPath(filePath);
     const selectedIds = this.validateHunkIds(hunkIds);
     const diff = await this.getParsedWorkingDiff(relativePath, reverse);
     if (diff.binary) throw new Error('Binary files can only be staged as a whole');
-    const available = new Map(diff.hunks.map(hunk => [hunk.id, hunk]));
+    const available = new Map(
+      diff.hunks.map((hunk): [string, WorkingDiffHunk] => [hunk.id, hunk])
+    );
     const selected = selectedIds.map(id => available.get(id));
     if (selected.some(hunk => !hunk)) {
       throw new Error('Working tree changed; refresh Changes and try again');
     }
-    const patch = `${diff.prelude}${selected.map(hunk => hunk.raw).join('')}`;
+    const prelude = 'noDiff' in diff ? '' : diff.prelude;
+    const patch = `${prelude}${selected.map(hunk => hunk.raw).join('')}`;
     const args = ['apply', '--cached', '--recount', '--whitespace=nowarn'];
     if (reverse) args.push('--reverse');
     args.push('-');
@@ -296,17 +379,17 @@ class RepositoryWorkingTree {
     return { success: true, snapshot: await this.getWorkingTree() };
   }
 
-  runGitWithInput(args, input) {
+  runGitWithInput(args: string[], input: string): Promise<string> {
     return new Promise((resolve, reject) => {
       const child = spawn('git', args, {
         cwd: this.repoPath,
         windowsHide: true,
         env: process.env
       });
-      const stdout = [];
-      const stderr = [];
+      const stdout: Buffer[] = [];
+      const stderr: Buffer[] = [];
       let outputSize = 0;
-      const collect = target => chunk => {
+      const collect = (target: Buffer[]) => (chunk: Buffer) => {
         outputSize += chunk.length;
         if (outputSize > 50 * 1024 * 1024) {
           child.kill();
@@ -330,5 +413,3 @@ class RepositoryWorkingTree {
     });
   }
 }
-
-module.exports = RepositoryWorkingTree;

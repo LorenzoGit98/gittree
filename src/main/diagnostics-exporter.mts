@@ -1,14 +1,14 @@
-const crypto = require('node:crypto');
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
-const AdmZip = require('adm-zip');
+import * as crypto from 'node:crypto';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import AdmZip from 'adm-zip';
 
-function escapeRegularExpression(value) {
+export function escapeRegularExpression(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function redactText(value, repositoryPaths = []) {
+export function redactText(value: unknown, repositoryPaths: string[] = []): string {
   let redacted = String(value || '');
   for (const repositoryPath of repositoryPaths.filter(Boolean)) {
     redacted = redacted.replace(
@@ -27,23 +27,30 @@ function redactText(value, repositoryPaths = []) {
     .replace(/(^|[\s"'=])\/(?:Users|home|tmp|var|private|opt)\/[^\s,"']+/g, '$1[REDACTED_PATH]');
 }
 
-function repositoryIdentifier(repositoryPath) {
+export function repositoryIdentifier(repositoryPath: unknown): string {
   return crypto.createHash('sha256').update(String(repositoryPath)).digest('hex').slice(0, 16);
 }
 
-function safeJson(value, repositoryPaths) {
+export function safeJson(value: unknown, repositoryPaths: string[]): any {
   return JSON.parse(redactText(JSON.stringify(value || {}), repositoryPaths));
 }
 
-function buildDiagnosticsData({
+export function buildDiagnosticsData({
   versions,
   system,
   updateState,
   repositories = [],
   logs = '',
   checks = {}
+}: {
+  versions: any;
+  system: any;
+  updateState: any;
+  repositories?: Array<{ path?: string }>;
+  logs?: string;
+  checks?: any;
 }) {
-  const repositoryPaths = repositories.map(repository => repository.path).filter(Boolean);
+  const repositoryPaths = repositories.map(repository => repository.path).filter(Boolean) as string[];
   return {
     summary: {
       versions: { ...versions },
@@ -64,7 +71,7 @@ function buildDiagnosticsData({
   };
 }
 
-function readLogs(logger) {
+function readLogs(logger: any): string {
   if (!logger?.file) return '';
   return [logger.file, `${logger.file}.1`]
     .filter(filename => fs.existsSync(filename))
@@ -72,7 +79,25 @@ function readLogs(logger) {
     .join('\n');
 }
 
-class DiagnosticsExporter {
+export interface DiagnosticsExporterOptions {
+  app: any;
+  showSaveDialog: any;
+  logger: any;
+  getGitVersion: () => Promise<any>;
+  getUpdateState: () => any;
+  getRepositories: () => any[];
+  getChecks?: () => any;
+}
+
+export class DiagnosticsExporter {
+  app: any;
+  showSaveDialog: any;
+  logger: any;
+  getGitVersion: () => Promise<any>;
+  getUpdateState: () => any;
+  getRepositories: () => any[];
+  getChecks: () => any;
+
   constructor({
     app,
     showSaveDialog,
@@ -81,7 +106,7 @@ class DiagnosticsExporter {
     getUpdateState,
     getRepositories,
     getChecks = () => ({ quality: 'not-run-in-app' })
-  }) {
+  }: DiagnosticsExporterOptions) {
     this.app = app;
     this.showSaveDialog = showSaveDialog;
     this.logger = logger;
@@ -91,7 +116,7 @@ class DiagnosticsExporter {
     this.getChecks = getChecks;
   }
 
-  async export() {
+  async export(): Promise<{ success?: true; canceled?: true }> {
     const date = new Date().toISOString().slice(0, 10);
     const result = await this.showSaveDialog({
       title: 'Export GitTree diagnostics',
@@ -102,7 +127,7 @@ class DiagnosticsExporter {
     const diagnostics = buildDiagnosticsData({
       versions: {
         app: this.app.getVersion(),
-        electron: process.versions.electron || null,
+        electron: (process as any).versions.electron || null,
         node: process.versions.node,
         git: await this.getGitVersion()
       },
@@ -117,11 +142,9 @@ class DiagnosticsExporter {
     zip.addFile('logs.txt', Buffer.from(diagnostics.logs));
     zip.addFile('checks.json', Buffer.from(JSON.stringify(diagnostics.checks, null, 2)));
     await fs.promises.mkdir(path.dirname(result.filePath), { recursive: true });
-    await new Promise((resolve, reject) => {
-      zip.writeZip(result.filePath, error => error ? reject(error) : resolve());
+    await new Promise<void>((resolve, reject) => {
+      zip.writeZip(result.filePath, (error: any) => error ? reject(error) : resolve());
     });
     return { success: true };
   }
 }
-
-module.exports = { DiagnosticsExporter, buildDiagnosticsData, redactText };

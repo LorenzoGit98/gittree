@@ -1,10 +1,23 @@
-function findDeepLink(argv) {
-  return (argv || []).find(argument => (
+export function findDeepLink(argv: unknown): string | undefined {
+  return (argv as any[] || []).find(argument => (
     typeof argument === 'string' && argument.startsWith('gittree://')
   ));
 }
 
-function createApplicationRuntime({
+export interface ApplicationRuntimeOptions {
+  host: any;
+  initialize: () => Promise<void>;
+  createWindow: () => void;
+  getMainWindow: () => any;
+  getWindowCount: () => number;
+  focusMainWindow: () => void;
+  handleDeepLink: (url: string) => void;
+  argv?: string[];
+  platform?: string;
+  teardown?: () => void | Promise<void>;
+}
+
+export function createApplicationRuntime({
   host,
   initialize,
   createWindow,
@@ -15,19 +28,19 @@ function createApplicationRuntime({
   argv,
   platform,
   teardown = () => {}
-}) {
-  const pendingDeepLinks = [];
-  const hostListeners = [];
+}: ApplicationRuntimeOptions) {
+  const pendingDeepLinks: string[] = [];
+  const hostListeners: Array<[string, (...args: any[]) => void]> = [];
   let rendererReady = false;
-  let rendererReadiness = null;
+  let rendererReadiness: { webContents: any; listener: () => void } | null = null;
   let started = false;
 
-  const listen = (event, listener) => {
+  const listen = (event: string, listener: (...args: any[]) => void) => {
     host.on(event, listener);
     hostListeners.push([event, listener]);
   };
 
-  const dispatchDeepLink = url => {
+  const dispatchDeepLink = (url: string | undefined) => {
     if (!url) return;
     if (!rendererReady) pendingDeepLinks.push(url);
     else handleDeepLink(url);
@@ -59,11 +72,11 @@ function createApplicationRuntime({
       return false;
     }
     started = true;
-    listen('second-instance', (_event, secondArgv) => {
+    listen('second-instance', (_event: unknown, secondArgv: unknown) => {
       focusMainWindow();
-      dispatchDeepLink(findDeepLink(secondArgv));
+      dispatchDeepLink(findDeepLink(secondArgv as any[]));
     });
-    listen('open-url', (event, url) => {
+    listen('open-url', (event: any, url: string) => {
       event.preventDefault();
       dispatchDeepLink(url);
     });
@@ -109,5 +122,3 @@ function createApplicationRuntime({
 
   return { start, stop };
 }
-
-module.exports = { createApplicationRuntime };

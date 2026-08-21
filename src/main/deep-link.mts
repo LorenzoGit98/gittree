@@ -1,6 +1,6 @@
-function parseDeepLink(url) {
+export function parseDeepLink(url: unknown): string | null {
   if (typeof url !== 'string') return null;
-  let parsed;
+  let parsed: URL;
   try {
     parsed = new URL(url);
   } catch {
@@ -15,5 +15,3 @@ function parseDeepLink(url) {
   if (repoPath.length > 4096 || /[\0\r\n]/.test(repoPath)) return null;
   return repoPath;
 }
-
-module.exports = { parseDeepLink };

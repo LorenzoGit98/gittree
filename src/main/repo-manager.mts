@@ -1,25 +1,47 @@
-const path = require('path');
-const fs = require('fs');
-const { app } = require('electron');
+import * as path from 'node:path';
+import * as fs from 'node:fs';
+import * as electron from 'electron';
 
-function repositoryName(repoPath) {
+const app: any = (electron as any).app ?? (electron as any).default?.app ?? { getPath: () => '/tmp' };
+
+export function repositoryName(repoPath: unknown): string {
   return path.basename(String(repoPath).replace(/[\\/]+$/, '').replace(/\\/g, '/'));
 }
 
-function normalizedRepositoryPath(repoPath) {
+export function normalizedRepositoryPath(repoPath: unknown): string {
   if (typeof repoPath !== 'string' || !repoPath.trim() || !path.isAbsolute(repoPath)) {
     throw new Error('Invalid repository path');
   }
   return path.normalize(repoPath);
 }
 
-function repositoryKey(repoPath, platform = process.platform) {
+export function repositoryKey(repoPath: unknown, platform: string = process.platform): string {
   const normalized = normalizedRepositoryPath(repoPath);
   return platform === 'win32' ? normalized.toLocaleLowerCase('en-US') : normalized;
 }
 
-class RepoManager {
-  constructor(options = {}) {
+export interface RepositoryEntry {
+  path: string;
+  name: string;
+  addedAt: string;
+}
+
+export interface RepoManagerOptions {
+  platform?: string;
+  fileSystem?: typeof fs;
+  now?: () => string;
+  configPath?: string;
+}
+
+export class RepoManager {
+  repos: RepositoryEntry[];
+  activeRepoIndex: number;
+  platform: string;
+  fileSystem: typeof fs;
+  now: () => string;
+  configPath: string;
+
+  constructor(options: RepoManagerOptions = {}) {
     this.repos = [];
     this.activeRepoIndex = -1;
     this.platform = options.platform || process.platform;
@@ -29,16 +51,16 @@ class RepoManager {
     this.loadRepos();
   }
 
-  loadRepos() {
+  loadRepos(): void {
     try {
       if (this.fileSystem.existsSync(this.configPath)) {
         const data = this.fileSystem.readFileSync(this.configPath, 'utf-8');
         const parsed = JSON.parse(data);
-        if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.repos)) {
+        if (!parsed || typeof parsed !== 'object' || !Array.isArray((parsed as any).repos)) {
           throw new Error('Invalid repository workspace file');
         }
-        const seen = new Set();
-        this.repos = parsed.repos.flatMap(repository => {
+        const seen = new Set<string>();
+        this.repos = (parsed as any).repos.flatMap((repository: any) => {
           try {
             const normalizedPath = normalizedRepositoryPath(repository?.path);
             const key = repositoryKey(normalizedPath, this.platform);
@@ -53,8 +75,8 @@ class RepoManager {
             return [];
           }
         });
-        const requestedIndex = Number.isInteger(parsed.activeRepoIndex)
-          ? parsed.activeRepoIndex
+        const requestedIndex = Number.isInteger((parsed as any).activeRepoIndex)
+          ? (parsed as any).activeRepoIndex
           : -1;
         this.activeRepoIndex = requestedIndex >= 0 && requestedIndex < this.repos.length
           ? requestedIndex
@@ -66,8 +88,8 @@ class RepoManager {
     }
   }
 
-  saveRepos() {
-    let temporaryPath = null;
+  saveRepos(): void {
+    let temporaryPath: string | null = null;
     try {
       const dir = path.dirname(this.configPath);
       if (!this.fileSystem.existsSync(dir)) {
@@ -93,7 +115,7 @@ class RepoManager {
     }
   }
 
-  addRepo(repoPath) {
+  addRepo(repoPath: unknown): RepositoryEntry | null {
     const normalizedPath = normalizedRepositoryPath(repoPath);
     const key = repositoryKey(normalizedPath, this.platform);
     const existing = this.repos.find(r => repositoryKey(r.path, this.platform) === key);
@@ -108,17 +130,17 @@ class RepoManager {
     return this.getActiveRepo();
   }
 
-  addRepos(repoPaths) {
+  addRepos(repoPaths: unknown): { added: RepositoryEntry[]; existing: RepositoryEntry[]; activeRepo: RepositoryEntry | null } {
     const paths = Array.isArray(repoPaths) ? repoPaths : [];
-    const existingByPath = new Map(
+    const existingByPath = new Map<string, RepositoryEntry>(
       this.repos.map(repo => [repositoryKey(repo.path, this.platform), repo])
     );
-    const added = [];
-    const existing = [];
+    const added: RepositoryEntry[] = [];
+    const existing: RepositoryEntry[] = [];
 
     for (const repoPath of paths) {
       if (typeof repoPath !== 'string' || !repoPath.trim()) continue;
-      let normalizedPath;
+      let normalizedPath: string;
       try {
         normalizedPath = normalizedRepositoryPath(repoPath);
       } catch {
@@ -131,7 +153,7 @@ class RepoManager {
         continue;
       }
 
-      const repo = {
+      const repo: RepositoryEntry = {
         path: normalizedPath,
         name: repositoryName(normalizedPath),
         addedAt: this.now()
@@ -153,8 +175,8 @@ class RepoManager {
     };
   }
 
-  removeRepo(repoPath) {
-    let key;
+  removeRepo(repoPath: unknown): boolean {
+    let key: string;
     try {
       key = repositoryKey(repoPath, this.platform);
     } catch {
@@ -172,7 +194,7 @@ class RepoManager {
     return true;
   }
 
-  setActiveRepo(index) {
+  setActiveRepo(index: number): RepositoryEntry | null {
     if (index >= 0 && index < this.repos.length) {
       this.activeRepoIndex = index;
       this.saveRepos();
@@ -181,16 +203,14 @@ class RepoManager {
     return null;
   }
 
-  getActiveRepo() {
+  getActiveRepo(): RepositoryEntry | null {
     if (this.activeRepoIndex >= 0 && this.activeRepoIndex < this.repos.length) {
       return { ...this.repos[this.activeRepoIndex] };
     }
     return null;
   }
 
-  getAllRepos() {
+  getAllRepos(): RepositoryEntry[] {
     return this.repos.map(repository => ({ ...repository }));
   }
 }
-
-module.exports = RepoManager;

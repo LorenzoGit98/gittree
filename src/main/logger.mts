@@ -1,9 +1,9 @@
-const fs = require('node:fs');
-const path = require('node:path');
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 const MAX_LOG_BYTES = 5 * 1024 * 1024;
 
-function sanitizeMessage(message) {
+export function sanitizeMessage(message: unknown): string {
   return String(message)
     .replace(/(ghp|gho|glpat|pat)[-_A-Za-z0-9]{8,}/g, '$1***')
     .replace(/(authorization[=:]\s*)[^\s,;]+/gi, '$1***')
@@ -12,8 +12,13 @@ function sanitizeMessage(message) {
     .replace(/(token[=:]\s*)[^\s,;]+/gi, '$1***');
 }
 
-class Logger {
-  constructor(directory) {
+export class Logger {
+  directory: string | null;
+  level: number;
+  enabled: boolean;
+  file: string | null;
+
+  constructor(directory: string | null) {
     this.directory = directory;
     this.level = 2;
     this.enabled = Boolean(directory);
@@ -24,11 +29,11 @@ class Logger {
     }
   }
 
-  setLevel(level) {
+  setLevel(level: number): void {
     this.level = level;
   }
 
-  log(level, message, details) {
+  log(level: number, message: unknown, details?: unknown): void {
     if (!this.enabled || level < this.level) return;
     const line = [
       new Date().toISOString(),
@@ -44,7 +49,7 @@ class Logger {
       ) {
         this.rotate();
       }
-      fs.appendFileSync(this.file, `${line}\n`, 'utf8');
+      fs.appendFileSync(this.file!, `${line}\n`, 'utf8');
     } catch { /* logging must never break the app */ }
     if (level >= 2) {
       const method = level === 3 ? console.error : console.warn;
@@ -52,7 +57,7 @@ class Logger {
     }
   }
 
-  rotate() {
+  rotate(): void {
     if (!this.file || !fs.existsSync(this.file)) return;
     const rotated = `${this.file}.1`;
     try {
@@ -61,10 +66,8 @@ class Logger {
     } catch { /* rotation is best effort */ }
   }
 
-  debug(message, details) { this.log(0, message, details); }
-  info(message, details) { this.log(1, message, details); }
-  warn(message, details) { this.log(2, message, details); }
-  error(message, details) { this.log(3, message, details); }
+  debug(message: unknown, details?: unknown): void { this.log(0, message, details); }
+  info(message: unknown, details?: unknown): void { this.log(1, message, details); }
+  warn(message: unknown, details?: unknown): void { this.log(2, message, details); }
+  error(message: unknown, details?: unknown): void { this.log(3, message, details); }
 }
-
-module.exports = { Logger, sanitizeMessage };

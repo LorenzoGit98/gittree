@@ -1,11 +1,39 @@
-const electron = require('electron');
-const electronUpdater = require('electron-updater');
+import * as electron from 'electron';
+import * as electronUpdater from 'electron-updater';
 
-class UpdateService {
-  constructor(window, dependencies = {}) {
+export interface UpdateState {
+  status: string;
+  currentVersion: string;
+  availableVersion: string | null;
+  progress: number;
+  error: string | null;
+}
+
+export class UpdateService {
+  window: any;
+  notify: (channel: string, payload: unknown) => void;
+  app: any;
+  autoUpdater: any;
+  timers: {
+    setTimeout: typeof setTimeout;
+    setInterval: typeof setInterval;
+    setImmediate: typeof setImmediate;
+    clearTimeout: typeof clearTimeout;
+    clearInterval: typeof clearInterval;
+  };
+  initialized: boolean;
+  startupTimer: any;
+  timer: any;
+  updaterListeners: Array<[string, (...args: any[]) => void]>;
+  state: UpdateState;
+
+  constructor(window: any, dependencies: any = {}) {
     this.window = window;
-    this.app = dependencies.app || electron.app;
-    this.autoUpdater = dependencies.autoUpdater || electronUpdater.autoUpdater;
+    this.notify = dependencies.notify || ((channel: string, payload: unknown) => {
+      if (this.window && !this.window.isDestroyed()) this.window.webContents.send(channel, payload);
+    });
+    this.app = dependencies.app || (electron as any).app;
+    this.autoUpdater = dependencies.autoUpdater || (electronUpdater as any).autoUpdater;
     this.timers = {
       setTimeout: dependencies.setTimeout || setTimeout,
       setInterval: dependencies.setInterval || setInterval,
@@ -26,12 +54,12 @@ class UpdateService {
     };
   }
 
-  setWindow(window) {
+  setWindow(window: any): void {
     this.window = window;
     this.broadcast();
   }
 
-  initialize() {
+  initialize(): void {
     if (this.initialized) {
       this.broadcast();
       return;
@@ -51,7 +79,7 @@ class UpdateService {
       status: 'checking',
       error: null
     }));
-    this.listenToUpdater('update-available', info => this.setState({
+    this.listenToUpdater('update-available', (info: any) => this.setState({
       status: 'available',
       availableVersion: info.version,
       progress: 0,
@@ -63,18 +91,18 @@ class UpdateService {
       progress: 0,
       error: null
     }));
-    this.listenToUpdater('download-progress', progress => this.setState({
+    this.listenToUpdater('download-progress', (progress: any) => this.setState({
       status: 'downloading',
       progress: Math.max(0, Math.min(100, Math.round(progress.percent || 0))),
       error: null
     }));
-    this.listenToUpdater('update-downloaded', info => this.setState({
+    this.listenToUpdater('update-downloaded', (info: any) => this.setState({
       status: 'downloaded',
       availableVersion: info.version,
       progress: 100,
       error: null
     }));
-    this.listenToUpdater('error', error => this.setState({
+    this.listenToUpdater('error', (error: any) => this.setState({
       status: 'error',
       error: error?.message || String(error)
     }));
@@ -86,12 +114,12 @@ class UpdateService {
     this.broadcast();
   }
 
-  listenToUpdater(event, listener) {
+  listenToUpdater(event: string, listener: (...args: any[]) => void): void {
     this.autoUpdater.on(event, listener);
     this.updaterListeners.push([event, listener]);
   }
 
-  destroy() {
+  destroy(): void {
     if (this.startupTimer) this.timers.clearTimeout(this.startupTimer);
     if (this.timer) this.timers.clearInterval(this.timer);
     this.startupTimer = null;
@@ -103,11 +131,11 @@ class UpdateService {
     this.initialized = false;
   }
 
-  getState() {
+  getState(): UpdateState {
     return { ...this.state };
   }
 
-  async check(manual = true) {
+  async check(manual = true): Promise<{ success: boolean; skipped?: boolean; error?: string; state: UpdateState }> {
     if (!this.app.isPackaged) {
       return { success: false, skipped: true, state: this.getState() };
     }
@@ -120,13 +148,13 @@ class UpdateService {
     } catch (error) {
       this.setState({
         status: manual ? 'error' : 'idle',
-        error: manual ? error.message : null
+        error: manual ? (error as Error).message : null
       });
-      return { success: false, error: error.message, state: this.getState() };
+      return { success: false, error: (error as Error).message, state: this.getState() };
     }
   }
 
-  async download() {
+  async download(): Promise<{ success: boolean; error?: string; state: UpdateState }> {
     if (this.state.status !== 'available') {
       return { success: false, error: 'No update is ready to download', state: this.getState() };
     }
@@ -134,12 +162,12 @@ class UpdateService {
       await this.autoUpdater.downloadUpdate();
       return { success: true, state: this.getState() };
     } catch (error) {
-      this.setState({ status: 'error', error: error.message });
-      return { success: false, error: error.message, state: this.getState() };
+      this.setState({ status: 'error', error: (error as Error).message });
+      return { success: false, error: (error as Error).message, state: this.getState() };
     }
   }
 
-  install() {
+  install(): { success: boolean; error?: string } {
     if (this.state.status !== 'downloaded') {
       return { success: false, error: 'No downloaded update is ready to install' };
     }
@@ -147,15 +175,13 @@ class UpdateService {
     return { success: true };
   }
 
-  setState(patch) {
+  setState(patch: Partial<UpdateState>): void {
     this.state = { ...this.state, ...patch };
     this.broadcast();
   }
 
-  broadcast() {
+  broadcast(): void {
     if (!this.window || this.window.isDestroyed()) return;
-    this.window.webContents.send('update:state', this.getState());
+    this.notify('update:state', this.getState());
   }
 }
-
-module.exports = UpdateService;

@@ -1,20 +1,46 @@
-const fs = require('node:fs');
-const path = require('node:path');
-const GitService = require('./git-service');
-const RepositoryQueue = require('./git/repository-queue');
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { GitService } from './git-service.mts';
+import { RepositoryQueue } from './git/repository-queue.mts';
 
-function isInside(rootPath, candidatePath) {
+function isInside(rootPath: string, candidatePath: string): boolean {
   const relative = path.relative(rootPath, candidatePath);
   return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
 }
 
-class RepositoryWorkspace {
+export interface RepositoryStore {
+  getAllRepos: () => any[];
+  getActiveRepo: () => any | null;
+  setActiveRepo: (index: number) => any | null;
+  addRepo: (path: string) => any;
+  addRepos: (paths: string[]) => any;
+  removeRepo: (path: string) => boolean;
+  addAuthorizedRepositories?: (paths: string[]) => any;
+}
+
+export interface RepositoryWorkspaceOptions {
+  repoStore: RepositoryStore;
+  createGitService?: (repoPath: string, options: { queue: RepositoryQueue }) => GitService;
+  platform?: string;
+  fileSystem?: typeof fs;
+}
+
+export class RepositoryWorkspace {
+  repoStore: RepositoryStore;
+  createGitService: (repoPath: string, options: { queue: RepositoryQueue }) => GitService;
+  platform: string;
+  fs: typeof fs;
+  authorizedDirectories: Map<string, string>;
+  activeScanRoots: Map<string, string>;
+  gitServices: Map<string, GitService>;
+  queues: Map<string, RepositoryQueue>;
+
   constructor({
     repoStore,
     createGitService = (repoPath, options) => new GitService(repoPath, options),
     platform = process.platform,
     fileSystem = fs
-  }) {
+  }: RepositoryWorkspaceOptions) {
     if (!repoStore) throw new TypeError('repoStore is required');
     this.repoStore = repoStore;
     this.createGitService = createGitService;
@@ -26,41 +52,41 @@ class RepositoryWorkspace {
     this.queues = new Map();
   }
 
-  resolvePath(repoPath, { mustExist = true } = {}) {
+  resolvePath(repoPath: unknown, { mustExist = true } = {}): string {
     if (typeof repoPath !== 'string' || !repoPath || !path.isAbsolute(repoPath)) {
       throw new Error('Invalid repository path');
     }
     const resolved = path.resolve(repoPath);
     if (!mustExist) return path.normalize(resolved);
-    const realpath = this.fs.realpathSync.native || this.fs.realpathSync;
+    const realpath = (this.fs as any).realpathSync.native || this.fs.realpathSync;
     return path.normalize(realpath(resolved));
   }
 
-  pathKey(repoPath, options) {
+  pathKey(repoPath: unknown, options?: { mustExist?: boolean }): string {
     const normalized = this.resolvePath(repoPath, options);
     return this.platform === 'win32' ? normalized.toLocaleLowerCase('en-US') : normalized;
   }
 
-  repositories() {
+  repositories(): any[] {
     return this.repoStore.getAllRepos();
   }
 
-  list() {
+  list(): any[] {
     return this.repositories().map(repository => ({ ...repository }));
   }
 
-  active() {
+  active(): any | null {
     const repository = this.repoStore.getActiveRepo();
     return repository ? { ...repository } : null;
   }
 
-  setActive(index) {
+  setActive(index: number): any | null {
     const repository = this.repoStore.setActiveRepo(index);
     return repository ? { ...repository } : null;
   }
 
-  pathKeys(repoPath) {
-    const keys = new Set();
+  pathKeys(repoPath: unknown): Set<string> {
+    const keys = new Set<string>();
     try {
       keys.add(this.pathKey(repoPath));
     } catch {
@@ -74,7 +100,7 @@ class RepositoryWorkspace {
     return keys;
   }
 
-  managedRepository(repoPath) {
+  managedRepository(repoPath: unknown): any | null {
     const requestedKeys = this.pathKeys(repoPath);
     if (requestedKeys.size === 0) return null;
     return this.repositories().find(repository => {
@@ -83,23 +109,23 @@ class RepositoryWorkspace {
     }) || null;
   }
 
-  isManaged(repoPath) {
+  isManaged(repoPath: unknown): boolean {
     return Boolean(this.managedRepository(repoPath));
   }
 
-  assertManaged(repoPath) {
+  assertManaged(repoPath: unknown): void {
     if (!this.isManaged(repoPath)) {
       throw new Error('Repository is not opened in this workspace');
     }
   }
 
-  authorizeDirectory(directoryPath) {
+  authorizeDirectory(directoryPath: unknown): string {
     const canonical = this.resolvePath(directoryPath);
     this.authorizedDirectories.set(this.pathKey(canonical), canonical);
     return canonical;
   }
 
-  canInspect(repoPath) {
+  canInspect(repoPath: unknown): boolean {
     if (this.isManaged(repoPath)) return true;
     try {
       return this.authorizedDirectories.has(this.pathKey(repoPath));
@@ -108,11 +134,11 @@ class RepositoryWorkspace {
     }
   }
 
-  canAdd(repoPath) {
+  canAdd(repoPath: unknown): boolean {
     return this.canInspect(repoPath);
   }
 
-  consumeAuthorizedDirectory(directoryPath) {
+  consumeAuthorizedDirectory(directoryPath: unknown): string {
     const key = this.pathKey(directoryPath);
     const canonical = this.authorizedDirectories.get(key);
     if (!canonical) throw new Error('Repository path was not authorized');
@@ -120,19 +146,19 @@ class RepositoryWorkspace {
     return canonical;
   }
 
-  beginScan(rootPath) {
+  beginScan(rootPath: unknown): string {
     const root = this.consumeAuthorizedDirectory(rootPath);
     this.activeScanRoots.set(this.pathKey(root), root);
     return root;
   }
 
-  authorizeScanResults(rootPath, repositories) {
+  authorizeScanResults(rootPath: unknown, repositories: unknown): void {
     const rootKey = this.pathKey(rootPath);
     const root = this.activeScanRoots.get(rootKey);
     if (!root) throw new Error('Repository scan root was not authorized');
     this.activeScanRoots.delete(rootKey);
     for (const repository of Array.isArray(repositories) ? repositories : []) {
-      const candidatePath = typeof repository === 'string' ? repository : repository?.path;
+      const candidatePath = typeof repository === 'string' ? repository : (repository as any)?.path;
       try {
         const canonical = this.resolvePath(candidatePath);
         if (isInside(root, canonical)) {
@@ -144,7 +170,7 @@ class RepositoryWorkspace {
     }
   }
 
-  addTrustedRepository(repoPath) {
+  addTrustedRepository(repoPath: unknown): any {
     const canonical = this.resolvePath(repoPath);
     const managed = this.managedRepository(canonical);
     return managed
@@ -152,21 +178,21 @@ class RepositoryWorkspace {
       : this.repoStore.addRepo(canonical);
   }
 
-  addAuthorizedRepository(repoPath) {
+  addAuthorizedRepository(repoPath: unknown): any {
     const managed = this.managedRepository(repoPath);
     if (managed) return this.repoStore.addRepo(managed.path);
     return this.repoStore.addRepo(this.consumeAuthorizedDirectory(repoPath));
   }
 
-  addTrustedRepositories(repoPaths) {
+  addTrustedRepositories(repoPaths: unknown): any {
     const canonical = (Array.isArray(repoPaths) ? repoPaths : [])
       .map(repoPath => this.resolvePath(repoPath));
     return this.repoStore.addRepos(canonical);
   }
 
-  addAuthorizedRepositories(repoPaths) {
-    const valid = [];
-    const failed = [];
+  addAuthorizedRepositories(repoPaths: unknown): any {
+    const valid: string[] = [];
+    const failed: Array<{ path: string; error: string }> = [];
     for (const repoPath of Array.isArray(repoPaths) ? repoPaths : []) {
       const managed = this.managedRepository(repoPath);
       if (managed) {
@@ -176,13 +202,13 @@ class RepositoryWorkspace {
       try {
         valid.push(this.consumeAuthorizedDirectory(repoPath));
       } catch (error) {
-        failed.push({ path: String(repoPath || ''), error: error.message });
+        failed.push({ path: String(repoPath || ''), error: (error as Error).message });
       }
     }
     return { ...this.repoStore.addRepos(valid), failed };
   }
 
-  remove(repoPath) {
+  remove(repoPath: unknown): boolean {
     const managed = this.managedRepository(repoPath);
     if (!managed) return false;
     const removed = this.repoStore.removeRepo(managed.path);
@@ -190,7 +216,7 @@ class RepositoryWorkspace {
     return removed;
   }
 
-  resolveCommonDirectory(repoPath) {
+  resolveCommonDirectory(repoPath: string): string {
     const dotGit = path.join(repoPath, '.git');
     const stat = this.fs.statSync(dotGit);
     let gitDirectory = dotGit;
@@ -208,11 +234,11 @@ class RepositoryWorkspace {
     return this.resolvePath(commonDirectory);
   }
 
-  getGitService(repoPath) {
+  getGitService(repoPath: unknown): GitService {
     this.assertManaged(repoPath);
     const canonical = this.resolvePath(repoPath);
     const serviceKey = this.pathKey(canonical);
-    if (this.gitServices.has(serviceKey)) return this.gitServices.get(serviceKey);
+    if (this.gitServices.has(serviceKey)) return this.gitServices.get(serviceKey)!;
     const commonDirectory = this.resolveCommonDirectory(canonical);
     const queueKey = this.pathKey(commonDirectory);
     let queue = this.queues.get(queueKey);
@@ -225,7 +251,7 @@ class RepositoryWorkspace {
     return service;
   }
 
-  evictGitService(repoPath) {
+  evictGitService(repoPath: unknown): boolean {
     try {
       return this.gitServices.delete(this.pathKey(repoPath, { mustExist: false }));
     } catch {
@@ -233,5 +259,3 @@ class RepositoryWorkspace {
     }
   }
 }
-
-module.exports = RepositoryWorkspace;

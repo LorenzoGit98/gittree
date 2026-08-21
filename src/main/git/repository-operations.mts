@@ -1,26 +1,100 @@
-const fs = require('node:fs');
-const path = require('node:path');
-const { execFile } = require('node:child_process');
-const { promisify } = require('node:util');
-
-const {
+import * as nodeFs from 'node:fs';
+import * as nodePath from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import type { SimpleGit } from 'simple-git';
+import {
   MAX_CONFLICT_RESULT_BYTES,
   conflictSnapshot,
   hasUnresolvedMarkers,
-  parseConflictBlocks
-} = require('../conflict-model');
+  parseConflictBlocks,
+  type ConflictBlock
+} from '../conflict-model.mts';
+import type { OperationState } from '../../shared/models.mts';
 
 const execFileAsync = promisify(execFile);
 
-class RepositoryOperations {
-  constructor({ git, repoPath, assertCommitish, validateRepositoryPath }) {
+export interface CommitActionMetadata {
+  hash: string;
+  parents: string[];
+  timestamp: number;
+  subject: string;
+}
+
+export interface CommitActionPreview {
+  action: 'rebase' | 'cherry-pick';
+  target: string | null;
+  commits: CommitActionMetadata[];
+  files: string[];
+  workingTree: { clean: boolean; files: string[] };
+  pendingOperation: OperationState['type'];
+  detached: boolean;
+  allowed: boolean;
+  reason: string;
+}
+
+export interface MergePreview {
+  supported: boolean;
+  canFastForward: boolean | null;
+  conflictedFiles: string[];
+  changedFiles: string[];
+}
+
+export interface ConflictFile {
+  snapshotId: string;
+  path: string;
+  binary: boolean;
+  eol: 'crlf' | 'lf';
+  base: string;
+  current: string;
+  incoming: string;
+  result: string;
+  blocks: ConflictBlock[];
+  ours: string;
+  theirs: string;
+}
+
+export interface ConflictResolution {
+  strategy?: string;
+  snapshotId?: unknown;
+  content?: unknown;
+}
+
+export interface RepositoryOperationsOptions {
+  git: SimpleGit;
+  repoPath: string;
+  assertCommitish: (ref: string) => Promise<void> | void;
+  validateRepositoryPath: (
+    filePath: string,
+    options?: { rejectSymlinks?: boolean }
+  ) => string;
+}
+
+const MERGE_STRATEGIES = {
+  ff: '--ff',
+  noff: '--no-ff',
+  squash: '--squash'
+} as const;
+
+export type MergeStrategy = keyof typeof MERGE_STRATEGIES;
+
+export class RepositoryOperations {
+  private git: SimpleGit;
+
+  private repoPath: string;
+
+  private assertCommitish: (ref: string) => Promise<void> | void;
+
+  private validateRepositoryPath: RepositoryOperationsOptions['validateRepositoryPath'];
+
+  constructor({ git, repoPath, assertCommitish, validateRepositoryPath }: RepositoryOperationsOptions) {
     this.git = git;
     this.repoPath = repoPath;
     this.assertCommitish = assertCommitish;
     this.validateRepositoryPath = validateRepositoryPath;
   }
 
-  async rebaseOnto(branch) {
+  async rebaseOnto(branch: string) {
     await this.assertNoPendingOperation();
     await this.assertCommitish(branch);
     const status = await this.git.status();
@@ -31,11 +105,11 @@ class RepositoryOperations {
       const result = await this.git.rebase([branch]);
       return { success: true, branch, result };
     } catch (error) {
-      throw new Error(`Failed to rebase onto ${branch}: ${error.message}`, { cause: error });
+      throw new Error(`Failed to rebase onto ${branch}: ${(error as Error).message}`, { cause: error });
     }
   }
 
-  validateCommitHashes(hashes) {
+  validateCommitHashes(hashes: unknown): string[] {
     if (!Array.isArray(hashes) || hashes.length === 0 || hashes.length > 500) {
       throw new Error('Select between 1 and 500 commits');
     }
@@ -46,8 +120,8 @@ class RepositoryOperations {
     return unique;
   }
 
-  async getCommitActionMetadata(hashes) {
-    const metadata = [];
+  async getCommitActionMetadata(hashes: unknown): Promise<CommitActionMetadata[]> {
+    const metadata: CommitActionMetadata[] = [];
     for (const hash of this.validateCommitHashes(hashes)) {
       await this.assertCommitish(hash);
       const raw = await this.git.raw([
@@ -68,10 +142,10 @@ class RepositoryOperations {
     return metadata;
   }
 
-  sortCommitsParentFirst(commits) {
+  sortCommitsParentFirst(commits: CommitActionMetadata[]): CommitActionMetadata[] {
     const byHash = new Map(commits.map(commit => [commit.hash, commit]));
     const indegree = new Map(commits.map(commit => [commit.hash, 0]));
-    const children = new Map(commits.map(commit => [commit.hash, []]));
+    const children = new Map<string, string[]>(commits.map(commit => [commit.hash, []]));
     for (const commit of commits) {
       for (const parent of commit.parents) {
         if (!byHash.has(parent)) continue;
@@ -82,14 +156,16 @@ class RepositoryOperations {
     const ready = commits
       .filter(commit => indegree.get(commit.hash) === 0)
       .sort((left, right) => left.timestamp - right.timestamp);
-    const ordered = [];
+    const ordered: CommitActionMetadata[] = [];
     while (ready.length) {
       const commit = ready.shift();
+      if (!commit) break;
       ordered.push(commit);
       for (const childHash of children.get(commit.hash)) {
         indegree.set(childHash, indegree.get(childHash) - 1);
         if (indegree.get(childHash) === 0) {
-          ready.push(byHash.get(childHash));
+          const child = byHash.get(childHash);
+          if (child) ready.push(child);
           ready.sort((left, right) => left.timestamp - right.timestamp);
         }
       }
@@ -99,7 +175,7 @@ class RepositoryOperations {
       : [...commits].sort((left, right) => left.timestamp - right.timestamp);
   }
 
-  async isAncestor(ancestor, descendant) {
+  async isAncestor(ancestor: string, descendant: string): Promise<boolean> {
     try {
       await execFileAsync(
         'git',
@@ -108,13 +184,13 @@ class RepositoryOperations {
       );
       return true;
     } catch (error) {
-      if (error.code === 1) return false;
+      if ((error as { code?: number }).code === 1) return false;
       throw error;
     }
   }
 
-  async getCommitFiles(commits) {
-    const files = new Set();
+  async getCommitFiles(commits: CommitActionMetadata[]): Promise<string[]> {
+    const files = new Set<string>();
     for (const commit of commits) {
       const raw = await this.git.raw([
         'show',
@@ -128,7 +204,10 @@ class RepositoryOperations {
     return [...files];
   }
 
-  async previewCommitAction(action, hashes) {
+  async previewCommitAction(
+    action: 'rebase' | 'cherry-pick',
+    hashes: unknown
+  ): Promise<CommitActionPreview> {
     if (!['rebase', 'cherry-pick'].includes(action)) {
       throw new Error(`Invalid commit action: ${action}`);
     }
@@ -142,7 +221,7 @@ class RepositoryOperations {
       action,
       target: commits[0]?.hash || null,
       commits,
-      files: [],
+      files: [] as string[],
       workingTree: {
         clean: status.isClean(),
         files: status.files.map(file => file.path)
@@ -212,7 +291,7 @@ class RepositoryOperations {
     };
   }
 
-  async rebaseOntoCommit(hash) {
+  async rebaseOntoCommit(hash: string) {
     const preview = await this.previewCommitAction('rebase', [hash]);
     if (!preview.allowed) throw new Error(preview.reason);
     try {
@@ -224,11 +303,11 @@ class RepositoryOperations {
         result
       };
     } catch (error) {
-      throw new Error(`Failed to rebase onto commit: ${error.message}`, { cause: error });
+      throw new Error(`Failed to rebase onto commit: ${(error as Error).message}`, { cause: error });
     }
   }
 
-  async cherryPickCommits(hashes) {
+  async cherryPickCommits(hashes: unknown) {
     const preview = await this.previewCommitAction('cherry-pick', hashes);
     if (!preview.allowed) throw new Error(preview.reason);
     try {
@@ -239,26 +318,21 @@ class RepositoryOperations {
         head: (await this.git.revparse(['HEAD'])).trim()
       };
     } catch (error) {
-      throw new Error(`Failed to cherry-pick: ${error.message}`, { cause: error });
+      throw new Error(`Failed to cherry-pick: ${(error as Error).message}`, { cause: error });
     }
   }
 
-  async assertNoPendingOperation() {
+  async assertNoPendingOperation(): Promise<void> {
     const state = await this.getOperationState();
     if (state.type) {
       throw new Error(`Finish or abort the pending ${state.type} before changing branches`);
     }
   }
 
-  async merge(branch, strategy = 'ff') {
+  async merge(branch: string, strategy: string = 'ff') {
     await this.assertNoPendingOperation();
     await this.assertCommitish(branch);
-    const strategies = {
-      ff: '--ff',
-      noff: '--no-ff',
-      squash: '--squash'
-    };
-    const flag = strategies[strategy];
+    const flag = MERGE_STRATEGIES[strategy as MergeStrategy];
     if (!flag) throw new Error(`Invalid merge strategy: ${strategy}`);
     const status = await this.git.status();
     if (!status.isClean()) {
@@ -273,11 +347,11 @@ class RepositoryOperations {
       const result = await this.git.merge([flag, branch]);
       return { success: true, branch, strategy, result };
     } catch (error) {
-      throw new Error(`Failed to merge: ${error.message}`, { cause: error });
+      throw new Error(`Failed to merge: ${(error as Error).message}`, { cause: error });
     }
   }
 
-  async mergeBlockingFiles(branch, status) {
+  async mergeBlockingFiles(branch: string, status: Awaited<ReturnType<SimpleGit['status']>>) {
     const changedRaw = await this.git.raw(['diff', '--name-only', `HEAD...${branch}`]);
     const incoming = new Set(changedRaw.split(/\r?\n/).filter(Boolean));
     if (!incoming.size) return [];
@@ -294,15 +368,15 @@ class RepositoryOperations {
     return [...new Set(local.filter(file => incoming.has(file)))];
   }
 
-  async previewMerge(branch) {
+  async previewMerge(branch: string): Promise<MergePreview> {
     await this.assertCommitish(branch);
-    const fallback = () => ({
+    const fallback = (): MergePreview => ({
       supported: false,
       canFastForward: null,
       conflictedFiles: [],
       changedFiles: []
     });
-    let stdout;
+    let stdout: string;
     try {
       ({ stdout } = await execFileAsync(
         'git',
@@ -310,10 +384,10 @@ class RepositoryOperations {
         { cwd: this.repoPath, encoding: 'utf8', maxBuffer: 50 * 1024 * 1024 }
       ));
     } catch (error) {
-      stdout = String(error.stdout || '');
+      stdout = String((error as { stdout?: string }).stdout || '');
       if (!stdout) return fallback();
     }
-    const conflictedFiles = [];
+    const conflictedFiles: string[] = [];
     const lines = String(stdout).split(/\r?\n/);
     for (let index = 1; index < lines.length; index += 1) {
       const line = lines[index].trim();
@@ -344,11 +418,11 @@ class RepositoryOperations {
     }
   }
 
-  parseConflictBlocks(content) {
+  parseConflictBlocks(content: unknown): ConflictBlock[] {
     return parseConflictBlocks(String(content || ''));
   }
 
-  async getOperationState() {
+  async getOperationState(): Promise<OperationState> {
     const [
       mergePath,
       rebaseMergePath,
@@ -362,10 +436,10 @@ class RepositoryOperations {
       'CHERRY_PICK_HEAD',
       'sequencer'
     ].map(name => this.resolveGitPath(name)));
-    let type = null;
-    if (fs.existsSync(mergePath)) type = 'merge';
-    else if (fs.existsSync(rebaseMergePath) || fs.existsSync(rebaseApplyPath)) type = 'rebase';
-    else if (fs.existsSync(cherryPickPath) || fs.existsSync(sequencerPath)) {
+    let type: OperationState['type'] = null;
+    if (nodeFs.existsSync(mergePath)) type = 'merge';
+    else if (nodeFs.existsSync(rebaseMergePath) || nodeFs.existsSync(rebaseApplyPath)) type = 'rebase';
+    else if (nodeFs.existsSync(cherryPickPath) || nodeFs.existsSync(sequencerPath)) {
       type = 'cherry-pick';
     }
 
@@ -375,7 +449,7 @@ class RepositoryOperations {
     return { type, conflicts, canContinue: conflicts.length === 0 };
   }
 
-  async readConflict(filePath) {
+  async readConflict(filePath: string): Promise<ConflictFile> {
     const relativePath = this.validateRepositoryPath(filePath);
     const state = await this.getOperationState();
     if (!state.type || !state.conflicts.includes(relativePath)) {
@@ -386,11 +460,11 @@ class RepositoryOperations {
       this.readStageBlob(1, relativePath),
       this.readStageBlob(2, relativePath),
       this.readStageBlob(3, relativePath),
-      fs.promises.readFile(path.resolve(this.repoPath, relativePath)).catch(() => Buffer.alloc(0))
+      nodeFs.promises.readFile(nodePath.resolve(this.repoPath, relativePath)).catch(() => Buffer.alloc(0))
     ]);
     const buffers = [base, ours, theirs, result];
     const binary = buffers.some(buffer => buffer.includes(0));
-    const decode = buffer => binary ? '' : buffer.toString('utf8');
+    const decode = (buffer: Buffer) => binary ? '' : buffer.toString('utf8');
     const resultText = decode(result);
     const snapshotId = conflictSnapshot(buffers);
 
@@ -410,7 +484,7 @@ class RepositoryOperations {
     };
   }
 
-  async resolveConflict(filePath, resolution) {
+  async resolveConflict(filePath: string, resolution: ConflictResolution) {
     const relativePath = this.validateRepositoryPath(filePath);
     const state = await this.getOperationState();
     if (!state.type || !state.conflicts.includes(relativePath)) {
@@ -436,8 +510,8 @@ class RepositoryOperations {
       if (hasUnresolvedMarkers(resolution.content)) {
         throw new Error('The result still contains unresolved conflict markers');
       }
-      await fs.promises.writeFile(
-        path.resolve(this.repoPath, relativePath),
+      await nodeFs.promises.writeFile(
+        nodePath.resolve(this.repoPath, relativePath),
         resolution.content,
         'utf8'
       );
@@ -471,7 +545,7 @@ class RepositoryOperations {
       );
       return { success: true, state: await this.getOperationState() };
     } catch (error) {
-      throw new Error(`Failed to continue ${state.type}: ${error.message}`, { cause: error });
+      throw new Error(`Failed to continue ${state.type}: ${(error as Error).message}`, { cause: error });
     }
   }
 
@@ -482,7 +556,7 @@ class RepositoryOperations {
       await this.git.raw([state.type, '--abort']);
       return { success: true, state: await this.getOperationState() };
     } catch (error) {
-      throw new Error(`Failed to abort ${state.type}: ${error.message}`, { cause: error });
+      throw new Error(`Failed to abort ${state.type}: ${(error as Error).message}`, { cause: error });
     }
   }
 
@@ -495,16 +569,16 @@ class RepositoryOperations {
       await this.git.raw([state.type, '--skip']);
       return { success: true, state: await this.getOperationState() };
     } catch (error) {
-      throw new Error(`Failed to skip ${state.type}: ${error.message}`, { cause: error });
+      throw new Error(`Failed to skip ${state.type}: ${(error as Error).message}`, { cause: error });
     }
   }
 
-  async resolveGitPath(name) {
+  async resolveGitPath(name: string): Promise<string> {
     const value = (await this.git.raw(['rev-parse', '--git-path', name])).trim();
-    return path.isAbsolute(value) ? value : path.resolve(this.repoPath, value);
+    return nodePath.isAbsolute(value) ? value : nodePath.resolve(this.repoPath, value);
   }
 
-  async readStageBlob(stage, relativePath) {
+  async readStageBlob(stage: number, relativePath: string): Promise<Buffer> {
     try {
       const { stdout } = await execFileAsync(
         'git',
@@ -517,5 +591,3 @@ class RepositoryOperations {
     }
   }
 }
-
-module.exports = RepositoryOperations;

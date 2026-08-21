@@ -1,21 +1,87 @@
-const path = require('node:path');
+import * as nodePath from 'node:path';
+import type { SimpleGit } from 'simple-git';
 
-function assertDirectory(directory) {
+export interface WorktreeEntry {
+  path: string;
+  head: string;
+  branch: string;
+  detached: boolean;
+  locked: boolean;
+  lockReason: string;
+  prunable: boolean;
+  pruneReason: string;
+}
+
+export interface WorktreeStatus {
+  dirty: boolean;
+  changes: number;
+  ahead: number;
+  behind: boolean | number;
+}
+
+export interface CreateWorktreeOptions {
+  directory: string;
+  branch: string;
+  baseRef?: string;
+  createBranch?: boolean;
+}
+
+export interface CreateWorktreeResult {
+  success: true;
+  path: string;
+  branch: string;
+  baseRef: string;
+  createdBranch: boolean;
+}
+
+export interface RepositoryWorktreesOptions {
+  git: SimpleGit;
+  repoPath: string;
+  readStatus?: ((path: string) => Promise<WorktreeStatus> | WorktreeStatus) | null;
+  assertNoPendingOperation: () => Promise<void> | void;
+  assertValidBranchName: (branch: string) => Promise<void> | void;
+  assertCommitish: (ref: string) => Promise<void> | void;
+}
+
+function assertDirectory(directory: unknown): string {
   if (
     typeof directory !== 'string' ||
-    !path.isAbsolute(directory) ||
+    !nodePath.isAbsolute(directory) ||
     /[\0\r\n]/.test(directory)
   ) {
     throw new Error('Invalid worktree directory');
   }
-  return path.normalize(directory);
+  return nodePath.normalize(directory);
 }
 
-function parseReason(line, prefix) {
+function parseReason(line: string, prefix: string): string {
   return line.length > prefix.length ? line.slice(prefix.length).trim() : '';
 }
 
-class RepositoryWorktrees {
+interface ParsedWorktree {
+  path?: string;
+  head?: string;
+  branch?: string;
+  detached?: boolean;
+  locked?: boolean;
+  lockReason?: string;
+  prunable?: boolean;
+  pruneReason?: string;
+}
+
+export class RepositoryWorktrees {
+  private git: SimpleGit;
+
+  private repoPath: string;
+
+  private readStatus: RepositoryWorktreesOptions['readStatus'];
+
+  private assertNoPendingOperation: () => Promise<void> | void;
+
+  private assertValidBranchName: (branch: string) => Promise<void> | void;
+
+  private assertCommitish: (ref: string) => Promise<void> | void;
+
   constructor({
     git,
     repoPath,
@@ -23,7 +89,7 @@ class RepositoryWorktrees {
     assertNoPendingOperation,
     assertValidBranchName,
     assertCommitish
-  }) {
+  }: RepositoryWorktreesOptions) {
     this.git = git;
     this.repoPath = repoPath;
     this.readStatus = readStatus;
@@ -32,9 +98,9 @@ class RepositoryWorktrees {
     this.assertCommitish = assertCommitish;
   }
 
-  parse(raw) {
-    const worktrees = [];
-    let current = null;
+  parse(raw: unknown): WorktreeEntry[] {
+    const worktrees: WorktreeEntry[] = [];
+    let current: ParsedWorktree | null = null;
     const finish = () => {
       if (!current) return;
       worktrees.push({
@@ -73,7 +139,7 @@ class RepositoryWorktrees {
     return worktrees;
   }
 
-  async list() {
+  async list(): Promise<WorktreeEntry[]> {
     try {
       const worktrees = this.parse(await this.git.raw(['worktree', 'list', '--porcelain']));
       if (!this.readStatus) return worktrees;
@@ -82,11 +148,11 @@ class RepositoryWorktrees {
         ...(await this.readStatus(worktree.path))
       })));
     } catch (error) {
-      throw new Error(`Failed to get worktrees: ${error.message}`, { cause: error });
+      throw new Error(`Failed to get worktrees: ${(error as Error).message}`, { cause: error });
     }
   }
 
-  parseStatus(raw) {
+  parseStatus(raw: unknown): WorktreeStatus {
     let ahead = 0;
     let behind = 0;
     let changes = 0;
@@ -102,7 +168,12 @@ class RepositoryWorktrees {
     return { dirty: changes > 0, changes, ahead, behind };
   }
 
-  async create({ directory, branch, baseRef = 'HEAD', createBranch = true }) {
+  async create({
+    directory,
+    branch,
+    baseRef = 'HEAD',
+    createBranch = true
+  }: CreateWorktreeOptions): Promise<CreateWorktreeResult> {
     await this.assertNoPendingOperation();
     const safeDirectory = assertDirectory(directory);
     await this.assertValidBranchName(branch);
@@ -120,21 +191,24 @@ class RepositoryWorktrees {
         createdBranch: Boolean(createBranch)
       };
     } catch (error) {
-      throw new Error(`Failed to create worktree: ${error.message}`, { cause: error });
+      throw new Error(`Failed to create worktree: ${(error as Error).message}`, { cause: error });
     }
   }
 
-  async remove(directory) {
+  async remove(directory: string): Promise<{ success: true; path: string }> {
     const safeDirectory = assertDirectory(directory);
     try {
       await this.git.raw(['worktree', 'remove', safeDirectory]);
       return { success: true, path: safeDirectory };
     } catch (error) {
-      throw new Error(`Failed to remove worktree: ${error.message}`, { cause: error });
+      throw new Error(`Failed to remove worktree: ${(error as Error).message}`, { cause: error });
     }
   }
 
-  async lock(directory, reason = '') {
+  async lock(
+    directory: string,
+    reason = ''
+  ): Promise<{ success: true; path: string; locked: true }> {
     const safeDirectory = assertDirectory(directory);
     if (typeof reason !== 'string' || reason.length > 200 || /[\0\r\n]/.test(reason)) {
       throw new Error('Invalid worktree lock reason');
@@ -146,19 +220,19 @@ class RepositoryWorktrees {
       await this.git.raw(args);
       return { success: true, path: safeDirectory, locked: true };
     } catch (error) {
-      throw new Error(`Failed to lock worktree: ${error.message}`, { cause: error });
+      throw new Error(`Failed to lock worktree: ${(error as Error).message}`, { cause: error });
     }
   }
 
-  async unlock(directory) {
+  async unlock(
+    directory: string
+  ): Promise<{ success: true; path: string; locked: false }> {
     const safeDirectory = assertDirectory(directory);
     try {
       await this.git.raw(['worktree', 'unlock', safeDirectory]);
       return { success: true, path: safeDirectory, locked: false };
     } catch (error) {
-      throw new Error(`Failed to unlock worktree: ${error.message}`, { cause: error });
+      throw new Error(`Failed to unlock worktree: ${(error as Error).message}`, { cause: error });
     }
   }
 }
-
-module.exports = RepositoryWorktrees;

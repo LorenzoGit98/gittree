@@ -1,7 +1,7 @@
-const fs = require('node:fs');
-const path = require('node:path');
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
-const IGNORED_DIRECTORIES = new Set([
+export const IGNORED_DIRECTORIES = new Set<string>([
   '.git',
   '.hg',
   '.svn',
@@ -23,11 +23,11 @@ const IGNORED_DIRECTORIES = new Set([
   'vendor'
 ]);
 
-function isCanceled(signal) {
+function isCanceled(signal: any): boolean {
   return Boolean(signal && signal.aborted);
 }
 
-async function hasGitMarker(directoryPath) {
+async function hasGitMarker(directoryPath: string): Promise<boolean> {
   const markerPath = path.join(directoryPath, '.git');
   try {
     const marker = await fs.promises.lstat(markerPath);
@@ -36,22 +36,35 @@ async function hasGitMarker(directoryPath) {
     const value = await fs.promises.readFile(markerPath, 'utf8');
     return /^\s*gitdir\s*:/i.test(value);
   } catch (error) {
-    if (error && (error.code === 'ENOENT' || error.code === 'ENOTDIR')) return false;
+    if (error && ((error as any).code === 'ENOENT' || (error as any).code === 'ENOTDIR')) return false;
     throw error;
   }
 }
 
-function pathKey(value) {
+function pathKey(value: string): string {
   const normalized = path.normalize(value);
   return process.platform === 'win32' ? normalized.toLocaleLowerCase('en-US') : normalized;
 }
 
-async function scanRepositories(rootPath, options = {}) {
+export interface ScanOptions {
+  signal?: AbortSignal;
+  onProgress?: (progress: { scannedDirectories: number; repository?: { path: string; name: string; relativePath: string } }) => void;
+  maxDirectories?: number;
+  maxRepositories?: number;
+}
+
+export async function scanRepositories(rootPath: unknown, options: ScanOptions = {}): Promise<{
+  repositories: Array<{ path: string; name: string; relativePath: string }>;
+  scannedDirectories: number;
+  skipped: number;
+  canceled: boolean;
+  limitReached: boolean;
+}> {
   if (typeof rootPath !== 'string' || !rootPath.trim()) {
     throw new TypeError('The workspace root must be a directory.');
   }
 
-  let rootStats;
+  let rootStats: fs.Stats;
   try {
     rootStats = await fs.promises.stat(rootPath);
   } catch {
@@ -65,14 +78,14 @@ async function scanRepositories(rootPath, options = {}) {
   const signal = options.signal;
   const onProgress = typeof options.onProgress === 'function' ? options.onProgress : () => {};
   const maximumDirectories = Number.isInteger(options.maxDirectories)
-    ? Math.max(1, options.maxDirectories)
+    ? Math.max(1, options.maxDirectories as number)
     : 250000;
   const maximumRepositories = Number.isInteger(options.maxRepositories)
-    ? Math.max(1, options.maxRepositories)
+    ? Math.max(1, options.maxRepositories as number)
     : 10000;
-  const queue = [root];
-  const repositories = [];
-  const knownPaths = new Set();
+  const queue: string[] = [root];
+  const repositories: Array<{ path: string; name: string; relativePath: string }> = [];
+  const knownPaths = new Set<string>();
   let scannedDirectories = 0;
   let skipped = 0;
   let limitReached = false;
@@ -83,7 +96,7 @@ async function scanRepositories(rootPath, options = {}) {
       break;
     }
 
-    const directoryPath = queue.shift();
+    const directoryPath = queue.shift()!;
     scannedDirectories += 1;
 
     try {
@@ -131,8 +144,3 @@ async function scanRepositories(rootPath, options = {}) {
     limitReached
   };
 }
-
-module.exports = {
-  IGNORED_DIRECTORIES,
-  scanRepositories
-};

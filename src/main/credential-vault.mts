@@ -1,8 +1,29 @@
-const fs = require('node:fs');
-const path = require('node:path');
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
-class CredentialVault {
-  constructor(options) {
+export interface SafeStorage {
+  isEncryptionAvailable?: () => boolean;
+  getSelectedStorageBackend?: () => string;
+  decryptString?: (encrypted: Buffer) => string;
+  encryptString?: (plaintext: string) => Buffer;
+}
+
+export interface CredentialVaultOptions {
+  storagePath: string;
+  safeStorage?: SafeStorage;
+  platform?: string;
+}
+
+export class CredentialVault {
+  storagePath: string;
+  safeStorage?: SafeStorage;
+  platform: string;
+  state: { accounts: Record<string, unknown>; reviewDrafts: Record<string, unknown> };
+  loaded: boolean;
+  loading: Promise<void> | null;
+  writeQueue: Promise<void>;
+
+  constructor(options: CredentialVaultOptions) {
     this.storagePath = options.storagePath;
     this.safeStorage = options.safeStorage;
     this.platform = options.platform || process.platform;
@@ -12,7 +33,7 @@ class CredentialVault {
     this.writeQueue = Promise.resolve();
   }
 
-  getSecurityState() {
+  getSecurityState(): { encryptionAvailable: boolean; backend: string; memoryOnly: boolean; warning: string } {
     const encryptionAvailable = Boolean(this.safeStorage?.isEncryptionAvailable?.());
     let backend = '';
     try {
@@ -31,21 +52,21 @@ class CredentialVault {
     };
   }
 
-  validateProvider(provider) {
-    if (!['github', 'gitlab', 'azure', 'ai'].includes(provider)) {
+  validateProvider(provider: unknown): string {
+    if (!['github', 'gitlab', 'azure', 'ai'].includes(provider as string)) {
       throw new Error(`Unsupported provider: ${provider}`);
     }
-    return provider;
+    return provider as string;
   }
 
-  async ensureLoaded() {
+  async ensureLoaded(): Promise<void> {
     if (this.loaded) return;
     if (this.loading) return this.loading;
     this.loading = (async () => {
       if (!this.getSecurityState().memoryOnly) {
         try {
           const encrypted = await fs.promises.readFile(this.storagePath);
-          const plaintext = this.safeStorage.decryptString(encrypted);
+          const plaintext = this.safeStorage!.decryptString!(encrypted);
           const parsed = JSON.parse(plaintext);
           this.state = {
             accounts: parsed.accounts && typeof parsed.accounts === 'object'
@@ -56,7 +77,7 @@ class CredentialVault {
               : {}
           };
         } catch (error) {
-          if (error.code !== 'ENOENT') {
+          if ((error as any).code !== 'ENOENT') {
             throw new Error('The encrypted hosting vault could not be read', { cause: error });
           }
         }
@@ -68,7 +89,7 @@ class CredentialVault {
     return this.loading;
   }
 
-  async reset() {
+  async reset(): Promise<{ success: true }> {
     this.state = { accounts: {}, reviewDrafts: {} };
     this.loaded = true;
     try {
@@ -78,10 +99,10 @@ class CredentialVault {
     return { success: true };
   }
 
-  async persist() {
+  async persist(): Promise<void> {
     if (this.getSecurityState().memoryOnly) return;
     const plaintext = JSON.stringify(this.state);
-    const encrypted = this.safeStorage.encryptString(plaintext);
+    const encrypted = this.safeStorage!.encryptString!(plaintext);
     const directory = path.dirname(this.storagePath);
     const temporaryPath = `${this.storagePath}.tmp`;
     this.writeQueue = this.writeQueue
@@ -94,24 +115,24 @@ class CredentialVault {
     return this.writeQueue;
   }
 
-  async getAccount(provider) {
+  async getAccount(provider: unknown): Promise<any> {
     await this.ensureLoaded();
     return this.state.accounts[this.validateProvider(provider)] || null;
   }
 
-  async setAccount(provider, account) {
+  async setAccount(provider: unknown, account: unknown): Promise<void> {
     await this.ensureLoaded();
     this.state.accounts[this.validateProvider(provider)] = account;
     await this.persist();
   }
 
-  async removeAccount(provider) {
+  async removeAccount(provider: unknown): Promise<void> {
     await this.ensureLoaded();
     delete this.state.accounts[this.validateProvider(provider)];
     await this.persist();
   }
 
-  validateDraftKey(key) {
+  validateDraftKey(key: unknown): string {
     if (
       typeof key !== 'string' ||
       key.length < 3 ||
@@ -123,24 +144,24 @@ class CredentialVault {
     return key;
   }
 
-  async getReviewDraft(key) {
+  async getReviewDraft(key: unknown): Promise<any> {
     await this.ensureLoaded();
     return this.state.reviewDrafts[this.validateDraftKey(key)] || null;
   }
 
-  async saveReviewDraft(key, draft) {
+  async saveReviewDraft(key: unknown, draft: unknown): Promise<void> {
     await this.ensureLoaded();
     this.state.reviewDrafts[this.validateDraftKey(key)] = draft;
     await this.persist();
   }
 
-  async removeReviewDraft(key) {
+  async removeReviewDraft(key: unknown): Promise<void> {
     await this.ensureLoaded();
     delete this.state.reviewDrafts[this.validateDraftKey(key)];
     await this.persist();
   }
 
-  async removeProviderDrafts(provider) {
+  async removeProviderDrafts(provider: unknown): Promise<void> {
     await this.ensureLoaded();
     const prefix = `${this.validateProvider(provider)}:`;
     let removed = false;
@@ -153,5 +174,3 @@ class CredentialVault {
     if (removed) await this.persist();
   }
 }
-
-module.exports = CredentialVault;

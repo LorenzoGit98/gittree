@@ -1,7 +1,10 @@
-const path = require('node:path');
-const GitService = require('./git-service');
+import * as path from 'node:path';
+import { GitService } from './git-service.mts';
 
-async function isWorkingTreeRepository(repoPath, createGitService = value => new GitService(value)) {
+export async function isWorkingTreeRepository(
+  repoPath: unknown,
+  createGitService: (value: string) => GitService = value => new GitService(value)
+): Promise<boolean> {
   if (typeof repoPath !== 'string' || !path.isAbsolute(repoPath)) return false;
   try {
     const git = createGitService(repoPath);
@@ -15,5 +18,3 @@ async function isWorkingTreeRepository(repoPath, createGitService = value => new
     return false;
   }
 }
-
-module.exports = { isWorkingTreeRepository };
