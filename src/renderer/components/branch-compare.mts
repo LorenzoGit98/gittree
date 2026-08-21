@@ -1,21 +1,49 @@
-/* exported BranchCompare */
-/* eslint-disable-next-line no-unused-vars -- script-tag global consumed by app.js */
-class BranchCompare {
-  constructor(app) {
+type CompareApp = {
+  state: { repo?: { path?: string } | null };
+  showToast: (message: unknown, type?: string) => void;
+  emit: (event: string, data?: unknown) => void;
+};
+
+interface CompareCommit {
+  hash: string;
+  message: string;
+  author_name: string;
+  date: string;
+}
+
+interface BranchCompareData {
+  source: string;
+  target: string;
+  commitsCount: number;
+  commits: CompareCommit[];
+  diff: string;
+}
+
+export class BranchCompare {
+  app: CompareApp;
+  sourceBranch: string | null;
+  targetBranch: string | null;
+  data: BranchCompareData | null;
+
+  constructor(app: CompareApp) {
     this.app = app;
     this.sourceBranch = null;
     this.targetBranch = null;
     this.data = null;
   }
 
-  async compare(source, target) {
+  async compare(source: string, target: string): Promise<void> {
     this.sourceBranch = source;
     this.targetBranch = target;
     const repo = this.app.state.repo;
     if (!repo) return;
 
     try {
-      const comparison = await window.gitTree.compareBranches(repo.path, target, source);
+      const comparison = await window.gitTree.compareBranches(repo.path, target, source) as {
+        error?: string;
+        commits?: CompareCommit[];
+        diff?: string;
+      };
       if (comparison?.error) throw new Error(comparison.error);
 
       this.data = {
@@ -27,11 +55,11 @@ class BranchCompare {
 
       this.showCompareView();
     } catch (e) {
-      this.app.showToast('Error comparing branches: ' + e.message, 'error');
+      this.app.showToast('Error comparing branches: ' + (e as Error).message, 'error');
     }
   }
 
-  showCompareView() {
+  showCompareView(): void {
     if (!this.data) return;
 
     const mainView = document.getElementById('merge-workspace-overlay');
@@ -69,23 +97,23 @@ class BranchCompare {
       </div>
     `;
     mainView.classList.remove('is-hidden');
-    document.getElementById('compare-close').onclick = () => {
+    document.getElementById('compare-close')!.onclick = () => {
       mainView.classList.add('is-hidden');
       mainView.innerHTML = '';
     };
-    mainView.querySelectorAll('.compare-commit-item[data-hash]').forEach(item => {
-      item.onclick = () => this.app.emit('commit:selected', item.dataset.hash);
+    mainView.querySelectorAll<HTMLElement>('.compare-commit-item[data-hash]').forEach(item => {
+      item.onclick = () => this.app.emit('commit:selected', (item as HTMLElement).dataset.hash);
     });
   }
 
-  esc(value) { return HtmlEncoder.encode(value); }
-  fmtDate(d) {
+  esc(value: unknown): string { return HtmlEncoder.encode(value); }
+  fmtDate(d: unknown): string {
     if (!d) return '';
-    const dt = new Date(d);
+    const dt = new Date(d as string);
     return dt.toLocaleDateString([], { month: 'short', day: 'numeric' });
   }
 
-  async compareMatrix(branches) {
+  async compareMatrix(branches: Array<{ name: string }>): Promise<void> {
     const repo = this.app.state.repo;
     if (!repo || branches.length < 2) return;
 
@@ -94,14 +122,17 @@ class BranchCompare {
     mainView.innerHTML = `<div class="empty-state"><i class="ph ph-circle-notch"></i>${t('common.loading')}</div>`;
 
     const names = branches.map(b => b.name);
-    const matrix = [];
+    const matrix: Array<Array<{ error?: string; commits?: number } | null>> = [];
 
     try {
       for (let i = 0; i < names.length; i += 1) {
         matrix[i] = [];
         for (let j = 0; j < names.length; j += 1) {
           if (i === j) { matrix[i][j] = null; continue; }
-          const comparison = await window.gitTree.compareBranches(repo.path, names[i], names[j]);
+          const comparison = await window.gitTree.compareBranches(repo.path, names[i], names[j]) as {
+            error?: string;
+            commits?: CompareCommit[];
+          };
           matrix[i][j] = comparison?.error ? { error: comparison.error } : {
             commits: comparison.commits?.length || 0
           };
@@ -148,23 +179,32 @@ class BranchCompare {
         </div>
       `;
 
-      document.getElementById('compare-matrix-close').onclick = () => {
+      document.getElementById('compare-matrix-close')!.onclick = () => {
         mainView.classList.add('is-hidden');
         mainView.innerHTML = '';
       };
-      mainView.querySelectorAll('.compare-matrix-cell').forEach(cell => {
+      mainView.querySelectorAll<HTMLElement>('.compare-matrix-cell').forEach(cell => {
         cell.onclick = () => {
-          const row = Number(cell.dataset.row);
-          const col = Number(cell.dataset.col);
+          const row = Number((cell as HTMLElement).dataset.row);
+          const col = Number((cell as HTMLElement).dataset.col);
           mainView.classList.add('is-hidden');
           mainView.innerHTML = '';
           this.compare(names[col], names[row]);
         };
       });
     } catch (e) {
-      this.app.showToast('Error comparing branches: ' + e.message, 'error');
+      this.app.showToast('Error comparing branches: ' + (e as Error).message, 'error');
       mainView.classList.add('is-hidden');
       mainView.innerHTML = '';
     }
   }
+}
+
+if (typeof window !== 'undefined') {
+  (window as unknown as { BranchCompare: typeof BranchCompare }).BranchCompare = BranchCompare;
+}
+
+declare const module: { exports: unknown } | undefined;
+if (typeof module !== 'undefined' && (module as { exports?: unknown }).exports) {
+  (module as { exports: unknown }).exports = BranchCompare;
 }

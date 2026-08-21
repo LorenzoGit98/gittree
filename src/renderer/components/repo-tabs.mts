@@ -1,6 +1,48 @@
-/* exported RepoTabs */
-class RepoTabs {
-  constructor(container, app, options = {}) {
+interface RepoEntry {
+  path: string;
+  name?: string;
+}
+
+interface SyncState {
+  branch?: string;
+  upstream?: string;
+  ahead?: number;
+  behind?: number;
+}
+
+type RepoTabsApp = {
+  state: { activeRepoIndex: number };
+  showToast: (message: unknown, type?: string) => void;
+  emit: (event: string, data?: unknown) => void;
+};
+
+export interface RepoTabsOptions {
+  platform?: string | null;
+  storage?: Storage | null;
+}
+
+export class RepoTabs {
+  container: HTMLElement;
+  app: RepoTabsApp;
+  repos: RepoEntry[];
+  backendRepos: RepoEntry[];
+  syncByRepoPath: Map<string, SyncState>;
+  busyRepoPaths: Set<string>;
+  platform: string | null;
+  storage: Storage | null;
+  layoutStorageKey: string;
+  pinnedKeys: Set<string>;
+  draggedKey: string | null;
+  dragOverKey: string | null;
+  dragOverAfter: boolean;
+  _syncRefreshToken: number;
+  _syncTimer: ReturnType<typeof setInterval> | null;
+  handleDragStart: (event: DragEvent) => void;
+  handleDragOver: (event: DragEvent) => void;
+  handleDrop: (event: DragEvent) => void;
+  handleDragEnd: () => void;
+
+  constructor(container: HTMLElement, app: RepoTabsApp, options: RepoTabsOptions = {}) {
     this.container = container;
     this.app = app;
     this.repos = [];
@@ -31,35 +73,38 @@ class RepoTabs {
     this.container.addEventListener('dragend', this.handleDragEnd);
   }
 
-  async init() {
+  async init(): Promise<void> {
     try {
-      this.setRepositoryData(await window.gitTree.getRepos());
+      this.setRepositoryData(await window.gitTree.getRepos() as RepoEntry[]);
     } catch { /* repo list may be unavailable */ }
     this.render();
     this.refreshAllSync();
     this.startPeriodicSyncRefresh();
   }
 
-  startPeriodicSyncRefresh() {
+  startPeriodicSyncRefresh(): void {
     this.stopPeriodicSyncRefresh();
     this._syncTimer = setInterval(() => this.refreshAllSync(), 60000);
   }
 
-  stopPeriodicSyncRefresh() {
+  stopPeriodicSyncRefresh(): void {
     if (this._syncTimer) {
       clearInterval(this._syncTimer);
       this._syncTimer = null;
     }
   }
 
-  async refreshAllSync() {
+  async refreshAllSync(): Promise<void> {
     if (!this.repos.length) return;
     const token = ++this._syncRefreshToken;
     const results = await Promise.all(this.repos.map(async repo => {
       try {
-        const metadata = await window.gitTree.getBranchMetadata(repo.path);
+        const metadata = await window.gitTree.getBranchMetadata(repo.path) as {
+          error?: unknown;
+          branches?: Array<{ kind?: string; current?: boolean; name?: string; upstream?: string; ahead?: number; behind?: number }>;
+        } | undefined;
         if (!metadata || metadata.error || !Array.isArray(metadata.branches)) {
-          return [repo.path, null];
+          return [repo.path, null] as const;
         }
         const current = metadata.branches.find(b => b.kind === 'local' && b.current);
         return [repo.path, current
@@ -69,9 +114,9 @@ class RepoTabs {
               ahead: current.ahead,
               behind: current.behind
             }
-          : null];
+          : null] as const;
       } catch {
-        return [repo.path, null];
+        return [repo.path, null] as const;
       }
     }));
     if (token !== this._syncRefreshToken) return;
@@ -82,7 +127,7 @@ class RepoTabs {
     this.render();
   }
 
-  render() {
+  render(): void {
     this.container.replaceChildren();
     this.container.classList.toggle('has-pinned', this.pinnedKeys.size > 0);
     this.repos.forEach((repo, i) => {
@@ -123,7 +168,7 @@ class RepoTabs {
       if (sync) el.appendChild(sync);
       el.appendChild(close);
       el.onclick = event => {
-        if (event.target.closest('button')) return;
+        if ((event.target as HTMLElement).closest('button')) return;
         this.selectRepo(i);
       };
       el.onkeydown = event => this.handleTabKeydown(event, i);
@@ -131,7 +176,7 @@ class RepoTabs {
     });
   }
 
-  createTabControl(className, labelKey, iconName) {
+  createTabControl(className: string, labelKey: string, iconName: string): HTMLButtonElement {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `repo-tab-control ${className}`;
@@ -145,7 +190,7 @@ class RepoTabs {
     return button;
   }
 
-  setRepositoryData(repositories, preferredActivePath = null) {
+  setRepositoryData(repositories: RepoEntry[] | undefined | null, preferredActivePath: string | null = null): void {
     const activePath = preferredActivePath || this.getActivePath();
     this.backendRepos = Array.isArray(repositories) ? [...repositories] : [];
     const layout = this.readLayout();
@@ -154,7 +199,7 @@ class RepoTabs {
       ...layout.order,
       ...this.backendRepos.map(repo => this.repoKey(repo.path))
     ];
-    const ordered = [];
+    const ordered: RepoEntry[] = [];
     const seen = new Set();
     for (const key of orderedKeys) {
       const repo = known.get(key);
@@ -170,12 +215,12 @@ class RepoTabs {
     this.syncActiveIndex(activePath);
   }
 
-  getActivePath() {
+  getActivePath(): string | null {
     const index = this.app.state.activeRepoIndex;
     return this.repos[index]?.path || null;
   }
 
-  syncActiveIndex(path) {
+  syncActiveIndex(path: string | null): void {
     if (!path) {
       this.app.state.activeRepoIndex = -1;
       return;
@@ -184,33 +229,33 @@ class RepoTabs {
     if (index >= 0) this.app.state.activeRepoIndex = index;
   }
 
-  repoKey(path) {
+  repoKey(path: unknown): string {
     const value = String(path || '');
     return this.platform === 'win32' ? value.toLocaleLowerCase('en-US') : value;
   }
 
-  sameRepo(left, right) {
+  sameRepo(left: string, right: string): boolean {
     return this.repoKey(left) === this.repoKey(right);
   }
 
-  isPinned(repo) {
+  isPinned(repo: RepoEntry): boolean {
     return this.pinnedKeys.has(this.repoKey(repo.path));
   }
 
-  readLayout() {
+  readLayout(): { order: string[]; pinned: string[] } {
     try {
-      const parsed = JSON.parse(this.storage?.getItem(this.layoutStorageKey) || '{}');
-      const values = value => Array.isArray(value)
-        ? value.filter(item => typeof item === 'string' && item.length <= 4096)
+      const parsed: unknown = JSON.parse(this.storage?.getItem(this.layoutStorageKey) || '{}');
+      const values = (value: unknown): string[] => Array.isArray(value)
+        ? (value as unknown[]).filter(item => typeof item === 'string' && item.length <= 4096)
           .slice(0, 500).map(item => this.repoKey(item))
         : [];
-      return { order: values(parsed?.order), pinned: values(parsed?.pinned) };
+      return { order: values((parsed as { order?: unknown })?.order), pinned: values((parsed as { pinned?: unknown })?.pinned) };
     } catch {
       return { order: [], pinned: [] };
     }
   }
 
-  persistLayout() {
+  persistLayout(): void {
     try {
       this.storage?.setItem(this.layoutStorageKey, JSON.stringify({
         order: this.repos.map(repo => this.repoKey(repo.path)),
@@ -221,7 +266,7 @@ class RepoTabs {
     }
   }
 
-  togglePinned(repoPath) {
+  togglePinned(repoPath: string): void {
     const activePath = this.getActivePath();
     const key = this.repoKey(repoPath);
     if (this.pinnedKeys.has(key)) this.pinnedKeys.delete(key);
@@ -236,8 +281,8 @@ class RepoTabs {
     this.render();
   }
 
-  handleTabKeydown(event, index) {
-    if (event.target.closest('button')) return;
+  handleTabKeydown(event: KeyboardEvent, index: number): void {
+    if ((event.target as HTMLElement).closest('button')) return;
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       this.selectRepo(index);
@@ -248,21 +293,21 @@ class RepoTabs {
     const offset = event.key === 'ArrowLeft' ? -1 : 1;
     const moved = this.moveRepoByOffset(index, offset);
     if (moved) {
-      const element = this.container.querySelector(
+      const element = this.container.querySelector<HTMLElement>(
         `[data-path="${CSS.escape(this.repos[index + offset].path)}"]`
       );
       element?.focus();
     }
   }
 
-  moveRepoByOffset(index, offset) {
+  moveRepoByOffset(index: number, offset: number): boolean {
     const targetIndex = index + offset;
     if (targetIndex < 0 || targetIndex >= this.repos.length) return false;
     if (this.isPinned(this.repos[index]) !== this.isPinned(this.repos[targetIndex])) return false;
     return this.moveRepo(this.repos[index].path, this.repos[targetIndex].path, offset > 0);
   }
 
-  moveRepo(draggedPath, targetPath, after = false) {
+  moveRepo(draggedPath: string, targetPath: string, after = false): boolean {
     const fromIndex = this.repos.findIndex(repo => this.sameRepo(repo.path, draggedPath));
     const targetIndex = this.repos.findIndex(repo => this.sameRepo(repo.path, targetPath));
     if (fromIndex < 0 || targetIndex < 0 || fromIndex === targetIndex) return false;
@@ -278,9 +323,9 @@ class RepoTabs {
     return true;
   }
 
-  onDragStart(event) {
-    const tab = event.target.closest?.('.repo-tab');
-    if (!tab || event.target.closest('button')) {
+  onDragStart(event: DragEvent): void {
+    const tab = (event.target as HTMLElement).closest?.('.repo-tab') as HTMLElement | null;
+    if (!tab || (event.target as HTMLElement).closest('button')) {
       event.preventDefault();
       return;
     }
@@ -292,9 +337,9 @@ class RepoTabs {
     }
   }
 
-  onDragOver(event) {
-    if (event.target.closest?.('button')) return;
-    const target = event.target.closest?.('.repo-tab');
+  onDragOver(event: DragEvent): void {
+    if ((event.target as HTMLElement).closest?.('button')) return;
+    const target = (event.target as HTMLElement).closest?.('.repo-tab') as HTMLElement | null;
     if (!this.draggedKey || !target) return;
     const dragged = this.repos.find(repo => this.repoKey(repo.path) === this.draggedKey);
     const targetRepo = this.repos.find(repo => this.sameRepo(repo.path, target.dataset.path));
@@ -303,7 +348,7 @@ class RepoTabs {
     const rect = target.getBoundingClientRect();
     this.dragOverAfter = event.clientX >= rect.left + (rect.width / 2);
     this.dragOverKey = this.repoKey(target.dataset.path);
-    this.container.querySelectorAll('.repo-tab').forEach(element => {
+    this.container.querySelectorAll<HTMLElement>('.repo-tab').forEach(element => {
       element.classList.toggle(
         'is-drag-over-before',
         this.repoKey(element.dataset.path) === this.dragOverKey && !this.dragOverAfter
@@ -316,9 +361,9 @@ class RepoTabs {
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
   }
 
-  onDrop(event) {
-    if (event.target.closest?.('button')) return;
-    const target = event.target.closest?.('.repo-tab');
+  onDrop(event: DragEvent): void {
+    if ((event.target as HTMLElement).closest?.('button')) return;
+    const target = (event.target as HTMLElement).closest?.('.repo-tab') as HTMLElement | null;
     if (!this.draggedKey || !target) return;
     event.preventDefault();
     const dragged = this.repos.find(repo => this.repoKey(repo.path) === this.draggedKey);
@@ -329,8 +374,8 @@ class RepoTabs {
     this.clearDragState();
   }
 
-  clearDragState() {
-    this.container.querySelectorAll('.repo-tab').forEach(element => {
+  clearDragState(): void {
+    this.container.querySelectorAll<HTMLElement>('.repo-tab').forEach(element => {
       element.classList.remove('is-dragging', 'is-drag-over-before', 'is-drag-over-after');
     });
     this.draggedKey = null;
@@ -338,7 +383,7 @@ class RepoTabs {
     this.dragOverAfter = false;
   }
 
-  updateSync(repoPath, state) {
+  updateSync(repoPath: string, state: SyncState | null): void {
     if (!repoPath) return;
     if (!state) {
       this.syncByRepoPath.delete(repoPath);
@@ -348,14 +393,14 @@ class RepoTabs {
     this.render();
   }
 
-  setSyncBusy(repoPath, busy) {
+  setSyncBusy(repoPath: string, busy: boolean): void {
     if (!repoPath) return;
     if (busy) this.busyRepoPaths.add(repoPath);
     else this.busyRepoPaths.delete(repoPath);
     this.render();
   }
 
-  createSyncIndicator(repoPath) {
+  createSyncIndicator(repoPath: string): HTMLElement | null {
     const state = this.syncByRepoPath.get(repoPath);
     const busy = this.busyRepoPaths.has(repoPath);
     if (!busy && (!state || (!state.ahead && !state.behind))) return null;
@@ -378,7 +423,7 @@ class RepoTabs {
     return indicator;
   }
 
-  syncBusyPart() {
+  syncBusyPart(): HTMLElement {
     const part = document.createElement('span');
     part.className = 'sync-indicator-part is-syncing';
     const icon = document.createElement('i');
@@ -388,7 +433,7 @@ class RepoTabs {
     return part;
   }
 
-  syncPart(direction, count) {
+  syncPart(direction: string, count: number): HTMLElement {
     const part = document.createElement('span');
     part.className = `sync-indicator-part is-${direction}`;
     const icon = document.createElement('i');
@@ -401,13 +446,13 @@ class RepoTabs {
     return part;
   }
 
-  async selectRepo(index) {
+  async selectRepo(index: number): Promise<void> {
     const repoToSelect = this.repos[index];
     if (!repoToSelect) return;
     const backendIndex = this.backendRepos.findIndex(repo => (
       this.sameRepo(repo.path, repoToSelect.path)
     ));
-    const repo = await window.gitTree.setActiveRepo(backendIndex);
+    const repo = await window.gitTree.setActiveRepo(backendIndex) as RepoEntry | undefined;
     if (repo) {
       this.app.state.activeRepoIndex = index;
       this.render();
@@ -415,22 +460,22 @@ class RepoTabs {
     }
   }
 
-  async removeRepo(repoPath) {
-    const active = await window.gitTree.removeRepo(repoPath);
+  async removeRepo(repoPath: string): Promise<void> {
+    const active = await window.gitTree.removeRepo(repoPath) as RepoEntry | undefined;
     this.syncByRepoPath.delete(repoPath);
     this.pinnedKeys.delete(this.repoKey(repoPath));
-    this.setRepositoryData(await window.gitTree.getRepos(), active?.path || null);
+    this.setRepositoryData(await window.gitTree.getRepos() as RepoEntry[], active?.path || null);
     this.persistLayout();
     this.render();
     if (active) this.app.emit('repo:changed', active);
     else this.app.emit('repo:cleared');
   }
 
-  async addRepo(repoPath) {
+  async addRepo(repoPath: string): Promise<void> {
     try {
-      const result = await window.gitTree.addRepo(repoPath);
+      const result = await window.gitTree.addRepo(repoPath) as { error?: string; path?: string };
       if (result && !result.error) {
-        this.setRepositoryData(await window.gitTree.getRepos(), result.path);
+        this.setRepositoryData(await window.gitTree.getRepos() as RepoEntry[], result.path);
         this.render();
         this.app.emit('repo:changed', result);
         this.refreshAllSync();
@@ -438,13 +483,17 @@ class RepoTabs {
         this.app.showToast(result.error, 'error');
       }
     } catch (e) {
-      this.app.showToast(`${t('common.error')}: ${e.message}`, 'error');
+      this.app.showToast(`${t('common.error')}: ${(e as Error).message}`, 'error');
     }
   }
 
-  async addRepos(repoPaths) {
-    const result = await window.gitTree.addRepos(repoPaths);
-    this.setRepositoryData(await window.gitTree.getRepos(), result?.activeRepo?.path || null);
+  async addRepos(repoPaths: string[]): Promise<{ added?: string[]; failed?: string[]; activeRepo?: RepoEntry } | undefined> {
+    const result = await window.gitTree.addRepos(repoPaths) as {
+      added?: string[];
+      failed?: string[];
+      activeRepo?: RepoEntry;
+    } | undefined;
+    this.setRepositoryData(await window.gitTree.getRepos() as RepoEntry[], result?.activeRepo?.path || null);
     if (result?.activeRepo) {
       this.render();
       this.app.emit('repo:changed', result.activeRepo);
@@ -454,4 +503,11 @@ class RepoTabs {
   }
 }
 
-if (typeof module !== 'undefined') module.exports = RepoTabs;
+if (typeof window !== 'undefined') {
+  (window as unknown as { RepoTabs: typeof RepoTabs }).RepoTabs = RepoTabs;
+}
+
+declare const module: { exports: unknown } | undefined;
+if (typeof module !== 'undefined' && (module as { exports?: unknown }).exports) {
+  (module as { exports: unknown }).exports = RepoTabs;
+}

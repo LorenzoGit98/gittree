@@ -1,33 +1,48 @@
-/* exported ReflogView */
-/* eslint-disable-next-line no-unused-vars -- script-tag global consumed by app.js */
-class ReflogView {
-  constructor(app) {
+interface ReflogEntry {
+  hash: string;
+  ref: string;
+  message: string;
+  date?: string;
+}
+
+type ReflogApp = {
+  state: { repo?: { path?: string } | null };
+  showToast: (message: unknown, type?: string) => void;
+  emit: (event: string, data?: unknown) => void;
+};
+
+export class ReflogView {
+  app: ReflogApp;
+  container: HTMLElement;
+  entries: ReflogEntry[];
+
+  constructor(app: ReflogApp) {
     this.app = app;
-    this.container = document.getElementById('merge-workspace-overlay');
+    this.container = document.getElementById('merge-workspace-overlay') as HTMLElement;
     this.entries = [];
   }
 
-  async open() {
+  async open(): Promise<void> {
     const repo = this.app.state.repo;
     if (!repo) return;
     this.showLoading();
     try {
-      const result = await window.gitTree.getReflog(repo.path);
-      if (result?.error) throw new Error(result.error);
+      const result = await window.gitTree.getReflog(repo.path) as { error?: string } | ReflogEntry[];
+      if ((result as { error?: string })?.error) throw new Error((result as { error?: string }).error);
       this.entries = Array.isArray(result) ? result : [];
       this.render();
     } catch (error) {
-      this.app.showToast(error.message, 'error');
+      this.app.showToast((error as Error).message, 'error');
       this.hide();
     }
   }
 
-  showLoading() {
+  showLoading(): void {
     this.container.classList.remove('is-hidden');
     this.container.innerHTML = `<div class="empty-state">${this.esc(t('common.loading'))}</div>`;
   }
 
-  render() {
+  render(): void {
     this.container.innerHTML = `
       <div class="reflog-view">
         <header class="reflog-header">
@@ -46,15 +61,15 @@ class ReflogView {
             : `<div class="empty-state">${this.esc(t('reflog.empty'))}</div>`}
         </div>
       </div>`;
-    document.getElementById('reflog-close').onclick = () => this.hide();
+    document.getElementById('reflog-close')!.onclick = () => this.hide();
     this.container.querySelectorAll('[data-reflog-entry]').forEach(row => {
-      row.querySelectorAll('[data-action]').forEach(button => {
-        button.onclick = () => this.runAction(button.dataset.action, Number(row.dataset.reflogEntry));
+      row.querySelectorAll<HTMLElement>('[data-action]').forEach(button => {
+        button.onclick = () => this.runAction(button.dataset.action, Number((row as HTMLElement).dataset.reflogEntry));
       });
     });
   }
 
-  renderEntry(entry, index) {
+  renderEntry(entry: ReflogEntry, index: number): string {
     const date = entry.date ? new Date(entry.date).toLocaleString() : '';
     return `
       <div class="reflog-row" data-reflog-entry="${index}">
@@ -73,7 +88,7 @@ class ReflogView {
       </div>`;
   }
 
-  async runAction(action, index) {
+  async runAction(action: string, index: number): Promise<void> {
     const repo = this.app.state.repo;
     const entry = this.entries[index];
     if (!repo || !entry) return;
@@ -89,7 +104,7 @@ class ReflogView {
     if (action === 'branch') {
       const name = await this.promptBranchName();
       if (!name) return;
-      const result = await window.gitTree.createBranch(repo.path, name, entry.hash);
+      const result = await window.gitTree.createBranch(repo.path, name, entry.hash) as { error?: string };
       if (result?.error) {
         this.app.showToast(result.error, 'error');
         return;
@@ -100,7 +115,7 @@ class ReflogView {
     }
   }
 
-  promptBranchName() {
+  promptBranchName(): Promise<string | null> {
     return new Promise(resolve => {
       const overlay = document.createElement('div');
       overlay.className = 'repository-picker-overlay';
@@ -125,37 +140,46 @@ class ReflogView {
             </footer>
           </form>
         </section>`;
-      const finish = value => {
+      const finish = (value: string | null) => {
         overlay.remove();
         document.removeEventListener('keydown', keydown);
         resolve(value);
       };
-      const keydown = event => {
+      const keydown = (event: KeyboardEvent) => {
         if (event.key === 'Escape') finish(null);
       };
       document.body.appendChild(overlay);
       overlay.addEventListener('mousedown', event => {
         if (event.target === overlay) finish(null);
       });
-      overlay.querySelector('[data-action="cancel"]').onclick = () => finish(null);
+      overlay.querySelector<HTMLElement>('[data-action="cancel"]').onclick = () => finish(null);
       overlay.querySelector('form').onsubmit = event => {
         event.preventDefault();
-        const input = overlay.querySelector('input');
+        const input = overlay.querySelector<HTMLInputElement>('input');
         const value = input.value.trim();
         if (!value) return;
         finish(value);
       };
       document.addEventListener('keydown', keydown);
-      overlay.querySelector('input').focus();
+      overlay.querySelector<HTMLInputElement>('input').focus();
     });
   }
 
-  hide() {
+  hide(): void {
     this.container.classList.add('is-hidden');
     this.container.innerHTML = '';
   }
 
-  esc(value) {
+  esc(value: unknown): string {
     return HtmlEncoder.encode(value);
   }
+}
+
+if (typeof window !== 'undefined') {
+  (window as unknown as { ReflogView: typeof ReflogView }).ReflogView = ReflogView;
+}
+
+declare const module: { exports: unknown } | undefined;
+if (typeof module !== 'undefined' && (module as { exports?: unknown }).exports) {
+  (module as { exports: unknown }).exports = ReflogView;
 }

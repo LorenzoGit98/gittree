@@ -1,6 +1,51 @@
-/* global InspectorGraph */
-/* exported InspectorWorkspace */
-class InspectorWorkspace {
+import type { InspectorGraph } from './inspector-graph.mts';
+
+interface InspectorFile {
+  path: string;
+  status?: string;
+  additions?: number;
+  deletions?: number;
+}
+
+export interface InspectorWorkspaceDependencies {
+  container: HTMLElement | null;
+  graphContainer: HTMLElement | null;
+  filesPanel: HTMLElement | null;
+  fileList: HTMLElement | null;
+  filesToggle: HTMLElement | null;
+  diffContainer: HTMLElement | null;
+  translate: (key: string, options?: Record<string, unknown>) => string;
+  storage?: Storage | null;
+  onGraphSelect?: ((hash: string) => void) | null;
+  onGraphRequestMore?: (() => void) | null;
+  onFileSelect?: ((path: string) => void) | null;
+  onFilesOpenChange?: ((open: boolean) => void) | null;
+}
+
+export class InspectorWorkspace {
+  container: HTMLElement | null;
+  graphContainer: HTMLElement | null;
+  filesPanel: HTMLElement | null;
+  fileList: HTMLElement | null;
+  filesToggle: HTMLElement | null;
+  diffContainer: HTMLElement | null;
+  translate: (key: string, options?: Record<string, unknown>) => string;
+  storage: Storage | null;
+  onGraphSelect: ((hash: string) => void) | null;
+  onGraphRequestMore: (() => void) | null;
+  onFileSelect: ((path: string) => void) | null;
+  onFilesOpenChange: ((open: boolean) => void) | null;
+  storageKey: string;
+  files: InspectorFile[];
+  selectedFile: string | null;
+  fileSignature: string;
+  filesOpen: boolean;
+  mounted: boolean;
+  fileCount: Element | null;
+  graph: InspectorGraph | null;
+  handleFilesToggle: () => void;
+  handleFileClick: (event: MouseEvent) => void;
+
   constructor({
     container,
     graphContainer,
@@ -14,7 +59,7 @@ class InspectorWorkspace {
     onGraphRequestMore = null,
     onFileSelect = null,
     onFilesOpenChange = null
-  }) {
+  }: InspectorWorkspaceDependencies) {
     this.container = container;
     this.graphContainer = graphContainer;
     this.filesPanel = filesPanel;
@@ -22,30 +67,32 @@ class InspectorWorkspace {
     this.filesToggle = filesToggle;
     this.diffContainer = diffContainer;
     this.translate = translate;
-    this.storage = storage;
-    this.onGraphSelect = onGraphSelect;
-    this.onGraphRequestMore = onGraphRequestMore;
-    this.onFileSelect = onFileSelect;
-    this.onFilesOpenChange = onFilesOpenChange;
+    this.storage = storage ?? null;
+    this.onGraphSelect = onGraphSelect ?? null;
+    this.onGraphRequestMore = onGraphRequestMore ?? null;
+    this.onFileSelect = onFileSelect ?? null;
+    this.onFilesOpenChange = onFilesOpenChange ?? null;
     this.storageKey = 'gittree.inspector.files.open';
     this.files = [];
     this.selectedFile = null;
     this.fileSignature = '';
     this.filesOpen = this.restoreFilesOpen();
     this.mounted = false;
+    this.graph = null;
 
     this.fileCount = container?.querySelector('[data-inspector-file-count]') || null;
     this.handleFilesToggle = () => this.setFilesOpen(!this.filesOpen);
     this.handleFileClick = event => {
-      const item = event.target.closest?.('.inspector-file-item');
+      const item = (event.target as HTMLElement).closest?.('.inspector-file-item') as HTMLElement | null;
       if (item?.dataset.path) this.selectFile(item.dataset.path);
     };
   }
 
-  mount() {
+  mount(): void {
     if (this.mounted || !this.container) return;
     this.mounted = true;
-    this.graph = new InspectorGraph({
+    const InspectorGraphCtor = (window as unknown as { InspectorGraph: typeof InspectorGraph }).InspectorGraph;
+    this.graph = new InspectorGraphCtor({
       container: this.graphContainer,
       translate: this.translate,
       onSelect: this.onGraphSelect,
@@ -58,8 +105,18 @@ class InspectorWorkspace {
     this.renderFiles();
   }
 
-  update({ graph = {}, files = [], selectedFile = null, selectedHash = null } = {}, options = {}) {
-    this.graph?.update({ ...graph, selectedHash: selectedHash || graph.selectedHash || null });
+  update({
+    graph = {},
+    files = [],
+    selectedFile = null,
+    selectedHash = null
+  }: {
+    graph?: Record<string, unknown>;
+    files?: InspectorFile[];
+    selectedFile?: string | null;
+    selectedHash?: string | null;
+  } = {}, options: { syncFilesOpen?: boolean; filesOpen?: boolean } = {}): void {
+    this.graph?.update({ ...graph, selectedHash: selectedHash || (graph as { selectedHash?: string }).selectedHash || null });
     this.selectedFile = typeof selectedFile === 'string' ? selectedFile : null;
     const nextFiles = Array.isArray(files) ? files : [];
     const nextSignature = nextFiles
@@ -77,13 +134,13 @@ class InspectorWorkspace {
     }
   }
 
-  refreshTranslations() {
+  refreshTranslations(): void {
     this.graph?.refreshTranslations();
     this.setFilesOpen(this.filesOpen, false, false);
     this.renderFiles();
   }
 
-  restoreFilesOpen() {
+  restoreFilesOpen(): boolean {
     try {
       return this.storage?.getItem(this.storageKey) !== '0';
     } catch {
@@ -91,7 +148,7 @@ class InspectorWorkspace {
     }
   }
 
-  setFilesOpen(open, persist = true, notify = true) {
+  setFilesOpen(open: boolean, persist = true, notify = true): void {
     this.filesOpen = Boolean(open);
     this.container?.classList.toggle('files-collapsed', !this.filesOpen);
     this.filesPanel?.classList.toggle('is-collapsed', !this.filesOpen);
@@ -113,7 +170,7 @@ class InspectorWorkspace {
     if (notify) this.onFilesOpenChange?.(this.filesOpen);
   }
 
-  renderFiles() {
+  renderFiles(): void {
     if (!this.fileList) return;
     if (this.fileCount) {
       this.fileCount.textContent = this.translate('details.files', { count: this.files.length });
@@ -174,43 +231,43 @@ class InspectorWorkspace {
     this.updateVisibleFileSelection();
   }
 
-  statusIcon(status) {
+  statusIcon(status: string): string {
     if (status === 'A') return 'ph-plus';
     if (status === 'D') return 'ph-minus';
     if (status === 'R') return 'ph-arrows-left-right';
     return 'ph-pencil-simple';
   }
 
-  statusLabel(status) {
+  statusLabel(status: string): string {
     if (status === 'A') return 'details.fileAdded';
     if (status === 'D') return 'details.fileDeleted';
     if (status === 'R') return 'details.fileRenamed';
     return 'details.fileModified';
   }
 
-  selectFile(path) {
+  selectFile(path: string): void {
     this.selectedFile = path;
     this.updateVisibleFileSelection();
     if (this.onFileSelect) this.onFileSelect(path);
     else this.scrollToFile(path);
   }
 
-  setSelectedFile(path) {
+  setSelectedFile(path: string | null): void {
     this.selectedFile = typeof path === 'string' ? path : null;
     this.updateVisibleFileSelection();
   }
 
-  updateVisibleFileSelection() {
+  updateVisibleFileSelection(): void {
     if (!this.fileList) return;
-    for (const item of this.fileList.querySelectorAll('.inspector-file-item')) {
+    for (const item of this.fileList.querySelectorAll<HTMLElement>('.inspector-file-item')) {
       const selected = item.dataset.path === this.selectedFile;
       item.classList.toggle('selected', selected);
       item.setAttribute('aria-selected', String(selected));
     }
   }
 
-  scrollToFile(path) {
-    const blocks = [...(this.diffContainer?.querySelectorAll('.diff-file-block') || [])];
+  scrollToFile(path: string): boolean {
+    const blocks = [...(this.diffContainer?.querySelectorAll<HTMLElement>('.diff-file-block') || [])];
     const block = blocks.find(element => element.dataset.filePath === path);
     if (!block) return false;
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -220,7 +277,7 @@ class InspectorWorkspace {
     return true;
   }
 
-  destroy() {
+  destroy(): void {
     if (!this.mounted) return;
     this.mounted = false;
     this.graph?.destroy();
@@ -229,4 +286,11 @@ class InspectorWorkspace {
   }
 }
 
-if (typeof module !== 'undefined') module.exports = InspectorWorkspace;
+if (typeof window !== 'undefined') {
+  (window as unknown as { InspectorWorkspace: typeof InspectorWorkspace }).InspectorWorkspace = InspectorWorkspace;
+}
+
+declare const module: { exports: unknown } | undefined;
+if (typeof module !== 'undefined' && (module as { exports?: unknown }).exports) {
+  (module as { exports: unknown }).exports = InspectorWorkspace;
+}

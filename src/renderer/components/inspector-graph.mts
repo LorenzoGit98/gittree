@@ -1,6 +1,71 @@
-/* exported InspectorGraph */
-class InspectorGraph {
-  constructor({ container, translate, onSelect = null, onRequestMore = null }) {
+interface GraphRowRef {
+  type: string;
+  shortName?: string;
+}
+
+interface GraphRowData {
+  hash: string;
+  subject?: string;
+  lane: number;
+  parents?: Array<{ lane: number }>;
+  refs?: GraphRowRef[];
+  before?: Array<string | null>;
+  incoming?: boolean;
+}
+
+interface GraphSnapshot {
+  rows?: GraphRowData[];
+  revision?: number;
+  selectedHash?: string | null;
+  laneCount?: number;
+}
+
+type WindowGraphLayout = {
+  createGraphSegments: (
+    row: unknown,
+    rowHeight: number
+  ) => Array<{ lane: number; path: string }>;
+};
+
+export interface InspectorGraphDependencies {
+  container: HTMLElement | null;
+  translate: (key: string) => string;
+  onSelect?: ((hash: string) => void) | null;
+  onRequestMore?: (() => void) | null;
+}
+
+export class InspectorGraph {
+  container: HTMLElement | null;
+  translate: (key: string) => string;
+  onSelect: ((hash: string) => void) | null;
+  onRequestMore: (() => void) | null;
+  rows: GraphRowData[];
+  rowsByHash: Map<string, GraphRowData>;
+  laneCount: number;
+  selectedHash: string | null;
+  revision: number;
+  rowHeight: number;
+  overscan: number;
+  renderedRange: [number, number];
+  raf: number;
+  mounted: boolean;
+  layer: HTMLElement;
+  tooltip: HTMLElement;
+  resizeObserver: ResizeObserver | null;
+  tooltipHash: HTMLElement;
+  tooltipBranchLabel: HTMLElement;
+  tooltipBranch: HTMLElement;
+  tooltipMessageLabel: HTMLElement;
+  tooltipMessage: HTMLElement;
+  handleScroll: () => void;
+  handleClick: (event: MouseEvent) => void;
+  handleKeydown: (event: KeyboardEvent) => void;
+  handlePointerOver: (event: PointerEvent) => void;
+  handlePointerOut: (event: PointerEvent) => void;
+  handleFocusIn: (event: FocusEvent) => void;
+  handleFocusOut: (event: FocusEvent) => void;
+
+  constructor({ container, translate, onSelect = null, onRequestMore = null }: InspectorGraphDependencies) {
     this.container = container;
     this.translate = translate;
     this.onSelect = onSelect;
@@ -15,6 +80,7 @@ class InspectorGraph {
     this.renderedRange = [-1, -1];
     this.raf = 0;
     this.mounted = false;
+    this.resizeObserver = null;
 
     this.layer = document.createElement('div');
     this.layer.className = 'inspector-graph-layer';
@@ -25,11 +91,11 @@ class InspectorGraph {
       this.scheduleViewport();
     };
     this.handleClick = event => {
-      const row = event.target.closest?.('.inspector-graph-row');
+      const row = (event.target as HTMLElement).closest?.('.inspector-graph-row') as HTMLElement | null;
       if (row?.dataset.hash && this.onSelect) this.select(row.dataset.hash);
     };
     this.handleKeydown = event => {
-      const row = event.target.closest?.('.inspector-graph-row');
+      const row = (event.target as HTMLElement).closest?.('.inspector-graph-row') as HTMLElement | null;
       if (!row?.dataset.hash) return;
       if ((event.key === 'Enter' || event.key === ' ') && this.onSelect) {
         event.preventDefault();
@@ -39,25 +105,25 @@ class InspectorGraph {
       }
     };
     this.handlePointerOver = event => {
-      const row = event.target.closest?.('.inspector-graph-row');
-      if (!row?.dataset.hash || row.contains(event.relatedTarget)) return;
+      const row = (event.target as HTMLElement).closest?.('.inspector-graph-row') as HTMLElement | null;
+      if (!row?.dataset.hash || row.contains(event.relatedTarget as Node)) return;
       this.showTooltip(row.dataset.hash, row);
     };
     this.handlePointerOut = event => {
-      const row = event.target.closest?.('.inspector-graph-row');
-      if (row && !row.contains(event.relatedTarget)) this.hideTooltip();
+      const row = (event.target as HTMLElement).closest?.('.inspector-graph-row') as HTMLElement | null;
+      if (row && !row.contains(event.relatedTarget as Node)) this.hideTooltip();
     };
     this.handleFocusIn = event => {
-      const row = event.target.closest?.('.inspector-graph-row');
+      const row = (event.target as HTMLElement).closest?.('.inspector-graph-row') as HTMLElement | null;
       if (row?.dataset.hash) this.showTooltip(row.dataset.hash, row);
     };
     this.handleFocusOut = event => {
-      const row = event.target.closest?.('.inspector-graph-row');
-      if (row && !row.contains(event.relatedTarget)) this.hideTooltip();
+      const row = (event.target as HTMLElement).closest?.('.inspector-graph-row') as HTMLElement | null;
+      if (row && !row.contains(event.relatedTarget as Node)) this.hideTooltip();
     };
   }
 
-  mount() {
+  mount(): void {
     if (this.mounted || !this.container) return;
     this.mounted = true;
     this.container.replaceChildren(this.layer);
@@ -75,7 +141,7 @@ class InspectorGraph {
     }
   }
 
-  update(snapshot = {}) {
+  update(snapshot: GraphSnapshot = {}): void {
     this.refreshTranslations();
     const rows = Array.isArray(snapshot.rows) ? snapshot.rows : [];
     const revision = Number.isInteger(snapshot.revision) ? snapshot.revision : 0;
@@ -102,14 +168,14 @@ class InspectorGraph {
     this.renderViewport(true);
   }
 
-  select(hash) {
+  select(hash: string): void {
     if (!this.rowsByHash.has(hash)) return;
     this.selectedHash = hash;
     this.updateVisibleSelection();
     this.onSelect?.(hash);
   }
 
-  scheduleViewport() {
+  scheduleViewport(): void {
     if (this.raf) return;
     this.raf = requestAnimationFrame(() => {
       this.raf = 0;
@@ -119,7 +185,7 @@ class InspectorGraph {
     });
   }
 
-  renderViewport(force = false) {
+  renderViewport(force = false): void {
     if (!this.mounted) return;
     if (!this.rows.length) {
       const empty = document.createElement('div');
@@ -146,12 +212,12 @@ class InspectorGraph {
     if (!force && start === this.renderedRange[0] && end === this.renderedRange[1]) return;
     this.renderedRange = [start, end];
 
-    const reusable = new Map();
-    const spare = [];
+    const reusable = new Map<string, HTMLElement>();
+    const spare: HTMLElement[] = [];
     if (!force) {
       for (const element of this.layer.children) {
-        if (element.classList.contains('inspector-graph-row') && element.dataset.hash) {
-          reusable.set(element.dataset.hash, element);
+        if (element.classList.contains('inspector-graph-row') && (element as HTMLElement).dataset.hash) {
+          reusable.set((element as HTMLElement).dataset.hash, element as HTMLElement);
         }
       }
       const visibleHashes = new Set(this.rows.slice(start, end).map(row => row.hash));
@@ -172,7 +238,7 @@ class InspectorGraph {
     this.layer.replaceChildren(fragment);
   }
 
-  createRow() {
+  createRow(): HTMLElement {
     const row = document.createElement('div');
     row.className = 'inspector-graph-row';
     row.setAttribute('role', 'listitem');
@@ -180,7 +246,7 @@ class InspectorGraph {
     return row;
   }
 
-  updateRow(row, data, index) {
+  updateRow(row: HTMLElement, data: GraphRowData, index: number): void {
     row.dataset.hash = data.hash;
     row.replaceChildren(this.createGraphSvg(data));
     const branches = this.branchNames(data);
@@ -191,25 +257,25 @@ class InspectorGraph {
     this.updateRowPosition(row, data, index);
   }
 
-  updateRowPosition(row, data, index) {
+  updateRowPosition(row: HTMLElement, data: GraphRowData, index: number): void {
     const selected = data.hash === this.selectedHash;
     row.style.transform = `translate3d(0, ${index * this.rowHeight}px, 0)`;
     row.classList.toggle('selected', selected);
     row.setAttribute('aria-selected', String(selected));
   }
 
-  updateVisibleSelection() {
-    for (const row of this.layer.querySelectorAll('.inspector-graph-row')) {
+  updateVisibleSelection(): void {
+    for (const row of this.layer.querySelectorAll<HTMLElement>('.inspector-graph-row')) {
       const selected = row.dataset.hash === this.selectedHash;
       row.classList.toggle('selected', selected);
       row.setAttribute('aria-selected', String(selected));
     }
   }
 
-  createGraphSvg(row) {
+  createGraphSvg(row: GraphRowData): SVGElement {
     const namespace = 'http://www.w3.org/2000/svg';
     const width = Math.min(190, Math.max(48, this.laneCount * 18 + 20));
-    const x = lane => 12 + lane * 18;
+    const x = (lane: number): number => 12 + lane * 18;
     const midpoint = this.rowHeight / 2;
     const svg = document.createElementNS(namespace, 'svg');
     svg.setAttribute('class', 'inspector-graph-svg');
@@ -217,14 +283,14 @@ class InspectorGraph {
     svg.setAttribute('aria-hidden', 'true');
     svg.style.width = `${width}px`;
 
-    for (const segment of window.GraphLayout.createGraphSegments(row, this.rowHeight)) {
+    for (const segment of (window as unknown as { GraphLayout: WindowGraphLayout }).GraphLayout.createGraphSegments(row, this.rowHeight)) {
       svg.appendChild(this.svgPath(segment.path, segment.lane));
     }
 
     const circle = document.createElementNS(namespace, 'circle');
-    circle.setAttribute('cx', x(row.lane));
-    circle.setAttribute('cy', midpoint);
-    circle.setAttribute('r', (row.parents || []).length > 1 ? 5 : 4);
+    circle.setAttribute('cx', String(x(row.lane)));
+    circle.setAttribute('cy', String(midpoint));
+    circle.setAttribute('r', String((row.parents || []).length > 1 ? 5 : 4));
     circle.setAttribute(
       'class',
       `graph-lane-node graph-lane-${row.lane % 8}${(row.parents || []).length > 1 ? ' is-merge' : ''}`
@@ -233,29 +299,29 @@ class InspectorGraph {
 
     if ((row.refs || []).some(ref => ref.type === 'head')) {
       const head = document.createElementNS(namespace, 'circle');
-      head.setAttribute('cx', x(row.lane));
-      head.setAttribute('cy', midpoint);
-      head.setAttribute('r', 8);
+      head.setAttribute('cx', String(x(row.lane)));
+      head.setAttribute('cy', String(midpoint));
+      head.setAttribute('r', '8');
       head.setAttribute('class', 'graph-head-indicator');
       svg.appendChild(head);
     }
     return svg;
   }
 
-  svgPath(data, lane) {
+  svgPath(data: string, lane: number): SVGElement {
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', data);
     path.setAttribute('class', `graph-lane-path graph-lane-${lane % 8}`);
     return path;
   }
 
-  branchNames(row) {
+  branchNames(row: GraphRowData): string[] {
     return [...new Set((row.refs || [])
       .filter(ref => ref && ['branch', 'remote'].includes(ref.type) && ref.shortName)
       .map(ref => ref.shortName))];
   }
 
-  createTooltip() {
+  createTooltip(): HTMLElement {
     const tooltip = document.createElement('div');
     tooltip.id = 'inspector-commit-tooltip';
     tooltip.className = 'inspector-commit-tooltip';
@@ -292,7 +358,7 @@ class InspectorGraph {
     return tooltip;
   }
 
-  refreshTranslations() {
+  refreshTranslations(): void {
     if (this.tooltipBranchLabel) {
       this.tooltipBranchLabel.textContent = this.translate('details.graphBranch');
     }
@@ -301,7 +367,7 @@ class InspectorGraph {
     }
   }
 
-  showTooltip(hash, anchor) {
+  showTooltip(hash: string, anchor: HTMLElement): void {
     const row = this.rowsByHash.get(hash);
     if (!row) return;
     const branches = this.branchNames(row);
@@ -327,7 +393,7 @@ class InspectorGraph {
     this.tooltip.style.top = `${top}px`;
   }
 
-  hideTooltip() {
+  hideTooltip(): void {
     this.tooltip.classList.remove('is-visible');
     this.tooltip.setAttribute('aria-hidden', 'true');
     for (const row of this.layer.querySelectorAll('[aria-describedby]')) {
@@ -335,7 +401,7 @@ class InspectorGraph {
     }
   }
 
-  destroy() {
+  destroy(): void {
     if (!this.mounted) return;
     this.mounted = false;
     if (this.raf) cancelAnimationFrame(this.raf);
@@ -352,4 +418,11 @@ class InspectorGraph {
   }
 }
 
-if (typeof module !== 'undefined') module.exports = InspectorGraph;
+if (typeof window !== 'undefined') {
+  (window as unknown as { InspectorGraph: typeof InspectorGraph }).InspectorGraph = InspectorGraph;
+}
+
+declare const module: { exports: unknown } | undefined;
+if (typeof module !== 'undefined' && (module as { exports?: unknown }).exports) {
+  (module as { exports: unknown }).exports = InspectorGraph;
+}

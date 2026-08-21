@@ -1,6 +1,64 @@
-/* exported MergeWorkspace */
-class MergeWorkspace {
-  constructor(app) {
+interface MergeCommit {
+  hash: string;
+  message: string;
+  author_name: string;
+  date: string;
+}
+
+interface MergeStatus {
+  isClean?: boolean;
+  files?: Array<{ path?: string }>;
+  modified?: string[];
+  not_added?: string[];
+  created?: string[];
+  deleted?: string[];
+  staged?: string[];
+  conflicted?: string[];
+  renamed?: Array<{ from?: string; to?: string }>;
+}
+
+interface MergePreview {
+  error?: unknown;
+  canFastForward?: boolean;
+  conflictedFiles?: string[];
+  changedFiles?: string[] | null;
+}
+
+type MergeApp = {
+  state: { repo?: { path?: string } | null };
+  showToast: (message: unknown, type?: string) => void;
+  emit: (event: string, data?: unknown) => void;
+  setWorkspaceMode: (mode: string) => void;
+  components: {
+    conflict?: { open: (operationState: unknown) => Promise<void> };
+    branchList?: {
+      metadata?: {
+        branches?: Array<{ name?: string; kind?: string; upstream?: string }>;
+        remotes?: Array<{ name?: string }>;
+      };
+    };
+  } & Record<string, unknown>;
+};
+
+export class MergeWorkspace {
+  app: MergeApp;
+  sourceBranch: string | null;
+  targetBranch: string | null;
+  mergeData: {
+    source: string;
+    target: string;
+    commitsCount: number;
+    commits: MergeCommit[];
+    targetCommit: unknown;
+    diff: string;
+    status: MergeStatus;
+  } | null;
+  preview: MergePreview | null;
+  container: HTMLElement | null;
+  strategy: string;
+  onKeydown: ((event: KeyboardEvent) => void) | null;
+
+  constructor(app: MergeApp) {
     this.app = app;
     this.sourceBranch = null;
     this.targetBranch = null;
@@ -11,7 +69,7 @@ class MergeWorkspace {
     this.onKeydown = null;
   }
 
-  async open(source, target) {
+  async open(source: string, target: string): Promise<void> {
     this.sourceBranch = source;
     this.targetBranch = target;
     this.strategy = 'noff';
@@ -26,7 +84,12 @@ class MergeWorkspace {
         window.gitTree.getLog(repo.path, 1, target),
         window.gitTree.getStatus(repo.path),
         window.gitTree.previewMerge(repo.path, source)
-      ]);
+      ]) as [
+        { error?: string; commits?: MergeCommit[]; diff?: string },
+        { latest?: unknown },
+        MergeStatus,
+        MergePreview
+      ];
       if (comparison?.error) throw new Error(comparison.error);
 
       this.mergeData = {
@@ -41,12 +104,12 @@ class MergeWorkspace {
 
       this.renderMerge();
     } catch (e) {
-      this.app.showToast('Error: ' + e.message, 'error');
+      this.app.showToast('Error: ' + (e as Error).message, 'error');
       this.hide();
     }
   }
 
-  showLoading() {
+  showLoading(): void {
     this.ensureContainer();
     this.bindEscape();
     this.container.classList.remove('is-hidden');
@@ -63,10 +126,10 @@ class MergeWorkspace {
       <div class="empty-state">${this.esc(t('common.loading'))}</div>
       </div>
     `;
-    document.getElementById('merge-cancel-btn').onclick = () => this.hide();
+    document.getElementById('merge-cancel-btn')!.onclick = () => this.hide();
   }
 
-  ensureContainer() {
+  ensureContainer(): void {
     if (this.container) return;
     this.container = document.getElementById('merge-preview-overlay');
     if (!this.container) {
@@ -77,7 +140,7 @@ class MergeWorkspace {
     this.container.className = 'merge-workspace-shell is-hidden';
   }
 
-  renderMerge() {
+  renderMerge(): void {
     this.ensureContainer();
     if (!this.mergeData) return;
 
@@ -232,9 +295,9 @@ class MergeWorkspace {
       </div>
     `;
 
-    document.getElementById('merge-cancel-btn').onclick = () => this.hide();
-    document.getElementById('merge-only-btn').onclick = () => this.executeMerge(false);
-    document.getElementById('merge-push-btn').onclick = () => this.executeMerge(true);
+    document.getElementById('merge-cancel-btn')!.onclick = () => this.hide();
+    document.getElementById('merge-only-btn')!.onclick = () => this.executeMerge(false);
+    document.getElementById('merge-push-btn')!.onclick = () => this.executeMerge(true);
     const viewChangesButton = document.getElementById('merge-view-changes-btn');
     if (viewChangesButton) {
       viewChangesButton.onclick = () => {
@@ -245,7 +308,7 @@ class MergeWorkspace {
     const stashButton = document.getElementById('merge-stash-btn');
     if (stashButton) stashButton.onclick = () => this.stashAndReload();
 
-    document.querySelectorAll('.merge-strategy-option').forEach(button => {
+    document.querySelectorAll<HTMLElement>('.merge-strategy-option').forEach(button => {
       button.onclick = () => {
         this.strategy = button.id.replace('merge-opt-', '');
         document.querySelectorAll('.merge-strategy-option').forEach(item => {
@@ -257,7 +320,7 @@ class MergeWorkspace {
     this.container.classList.remove('is-hidden');
   }
 
-  renderDiff(diffText) {
+  renderDiff(diffText: string): string {
     if (!diffText) {
       return `<div class="empty-state">${this.esc(t('mergeWorkspace.noDiffPreview'))}</div>`;
     }
@@ -288,14 +351,14 @@ class MergeWorkspace {
     return scroll.innerHTML;
   }
 
-  lineNumber(value, side) {
+  lineNumber(value: number | null, side: string): HTMLElement {
     const number = document.createElement('span');
     number.className = `diff-line-num is-${side}`;
     number.textContent = Number.isInteger(value) ? String(value) : '';
     return number;
   }
 
-  async executeMerge(andPush = false) {
+  async executeMerge(andPush = false): Promise<void> {
     const repo = this.app.state.repo;
     if (!repo) return;
     const changedFiles = this.preview?.changedFiles || null;
@@ -305,7 +368,10 @@ class MergeWorkspace {
     }
     this.app.showToast(t('mergeWorkspace.mergeStarted'));
 
-    const result = await window.gitTree.merge(repo.path, this.mergeData.source, this.strategy);
+    const result = await window.gitTree.merge(repo.path, this.mergeData.source, this.strategy) as {
+      error?: string;
+      conflictState?: { type?: string };
+    };
     if (result.error) {
       if (result.conflictState?.type) {
         this.hide();
@@ -330,7 +396,7 @@ class MergeWorkspace {
     const remoteName = targetBranch?.upstream?.split('/')[0]
       || metadata?.remotes?.[0]?.name
       || 'origin';
-    const pushResult = await window.gitTree.push(repo.path, remoteName, this.mergeData.target);
+    const pushResult = await window.gitTree.push(repo.path, remoteName, this.mergeData.target) as { error?: string };
     this.setPushing(false);
     this.hide();
     if (pushResult.error) {
@@ -341,10 +407,10 @@ class MergeWorkspace {
     this.app.emit('refresh');
   }
 
-  setPushing(pushing) {
+  setPushing(pushing: boolean): void {
     if (!this.container) return;
     this.container.querySelectorAll('.merge-confirm, #merge-cancel-btn').forEach(button => {
-      button.disabled = pushing;
+      (button as HTMLButtonElement).disabled = pushing;
     });
     const pushButton = this.container.querySelector('#merge-push-btn');
     if (pushButton && pushing) {
@@ -352,14 +418,14 @@ class MergeWorkspace {
     }
   }
 
-  async stashAndReload() {
+  async stashAndReload(): Promise<void> {
     const repo = this.app.state.repo;
     const data = this.mergeData;
     if (!repo || !data) return;
     const result = await window.gitTree.stash(
       repo.path,
       `GitTree: before merging ${data.source} into ${data.target}`
-    );
+    ) as { error?: string };
     if (result?.error) {
       this.app.showToast(result.error, 'error');
       return;
@@ -368,19 +434,19 @@ class MergeWorkspace {
     await this.open(data.source, data.target);
   }
 
-  bindEscape() {
+  bindEscape(): void {
     if (this.onKeydown) return;
     this.onKeydown = event => {
       if (event.key !== 'Escape') return;
       if (!this.container || this.container.classList.contains('is-hidden')) return;
-      const cancel = document.getElementById('merge-cancel-btn');
+      const cancel = document.getElementById('merge-cancel-btn') as HTMLButtonElement | null;
       if (!cancel || cancel.disabled) return;
       this.hide();
     };
     document.addEventListener('keydown', this.onKeydown);
   }
 
-  hide() {
+  hide(): void {
     if (this.onKeydown) {
       document.removeEventListener('keydown', this.onKeydown);
       this.onKeydown = null;
@@ -388,7 +454,7 @@ class MergeWorkspace {
     if (this.container) this.container.classList.add('is-hidden');
   }
 
-  hasPendingChanges(status = {}) {
+  hasPendingChanges(status: MergeStatus | null | undefined = {}): boolean {
     return status?.isClean === false || Boolean(
       status && (
         status.modified?.length ||
@@ -402,15 +468,15 @@ class MergeWorkspace {
     );
   }
 
-  hasBlockingChanges(status = {}, changedFiles = null) {
+  hasBlockingChanges(status: MergeStatus | null | undefined = {}, changedFiles: string[] | null = null): boolean {
     return this.blockingFiles(status, changedFiles).length > 0;
   }
 
-  pendingFileCount(status = {}) {
+  pendingFileCount(status: MergeStatus | null | undefined = {}): number {
     return this.localFiles(status).length;
   }
 
-  localFiles(status = {}) {
+  localFiles(status: MergeStatus | null | undefined = {}): string[] {
     const values = [
       ...(status.files || []).map(file => file.path),
       ...(status.modified || []),
@@ -424,24 +490,31 @@ class MergeWorkspace {
     return [...new Set(values)];
   }
 
-  blockingFiles(status = {}, changedFiles = null) {
+  blockingFiles(status: MergeStatus | null | undefined = {}, changedFiles: string[] | null = null): string[] {
     const local = this.localFiles(status);
     if (changedFiles === null) return local;
     const incoming = new Set(changedFiles);
     return local.filter(file => incoming.has(file));
   }
 
-  blockingSummary(status = {}, changedFiles = null) {
+  blockingSummary(status: MergeStatus | null | undefined = {}, changedFiles: string[] | null = null): string {
     const files = this.blockingFiles(status, changedFiles);
     if (!files.length) return t('mergeWorkspace.unknownChanges');
     return files.slice(0, 4).join(', ') + (files.length > 4 ? '…' : '');
   }
 
-  esc(value) { return HtmlEncoder.encode(value); }
-  fmtDate(d) {
+  esc(value: unknown): string { return HtmlEncoder.encode(value); }
+  fmtDate(d: unknown): string {
     if (!d) return '';
-    return new Date(d).toLocaleDateString([], { month: 'short', day: 'numeric' });
+    return new Date(d as string).toLocaleDateString([], { month: 'short', day: 'numeric' });
   }
 }
 
-if (typeof module !== 'undefined') module.exports = MergeWorkspace;
+if (typeof window !== 'undefined') {
+  (window as unknown as { MergeWorkspace: typeof MergeWorkspace }).MergeWorkspace = MergeWorkspace;
+}
+
+declare const module: { exports: unknown } | undefined;
+if (typeof module !== 'undefined' && (module as { exports?: unknown }).exports) {
+  (module as { exports: unknown }).exports = MergeWorkspace;
+}

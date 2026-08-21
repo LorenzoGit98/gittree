@@ -1,5 +1,34 @@
-class CommitCompare {
-  constructor(app) {
+interface CompareFile {
+  path: string;
+  status: string;
+  oldPath?: string;
+}
+
+interface CommitComparison {
+  error?: string;
+  files?: CompareFile[];
+}
+
+interface CommitFileDiff {
+  error?: string;
+  binary?: boolean;
+  hunks?: Array<{ header: string }>;
+}
+
+type CommitCompareApp = {
+  state: { repo?: { path?: string } | null };
+  showToast: (message: unknown, type?: string) => void;
+};
+
+export class CommitCompare {
+  app: CommitCompareApp;
+  hashA: string | null;
+  hashB: string | null;
+  data: CommitComparison | null;
+  selectedFile: string | null;
+  container: HTMLElement | null;
+
+  constructor(app: CommitCompareApp) {
     this.app = app;
     this.hashA = null;
     this.hashB = null;
@@ -8,7 +37,7 @@ class CommitCompare {
     this.container = null;
   }
 
-  async open(hashA, hashB) {
+  async open(hashA: string, hashB: string): Promise<void> {
     this.hashA = hashA;
     this.hashB = hashB;
     this.selectedFile = null;
@@ -19,32 +48,32 @@ class CommitCompare {
     this.showLoading();
 
     try {
-      const comparison = await window.gitTree.compareCommits(repo.path, hashA, hashB);
+      const comparison = await window.gitTree.compareCommits(repo.path, hashA, hashB) as CommitComparison;
       if (comparison?.error) throw new Error(comparison.error);
       this.data = comparison;
       this.render();
     } catch (e) {
-      this.app.showToast('Error comparing commits: ' + e.message, 'error');
+      this.app.showToast('Error comparing commits: ' + (e as Error).message, 'error');
       this.hide();
     }
   }
 
-  ensureContainer() {
+  ensureContainer(): void {
     this.container = document.getElementById('merge-workspace-overlay');
   }
 
-  showLoading() {
+  showLoading(): void {
     this.container.classList.remove('is-hidden');
     this.container.innerHTML = `<div class="empty-state"><i class="ph ph-circle-notch"></i>${t('commitCompare.loading')}</div>`;
   }
 
-  hide() {
+  hide(): void {
     this.container.classList.add('is-hidden');
     this.container.innerHTML = '';
     this.data = null;
   }
 
-  render() {
+  render(): void {
     if (!this.data) return;
     const files = this.data.files || [];
 
@@ -76,14 +105,14 @@ class CommitCompare {
     `;
     this.container.classList.remove('is-hidden');
 
-    document.getElementById('commit-compare-close').onclick = () => this.hide();
-    this.container.querySelectorAll('.commit-compare-file-item').forEach(item => {
-      item.onclick = () => this.selectFile(item.dataset.path, item);
+    document.getElementById('commit-compare-close')!.onclick = () => this.hide();
+    this.container.querySelectorAll<HTMLElement>('.commit-compare-file-item').forEach(item => {
+      item.onclick = () => this.selectFile((item as HTMLElement).dataset.path, item as HTMLElement);
     });
   }
 
-  fileRow(file, index) {
-    const statusClass = { A: 'added', M: 'modified', D: 'deleted', R: 'renamed', C: 'renamed' }[file.status] || 'modified';
+  fileRow(file: CompareFile, index: number): string {
+    const statusClass = ({ A: 'added', M: 'modified', D: 'deleted', R: 'renamed', C: 'renamed' } as Record<string, string>)[file.status] || 'modified';
     const displayName = file.oldPath ? `${file.oldPath} \u203A ${file.path}` : file.path;
     return `
       <div class="commit-compare-file-item" data-path="${this.esc(file.path)}" data-index="${index}">
@@ -94,7 +123,7 @@ class CommitCompare {
     `;
   }
 
-  async selectFile(filePath, element) {
+  async selectFile(filePath: string, element?: HTMLElement): Promise<void> {
     this.container.querySelectorAll('.commit-compare-file-item').forEach(el => el.classList.remove('active'));
     if (element) element.classList.add('active');
     this.selectedFile = filePath;
@@ -104,18 +133,18 @@ class CommitCompare {
 
     try {
       const repo = this.app.state.repo;
-      const diff = await window.gitTree.getCommitFileDiff(repo.path, this.hashA, this.hashB, filePath);
+      const diff = await window.gitTree.getCommitFileDiff(repo.path, this.hashA, this.hashB, filePath) as CommitFileDiff;
       if (diff?.error) {
         diffEl.innerHTML = `<div class="diff-placeholder">${this.esc(diff.error)}</div>`;
         return;
       }
       this.renderDiff(diffEl, diff);
     } catch (e) {
-      diffEl.innerHTML = `<div class="diff-placeholder">${this.esc(e.message)}</div>`;
+      diffEl.innerHTML = `<div class="diff-placeholder">${this.esc((e as Error).message)}</div>`;
     }
   }
 
-  renderDiff(container, diff) {
+  renderDiff(container: HTMLElement, diff: CommitFileDiff): void {
     container.innerHTML = '';
     if (diff.binary) {
       container.innerHTML = `<div class="diff-placeholder"><i class="ph ph-file-lock"></i>${t('commitCompare.binaryFile')}</div>`;
@@ -164,9 +193,16 @@ class CommitCompare {
     container.appendChild(wrapper);
   }
 
-  esc(value) {
+  esc(value: unknown): string {
     return HtmlEncoder.encode(value);
   }
 }
 
-window.CommitCompare = CommitCompare;
+if (typeof window !== 'undefined') {
+  (window as unknown as { CommitCompare: typeof CommitCompare }).CommitCompare = CommitCompare;
+}
+
+declare const module: { exports: unknown } | undefined;
+if (typeof module !== 'undefined' && (module as { exports?: unknown }).exports) {
+  (module as { exports: unknown }).exports = CommitCompare;
+}
