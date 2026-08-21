@@ -4,12 +4,19 @@ These instructions apply to the entire repository.
 
 ## Product invariants
 
-- Keep the stack vanilla: JavaScript, CommonJS, Electron and the native DOM.
-- Do not add a framework, bundler or TypeScript without an explicit product decision.
+- Keep the stack vanilla: JavaScript, CommonJS, Electron and the native DOM. TypeScript is adopted incrementally per ADR-0008 and `docs/typescript-migration-plan.md`.
+- Do not add a framework or bundler. In directories already converted to TypeScript (see the migration plan), new files must be `.ts` with `strict` typing; never add new `.js` there.
 - Preserve the named `window.gitTree` API. Never expose a generic public IPC invoke method.
-- Preserve registered-repository validation, the per-repository Git queue and `{ error }` IPC envelopes.
+- Preserve registered-repository validation, the per-repository Git queue and `{ error }` IPC envelopes. Their runtime shape is frozen; type them from `src/shared/` without changing it.
 - Keep GitTree local and privacy-first: no telemetry, repository upload or automatic diagnostics upload.
 - Treat `CONTEXT.md` and the ADRs in `docs/adr/` as architectural constraints.
+
+## TypeScript migration rules (ADR-0008)
+
+- Never mix a `.js`→`.ts` conversion with a behavior change in the same commit; conversions are behavior-preserving renames plus types only.
+- Never mix architectural cleanup (extractions A1–A8 of the migration plan) with a TS conversion; sequence them refactor-first for domains being restructured, types-first for shared contracts.
+- The TypeScript error count may only decrease: keep `npm run typecheck` within the baseline ratchet (`scripts/check-ts-baseline.js`).
+- Shared IPC contracts, bridge types and domain models live in `src/shared/`; main, preload and renderer import them from there.
 
 ## Required project skills
 
