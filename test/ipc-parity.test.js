@@ -94,7 +94,10 @@ test('every renderer push channel is declared in the shared notification contrac
   const declared = [...new Set(matches(shared, /'([a-z]+:[a-z0-9-]+)'/g))];
 
   const sources = [
-    fs.readFileSync(path.join(root, 'src', 'main', 'main-application.js'), 'utf8'),
+    (() => {
+      try { return fs.readFileSync(path.join(root, 'src', 'main', 'main-application.mts'), 'utf8'); }
+      catch { return fs.readFileSync(path.join(root, 'src', 'main', 'main-application.js'), 'utf8'); }
+    })(),
     fs.readFileSync(path.join(root, 'src', 'main', 'update-service.mts'), 'utf8'),
     readIpcFile('git-handlers'),
     readIpcFile('repository-handlers'),
