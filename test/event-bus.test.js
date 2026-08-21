@@ -1,7 +1,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const EventBus = require('../src/renderer/event-bus');
+let EventBus;
+try {
+  const mod = require('../src/renderer/event-bus.mts');
+  EventBus = mod.EventBus || mod.default || mod;
+} catch {
+  EventBus = require('../src/renderer/event-bus');
+}
 
 test('on subscribes and emit delivers the payload to every listener in order', () => {
   const bus = new EventBus();

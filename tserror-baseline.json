@@ -1,8 +1,8 @@
 {
-  "count": 908,
-  "generatedAt": "2026-08-21T11:06:23.624Z",
+  "count": 906,
+  "generatedAt": "2026-08-21T11:20:47.288Z",
   "perDirectory": {
-    "src/renderer": 55,
+    "src/renderer": 53,
     "src/renderer/components": 853
   }
 }

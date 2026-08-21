@@ -1,7 +1,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const ToastService = require('../src/renderer/toast-service');
+let ToastService;
+try {
+  const mod = require('../src/renderer/toast-service.mts');
+  ToastService = mod.ToastService || mod.default || mod;
+} catch {
+  ToastService = require('../src/renderer/toast-service');
+}
 
 function createHarness() {
   const classes = new Set(['toast']);
