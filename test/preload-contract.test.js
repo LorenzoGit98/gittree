@@ -4,6 +4,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
 
+function matches(source, pattern) {
+  return [...source.matchAll(pattern)].map(match => match[1]);
+}
+
 function loadBridge() {
   const invokes = [];
   const listeners = new Map();
@@ -92,4 +96,20 @@ test('preload preserves observable defaults', async () => {
     ['repo', 'github', 42, 1],
     ['repo', 'github', { id: 42 }, false]
   ]);
+});
+
+test('shared GitTreeBridge interface stays in lockstep with the preload API', () => {
+  const bridge = fs.readFileSync(
+    path.resolve(__dirname, '..', 'src', 'shared', 'bridge.mts'),
+    'utf8'
+  );
+  const source = fs.readFileSync(
+    path.resolve(__dirname, '..', 'src', 'preload.js'),
+    'utf8'
+  );
+  const exposed = [...new Set(matches(source, /^ {2}([a-zA-Z_][a-zA-Z0-9_]*):/gm))];
+  const declared = [...new Set(matches(bridge, /^ {2}(?:readonly )?([a-zA-Z_][a-zA-Z0-9_]*)[:(]/gm))];
+
+  assert.ok(exposed.length >= 150);
+  assert.deepEqual([...declared].sort(), [...exposed].sort());
 });
