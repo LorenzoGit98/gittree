@@ -1,14 +1,14 @@
-function boundedString(value, maxLength, fallback = '') {
+function boundedString(value: unknown, maxLength: number, fallback = ''): string {
   return typeof value === 'string' && value.length <= maxLength ? value : fallback;
 }
 
-function boundedInteger(value, maximum, fallback = 0) {
-  return Number.isInteger(value) && value >= 0 && value <= maximum ? value : fallback;
+function boundedInteger(value: unknown, maximum: number, fallback = 0): number {
+  return Number.isInteger(value) && (value as number) >= 0 && (value as number) <= maximum ? value as number : fallback;
 }
 
-function sanitizeGraphPayload(graph) {
-  const rows = [];
-  for (const source of Array.isArray(graph?.rows) ? graph.rows.slice(0, 2000) : []) {
+export function sanitizeGraphPayload(graph: any) {
+  const rows: any[] = [];
+  for (const source of Array.isArray(graph?.rows) ? (graph.rows as any[]).slice(0, 2000) : []) {
     const hash = boundedString(source?.hash, 80);
     if (!hash) continue;
     rows.push({
@@ -21,18 +21,18 @@ function sanitizeGraphPayload(graph) {
         .filter(value => value === null || Boolean(value)),
       parents: (Array.isArray(source.parents) ? source.parents : []).slice(0, 128)
         .map(parent => ({
-          hash: boundedString(parent?.hash, 80),
-          lane: boundedInteger(parent?.lane, 127),
-          kind: ['first-parent', 'merge-parent'].includes(parent?.kind)
-            ? parent.kind
+          hash: boundedString((parent as any)?.hash, 80),
+          lane: boundedInteger((parent as any)?.lane, 127),
+          kind: ['first-parent', 'merge-parent'].includes((parent as any)?.kind)
+            ? (parent as any).kind
             : 'first-parent'
         }))
         .filter(parent => parent.hash),
       refs: (Array.isArray(source.refs) ? source.refs : []).slice(0, 64)
         .map(ref => ({
-          shortName: boundedString(ref?.shortName, 500),
-          type: ['branch', 'remote', 'tag', 'head'].includes(ref?.type)
-            ? ref.type
+          shortName: boundedString((ref as any)?.shortName, 500),
+          type: ['branch', 'remote', 'tag', 'head'].includes((ref as any)?.type)
+            ? (ref as any).type
             : 'branch'
         }))
         .filter(ref => ref.shortName)
@@ -47,19 +47,19 @@ function sanitizeGraphPayload(graph) {
   };
 }
 
-function sanitizeFilesPayload(files) {
+function sanitizeFilesPayload(files: unknown) {
   return (Array.isArray(files) ? files : []).slice(0, 5000)
     .map(file => ({
-      path: boundedString(file?.path, 4000),
-      oldPath: boundedString(file?.oldPath, 4000) || null,
-      status: ['A', 'D', 'M', 'R'].includes(file?.status) ? file.status : 'M',
-      additions: boundedInteger(file?.additions, 10_000_000),
-      deletions: boundedInteger(file?.deletions, 10_000_000)
+      path: boundedString((file as any)?.path, 4000),
+      oldPath: boundedString((file as any)?.oldPath, 4000) || null,
+      status: ['A', 'D', 'M', 'R'].includes((file as any)?.status) ? (file as any).status : 'M',
+      additions: boundedInteger((file as any)?.additions, 10_000_000),
+      deletions: boundedInteger((file as any)?.deletions, 10_000_000)
     }))
     .filter(file => file.path);
 }
 
-function sanitizeInspectorPayload(payload) {
+export function sanitizeInspectorPayload(payload: any) {
   return {
     title: typeof payload?.title === 'string' && payload.title.length <= 200
       ? payload.title
@@ -92,7 +92,17 @@ function sanitizeInspectorPayload(payload) {
   };
 }
 
-function createInspectorWindowController({
+export interface InspectorWindowControllerOptions {
+  BrowserWindow: any;
+  getMainWindow: () => any;
+  lockDownWindow: (window: any) => void;
+  iconPath: () => string;
+  preloadPath: string;
+  htmlPath: string;
+  sendToRenderer: (channel: string, payload?: unknown) => void;
+}
+
+export function createInspectorWindowController({
   BrowserWindow,
   getMainWindow,
   lockDownWindow,
@@ -100,10 +110,10 @@ function createInspectorWindowController({
   preloadPath,
   htmlPath,
   sendToRenderer
-}) {
-  let inspectorWindow = null;
+}: InspectorWindowControllerOptions) {
+  let inspectorWindow: any | null = null;
 
-  function open(payload) {
+  function open(payload: unknown) {
     const safePayload = sanitizeInspectorPayload(payload);
     if (inspectorWindow && !inspectorWindow.isDestroyed()) {
       inspectorWindow.focus();
@@ -138,7 +148,7 @@ function createInspectorWindowController({
     return { success: true };
   }
 
-  function update(payload) {
+  function update(payload: unknown) {
     if (!inspectorWindow || inspectorWindow.isDestroyed()) return { success: false };
     inspectorWindow.webContents.send('inspector:render', sanitizeInspectorPayload(payload));
     return { success: true };
@@ -151,5 +161,3 @@ function createInspectorWindowController({
 
   return { open, update, destroy };
 }
-
-module.exports = { createInspectorWindowController };
