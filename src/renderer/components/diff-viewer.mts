@@ -1,15 +1,13 @@
-/* global DiffLayout */
+import type { GitTreeApp } from '../app.mts';
+import type { LayoutFile } from './diff-layout.mts';
+import type { SplitRow, UnifiedRow } from './diff-parser.mts';
+
 const VIRTUAL_DIFF_THRESHOLD = 1200;
 const VIRTUAL_DIFF_OVERSCAN_PX = 440;
 
-type DiffViewerApp = {
-  pushInspectorPayload?: () => void;
-  syncInspectorWorkspace?: (options?: Record<string, unknown>) => void;
-  showToast: (message: unknown, type?: string) => void;
-  components?: {
-    inspectorWorkspace?: { setSelectedFile: (path: string | null) => void };
-  } & Record<string, unknown>;
-};
+type VirtualDiffRow = UnifiedRow | SplitRow;
+type VirtualDiffFile = LayoutFile<VirtualDiffRow>;
+
 
 interface CommitDetail {
   error?: string;
@@ -22,7 +20,7 @@ interface CommitDetail {
 
 export class DiffViewer {
   body: HTMLElement;
-  app: DiffViewerApp;
+  app: GitTreeApp;
   mode: string;
   modeBeforeExpanded: string | null;
   inspectorExpanded: boolean;
@@ -30,7 +28,7 @@ export class DiffViewer {
   fileSummaries: Array<{ path: string; oldPath: string | null; status: string; additions: number; deletions: number }>;
   selectedFilePath: string | null;
   virtualLayer: HTMLElement | null;
-  virtualFiles: ReturnType<typeof DiffLayout.layoutFiles>['files'];
+  virtualFiles: VirtualDiffFile[];
   virtualMode: string | null;
   virtualScrollRaf: number;
   fileTargetTimer: number;
@@ -39,7 +37,7 @@ export class DiffViewer {
   wordLevel: boolean;
   handleVirtualScroll: () => void;
 
-  constructor(bodyEl: HTMLElement, app: DiffViewerApp) {
+  constructor(bodyEl: HTMLElement, app: GitTreeApp) {
     this.body = bodyEl;
     this.app = app;
     const savedMode = localStorage.getItem('gittree.diff.mode');
@@ -214,7 +212,7 @@ export class DiffViewer {
     }
     this.disableVirtualization();
     const frag = document.createDocumentFragment();
-    this.body.style.setProperty('--diff-gutter-digits', DiffParser.maxDigits(lines));
+    this.body.style.setProperty('--diff-gutter-digits', String(DiffParser.maxDigits(lines)));
     let lastRemoval: string | null = null;
     let target: ParentNode = frag;
     let fileIndex = 0;
@@ -275,7 +273,7 @@ export class DiffViewer {
 
     const parsedRows = this.parseSplitRows(diffText);
     this.disableVirtualization();
-    this.body.style.setProperty('--diff-gutter-digits', DiffParser.maxDigits(parsedRows));
+    this.body.style.setProperty('--diff-gutter-digits', String(DiffParser.maxDigits(parsedRows)));
     parsedRows.forEach(row => {
       if (row.type === 'full') {
         columns = null;
@@ -312,18 +310,21 @@ export class DiffViewer {
     this.body.appendChild(wrapper);
   }
 
-  renderVirtualized(rows: Parameters<typeof DiffLayout.groupRows>[0], mode: string): void {
+  renderVirtualized(rows: UnifiedRow[] | SplitRow[], mode: string): void {
     this.disableVirtualization();
     const isUnified = mode === 'unified';
     const isSplit = mode === 'split' || mode === 'split-unified';
-    const files = DiffLayout.groupRows(rows, {
-      isFile: (row: Record<string, unknown>) => isUnified || mode === 'split-unified'
-        ? row.kind === 'file'
-        : row.type === 'full' && row.kind === 'file',
-      pathForFile: (row: Record<string, unknown>) => this.extractPath(row.content as string) || row.content as string
+    const kindOf = (row: VirtualDiffRow): string => ('kind' in row ? String(row.kind) : '');
+    const contentOf = (row: VirtualDiffRow): string => ('content' in row && typeof row.content === 'string' ? row.content : '');
+    const isFullRow = (row: VirtualDiffRow): boolean => 'type' in row && (row as { type?: unknown }).type === 'full';
+    const files = DiffLayout.groupRows<VirtualDiffRow>(rows, {
+      isFile: row => isUnified || mode === 'split-unified'
+        ? kindOf(row) === 'file'
+        : isFullRow(row) && kindOf(row) === 'file',
+      pathForFile: row => this.extractPath(contentOf(row)) || contentOf(row)
     });
     const rowHeight = this.inspectorExpanded ? 24 : 22;
-    const layout = DiffLayout.layoutFiles(files, { rowHeight });
+    const layout = DiffLayout.layoutFiles<VirtualDiffRow>(files, { rowHeight });
     this.virtualMode = mode;
     this.virtualFiles = layout.files;
     this.body.classList.add('diff-virtualized');
@@ -341,7 +342,7 @@ export class DiffViewer {
   renderVirtualViewport(force = false): void {
     if (!this.virtualLayer || !this.virtualMode) return;
     const viewportHeight = this.body.clientHeight || 640;
-    const visible = DiffLayout.visibleFiles(
+    const visible = DiffLayout.visibleFiles<VirtualDiffRow>(
       this.virtualFiles,
       this.body.scrollTop,
       viewportHeight,
@@ -356,7 +357,9 @@ export class DiffViewer {
       block.style.top = `${file.top}px`;
       block.style.height = `${file.height}px`;
       if (file.path) block.dataset.filePath = file.path;
-      if (file.header) block.appendChild(this.createFileHeader(block, file.header.content));
+      if (file.header && 'content' in file.header) {
+        block.appendChild(this.createFileHeader(block, file.header.content));
+      }
 
       const rowsBeforeViewport = Math.ceil(VIRTUAL_DIFF_OVERSCAN_PX / file.rowHeight);
       const firstRow = Math.max(
@@ -373,18 +376,26 @@ export class DiffViewer {
       if (this.virtualMode === 'unified') {
         for (let index = 0; index < firstRow; index += 1) {
           const row = file.rows[index];
+          if (!('kind' in row)) continue;
           if (row.kind === 'del') previousRemoval = row.content;
           else if (row.kind === 'add') previousRemoval = null;
         }
       }
       for (let index = firstRow; index < lastRow; index += 1) {
         const row = file.rows[index];
-        const elements = this.virtualMode === 'unified'
-          ? [this.createUnifiedLine(row, previousRemoval)]
-          : this.createSplitLineElements(row);
-        const isSplitPair = this.virtualMode === 'split'
-          ? row.type === 'pair'
-          : this.virtualMode === 'split-unified' && ['del', 'add', 'context'].includes(row.kind);
+        let elements: HTMLElement[];
+        let isSplitPair: boolean;
+        if (this.virtualMode === 'unified') {
+          if (!('kind' in row)) continue;
+          elements = [this.createUnifiedLine(row, previousRemoval)];
+          isSplitPair = false;
+        } else {
+          if (!('type' in row)) continue;
+          elements = this.createSplitLineElements(row);
+          isSplitPair = this.virtualMode === 'split'
+            ? row.type === 'pair'
+            : 'kind' in row && ['del', 'add', 'context'].includes(String(row.kind));
+        }
         if (isSplitPair) {
           const columns = document.createElement('div');
           columns.className = 'diff-split-columns';
@@ -401,7 +412,7 @@ export class DiffViewer {
             block.appendChild(element);
           }
         }
-        if (this.virtualMode === 'unified') {
+        if (this.virtualMode === 'unified' && 'kind' in row) {
           if (row.kind === 'del') previousRemoval = row.content;
           else if (row.kind === 'add') previousRemoval = null;
         }
@@ -411,7 +422,7 @@ export class DiffViewer {
     this.virtualLayer.replaceChildren(fragment);
   }
 
-  createUnifiedLine(line: import('./diff-parser.mts').UnifiedRow, previousRemoval: string | null = null): HTMLElement {
+  createUnifiedLine(line: UnifiedRow, previousRemoval: string | null = null): HTMLElement {
     const element = document.createElement('div');
     element.className = `diff-line ${line.kind === 'no-newline' ? 'header' : line.kind}`;
     element.appendChild(this.lineNumber(line.oldLine, 'old'));
@@ -427,7 +438,7 @@ export class DiffViewer {
     return element;
   }
 
-  createSplitLineElements(row: import('./diff-parser.mts').SplitRow): HTMLElement[] {
+  createSplitLineElements(row: SplitRow): HTMLElement[] {
     if (row.type === 'pair') {
       return [
         this.splitLine(row.left, 'old', row.right?.content),
@@ -480,11 +491,11 @@ export class DiffViewer {
     this.virtualMode = null;
   }
 
-  parseSplitRows(diffText: string): import('./diff-parser.mts').SplitRow[] {
+  parseSplitRows(diffText: string): SplitRow[] {
     return DiffParser.parseSplit(diffText);
   }
 
-  splitLine(line: import('./diff-parser.mts').UnifiedRow, side: string, counterpart?: string): HTMLElement {
+  splitLine(line: UnifiedRow, side: string, counterpart?: string): HTMLElement {
     const el = document.createElement('div');
     el.className = `diff-line ${line.kind}`;
     el.appendChild(this.lineNumber(side === 'old' ? line.oldLine : line.newLine, side));

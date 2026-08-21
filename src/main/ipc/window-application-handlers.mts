@@ -28,7 +28,42 @@ function launchTerminal(repoPath: string, platform: string) {
   return { ok: true };
 }
 
-function registerWindowHandlers({ registerHandler, getMainWindow, getWindowState }: any) {
+interface BrowserWindowLike {
+  minimize(): void;
+  maximize(): void;
+  unmaximize(): void;
+  isMaximized(): boolean;
+  close(): void;
+}
+
+interface UpdateServiceLike {
+  getState(): unknown;
+  check(manual: boolean): Promise<unknown>;
+  download(): Promise<unknown>;
+  install(): Promise<unknown>;
+}
+
+interface WindowApplicationDependencies {
+  registerHandler: (channel: string, handler: (...args: unknown[]) => unknown) => void;
+  registerManagedRepoHandler: (channel: string, handler: (...args: unknown[]) => unknown) => void;
+  getMainWindow: () => BrowserWindowLike | null;
+  getWindowState: () => unknown;
+  getUpdateService?: () => UpdateServiceLike | null | undefined;
+  getAppVersion: () => string;
+  isPackaged: boolean;
+  setTheme: (theme: string, background: string) => void;
+  openExternal: (url: string) => void;
+  openPath: (repoPath: string) => Promise<string | undefined> | string | undefined;
+  platform: string;
+  getGitVersion: () => unknown;
+  exportDiagnostics: () => Promise<unknown> | unknown;
+  showOpenDialog?: (window: unknown, options: Record<string, unknown>) => Promise<{ canceled: boolean; filePaths?: string[] }>;
+  authorizeDirectory?: (directoryPath: unknown) => unknown;
+  openInspector: (payload: unknown) => unknown;
+  updateInspector: (payload: unknown) => unknown;
+}
+
+function registerWindowHandlers({ registerHandler, getMainWindow, getWindowState }: Pick<WindowApplicationDependencies, 'registerHandler' | 'getMainWindow' | 'getWindowState'>) {
   registerHandler('window:minimize', () => getMainWindow()?.minimize());
   registerHandler('window:toggle-maximize', () => {
     const window = getMainWindow();
@@ -41,7 +76,7 @@ function registerWindowHandlers({ registerHandler, getMainWindow, getWindowState
   registerHandler('window:close', () => getMainWindow()?.close());
 }
 
-function registerUpdateHandlers({ registerHandler, getUpdateService, getAppVersion, isPackaged }: any) {
+function registerUpdateHandlers({ registerHandler, getUpdateService, getAppVersion, isPackaged }: WindowApplicationDependencies) {
   registerHandler('update:get-state', () => (
     getUpdateService()?.getState() || {
       status: isPackaged ? 'idle' : 'disabled',
@@ -59,7 +94,7 @@ function registerUpdateHandlers({ registerHandler, getUpdateService, getAppVersi
   ));
 }
 
-export function registerWindowApplicationHandlers(dependencies: any) {
+export function registerWindowApplicationHandlers(dependencies: WindowApplicationDependencies) {
   const {
     registerHandler,
     registerManagedRepoHandler,
@@ -78,8 +113,8 @@ export function registerWindowApplicationHandlers(dependencies: any) {
   } = dependencies;
   registerWindowHandlers(dependencies);
   registerUpdateHandlers(dependencies);
-  registerHandler('app:set-theme', (theme: unknown, background: unknown) => setTheme(theme, background));
-  registerHandler('app:open-external', (url: unknown) => openExternal(url));
+  registerHandler('app:set-theme', (theme: string, background: string) => setTheme(theme, background));
+  registerHandler('app:open-external', (url: string) => openExternal(url));
   registerManagedRepoHandler('app:open-explorer', async (repoPath: string) => {
     const error = await openPath(repoPath);
     return error ? { error } : { ok: true };

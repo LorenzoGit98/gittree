@@ -28,10 +28,10 @@ export interface PromptOptions {
   maxLength?: number;
 }
 
-export interface FormOptions {
+export interface FormOptions<T = unknown> {
   title: string;
   fields: string;
-  extract: (form: HTMLFormElement) => unknown;
+  extract: (form: HTMLFormElement) => T;
   cancelLabel: string;
   actionLabel: string;
   danger?: boolean;
@@ -61,7 +61,7 @@ export class DialogService {
 
   confirm({ title, message, cancelLabel, actionLabel, danger = false }: ConfirmOptions): Promise<unknown> {
     const id = `dialog-title-${nextDialogId++}`;
-    return this.open({
+    return this.open<unknown>({
       markup: `<h3 id="${id}">${this.encode(title)}</h3><p>${this.encode(message)}</p>
         <div class="confirm-actions">
           <button class="btn" type="button" data-cancel>${this.encode(cancelLabel)}</button>
@@ -76,22 +76,22 @@ export class DialogService {
     });
   }
 
-  prompt({ title, label, value = '', cancelLabel, actionLabel, maxLength = 1000 }: PromptOptions): Promise<unknown> {
+  prompt({ title, label, value = '', cancelLabel, actionLabel, maxLength = 1000 }: PromptOptions): Promise<string | null> {
     const safeMaxLength = Math.max(1, Math.min(65536, Number(maxLength) || 1000));
-    return this.form({
+    return this.form<string>({
       title,
       fields: `<label>${this.encode(label)}
         <input name="value" value="${this.encode(value)}" maxlength="${safeMaxLength}" required autofocus>
       </label>`,
       cancelLabel,
       actionLabel,
-      extract: (form: HTMLFormElement) => (form.elements as unknown as { value: HTMLInputElement }).value.value
+      extract: form => (form.elements as unknown as Record<string, HTMLInputElement>).value.value
     });
   }
 
-  form({ title, fields, extract, cancelLabel, actionLabel, danger = false }: FormOptions): Promise<unknown> {
+  form<T>({ title, fields, extract, cancelLabel, actionLabel, danger = false }: FormOptions<T>): Promise<T | null> {
     const id = `dialog-title-${nextDialogId++}`;
-    return this.open({
+    return this.open<T | null>({
       markup: `<form class="branch-dialog-form">
         <h3 id="${id}">${this.encode(title)}</h3>${fields}
         <div class="confirm-actions">
@@ -112,7 +112,7 @@ export class DialogService {
     });
   }
 
-  open({ markup, titleId, cancelValue, bind }: DialogOpenOptions): Promise<unknown> {
+  open<T>({ markup, titleId, cancelValue, bind }: DialogOpenOptions): Promise<T> {
     if (this.activeCancel) this.activeCancel();
     const previousFocus = this.document.activeElement;
     this.dialog.className = 'confirm-dialog';
@@ -136,7 +136,7 @@ export class DialogService {
         this.dialog.removeAttribute('aria-labelledby');
         this.activeCancel = null;
         if (previousFocus?.isConnected) (previousFocus as HTMLElement).focus();
-        resolve(value);
+        resolve(value as T);
       };
       const onKeydown = (event: KeyboardEvent) => {
         if (event.key === 'Escape') {

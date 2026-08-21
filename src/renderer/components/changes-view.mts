@@ -1,4 +1,6 @@
 import type { ChangesFileList } from './changes-file-list.mts';
+import type { GitTreeApp } from '../app.mts';
+import type { NumberableHunk } from './diff-parser.mts';
 
 interface ChangeFile {
   path: string;
@@ -26,25 +28,10 @@ interface IdentityInfo {
   signing?: { available?: boolean; enabledByDefault?: boolean; format?: string };
 }
 
-type ChangesApp = {
-  isCurrentRepo: (repoPath?: string) => boolean;
-  showToast: (message: unknown, type?: string) => void;
-  pushInspectorPayload?: () => void;
-  refresh: (options?: Record<string, unknown>) => Promise<void>;
-  dialogs: {
-    confirm: (options: Record<string, unknown>) => Promise<unknown>;
-    form: (options: Record<string, unknown>) => Promise<Record<string, unknown> | null>;
-  };
-  components: {
-    branchList?: { load: (repoPath: string) => void };
-    diffViewer?: { clear: () => void };
-    welcome?: { markStep?: (step: string) => void };
-  } & Record<string, unknown>;
-};
 
 export class ChangesView {
   root: HTMLElement;
-  app: ChangesApp;
+  app: GitTreeApp;
   repoPath: string | null;
   snapshot: WorkingTreeSnapshot | null;
   identity: IdentityInfo | null;
@@ -60,7 +47,7 @@ export class ChangesView {
   fileLists: { unstaged: ChangesFileList; staged: ChangesFileList };
   elements: Record<string, HTMLElement>;
 
-  constructor(root: HTMLElement, app: ChangesApp) {
+  constructor(root: HTMLElement, app: GitTreeApp) {
     this.root = root;
     this.app = app;
     this.repoPath = null;
@@ -530,7 +517,7 @@ export class ChangesView {
       error?: string;
       noDiff?: boolean;
       binary?: boolean;
-      hunks?: Array<{ header: string; id?: string }>;
+      hunks?: Array<NumberableHunk & { header: string; id?: string }>;
       path?: string;
     } | undefined;
     if (request !== this.diffRequest) return;
@@ -542,7 +529,10 @@ export class ChangesView {
     this.app.pushInspectorPayload?.();
   }
 
-  renderWorkingDiff(diff: { noDiff?: boolean; binary?: boolean; hunks?: Array<{ header: string; id?: string }>; path?: string }, staged: boolean): void {
+  renderWorkingDiff(
+    diff: { noDiff?: boolean; binary?: boolean; hunks?: Array<NumberableHunk & { header: string; id?: string }>; path?: string },
+    staged: boolean
+  ): void {
     const body = document.getElementById('detail-body');
     body.innerHTML = '';
     if (diff.noDiff) {
@@ -577,7 +567,7 @@ export class ChangesView {
       lines: DiffParser.numberHunk(hunk)
     }));
     const allLines = numberedHunks.flatMap(item => item.lines);
-    wrapper.style.setProperty('--diff-gutter-digits', DiffParser.maxDigits(allLines));
+    wrapper.style.setProperty('--diff-gutter-digits', String(DiffParser.maxDigits(allLines)));
     numberedHunks.forEach(({ hunk, lines }) => {
       const section = document.createElement('section');
       section.className = 'working-diff-hunk';
@@ -701,7 +691,7 @@ export class ChangesView {
   }
 
   async editIdentity(): Promise<boolean> {
-    const value = await this.identityDialog() as { name: string; email: string; scope: string } | null;
+    const value = await this.identityDialog();
     if (!value) return false;
     const result = await window.gitTree.setIdentity(this.repoPath, value) as { error?: string; identity?: IdentityInfo };
     if (result?.error) {
@@ -730,11 +720,14 @@ export class ChangesView {
             <option value="global">${this.esc(t('changes.scopeGlobal'))}</option>
           </select>
         </label>`,
-      extract: form => ({
-        name: form.elements.name.value.trim(),
-        email: form.elements.email.value.trim(),
-        scope: form.elements.scope.value
-      }),
+      extract: (form): { name: string; email: string; scope: string } => {
+        const elements = form.elements as unknown as Record<string, HTMLInputElement | HTMLSelectElement>;
+        return {
+          name: elements.name.value.trim(),
+          email: elements.email.value.trim(),
+          scope: elements.scope.value
+        };
+      },
       cancelLabel: t('common.cancel'),
       actionLabel: t('common.continue')
     });

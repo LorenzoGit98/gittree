@@ -1,3 +1,6 @@
+import type { RepositoryWorkspace } from '../repository-workspace.mts';
+import type { Logger } from '../logger.mts';
+import type { ScanResult } from '../repository-scanner.mts';
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -60,12 +63,19 @@ async function cloneRepository(url, parentDirectory, repositoryWorkspace) {
   return repositoryWorkspace.addTrustedRepository(targetPath) || { path: targetPath, name };
 }
 
+interface RepositoryHandlerDependencies {
+  registerHandler: (channel: string, handler: (...args: unknown[]) => unknown) => void;
+  scanRepositories: (rootPath: unknown, options?: Record<string, unknown>) => Promise<ScanResult>;
+  sendToRenderer: (channel: string, payload: unknown) => void;
+  repositoryWorkspace: RepositoryWorkspace;
+}
+
 export function registerScanHandlers({
   registerHandler,
   scanRepositories,
   sendToRenderer,
   repositoryWorkspace
-}: any) {
+}: RepositoryHandlerDependencies) {
   const scans = new Map();
   registerHandler('repo:scan-start', rootPath => {
     const authorizedRoot = repositoryWorkspace.beginScan(rootPath);
@@ -135,7 +145,17 @@ async function addRepositories(repoPaths, createGitService, repositoryWorkspace)
   return { ...result, failed: [...failed, ...result.failed] };
 }
 
-export function registerRepositoryHandlers(dependencies: any) {
+interface RepositoryHandlersBundle {
+  registerHandler: (channel: string, handler: (...args: unknown[]) => unknown) => void;
+  repositoryWorkspace: RepositoryWorkspace;
+  isWorkingTreeRepository: (repoPath: unknown) => Promise<boolean> | boolean;
+  createGitService: (repoPath: string) => unknown;
+  scanRepositories: (rootPath: unknown, options?: Record<string, unknown>) => Promise<ScanResult>;
+  sendToRenderer: (channel: string, payload: unknown) => void;
+  logger?: Pick<Logger, 'info'>;
+}
+
+export function registerRepositoryHandlers(dependencies: RepositoryHandlersBundle) {
   const {
     registerHandler,
     repositoryWorkspace,
@@ -177,6 +197,6 @@ export function registerRepositoryHandlers(dependencies: any) {
     logger?.info('Repository removed', { path: repoPath });
     return repositoryWorkspace.active();
   });
-  registerHandler('repo:set-active', index => repositoryWorkspace.setActive(index));
+  registerHandler('repo:set-active', index => repositoryWorkspace.setActive(Number(index)));
   registerHandler('repo:active', () => repositoryWorkspace.active());
 }

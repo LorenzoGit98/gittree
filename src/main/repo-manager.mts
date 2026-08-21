@@ -2,7 +2,16 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as electron from 'electron';
 
-const app: any = (electron as any).app ?? (electron as any).default?.app ?? { getPath: () => '/tmp' };
+interface ElectronAppLike {
+  getPath(name: string): string;
+}
+
+function resolveElectronApp(): ElectronAppLike {
+  const candidate = electron as unknown as { app?: ElectronAppLike; default?: { app?: ElectronAppLike } };
+  return candidate.app ?? candidate.default?.app ?? { getPath: () => '/tmp' };
+}
+
+const app: ElectronAppLike = resolveElectronApp();
 
 export function repositoryName(repoPath: unknown): string {
   return path.basename(String(repoPath).replace(/[\\/]+$/, '').replace(/\\/g, '/'));
@@ -55,28 +64,33 @@ export class RepoManager {
     try {
       if (this.fileSystem.existsSync(this.configPath)) {
         const data = this.fileSystem.readFileSync(this.configPath, 'utf-8');
-        const parsed = JSON.parse(data);
-        if (!parsed || typeof parsed !== 'object' || !Array.isArray((parsed as any).repos)) {
+        const parsed: unknown = JSON.parse(data);
+        if (!parsed || typeof parsed !== 'object') {
+          throw new Error('Invalid repository workspace file');
+        }
+        const workspace = parsed as { repos?: unknown; activeRepoIndex?: unknown };
+        if (!Array.isArray(workspace.repos)) {
           throw new Error('Invalid repository workspace file');
         }
         const seen = new Set<string>();
-        this.repos = (parsed as any).repos.flatMap((repository: any) => {
+        this.repos = workspace.repos.flatMap((repository: unknown) => {
           try {
-            const normalizedPath = normalizedRepositoryPath(repository?.path);
+            const entry = repository as { path?: unknown; addedAt?: unknown };
+            const normalizedPath = normalizedRepositoryPath(entry?.path);
             const key = repositoryKey(normalizedPath, this.platform);
             if (seen.has(key)) return [];
             seen.add(key);
             return [{
               path: normalizedPath,
               name: repositoryName(normalizedPath),
-              addedAt: typeof repository.addedAt === 'string' ? repository.addedAt : this.now()
+              addedAt: typeof entry.addedAt === 'string' ? entry.addedAt : this.now()
             }];
           } catch {
             return [];
           }
         });
-        const requestedIndex = Number.isInteger((parsed as any).activeRepoIndex)
-          ? (parsed as any).activeRepoIndex
+        const requestedIndex = Number.isInteger(workspace.activeRepoIndex)
+          ? workspace.activeRepoIndex as number
           : -1;
         this.activeRepoIndex = requestedIndex >= 0 && requestedIndex < this.repos.length
           ? requestedIndex

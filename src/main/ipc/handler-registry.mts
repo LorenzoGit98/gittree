@@ -1,5 +1,10 @@
 export function errorEnvelope(error: unknown): { error: string } {
-  return { error: (error as any)?.message || String(error) };
+  const message = error instanceof Error
+    ? error.message
+    : typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { message: unknown }).message)
+      : String(error);
+  return { error: message };
 }
 
 export interface HandlerRegistryOptions {
@@ -16,7 +21,7 @@ export function createHandlerRegistry({ handle, removeHandler = () => {}, assert
 
   const registeredChannels = new Set<string>();
 
-  const registerHandler = (channel: string, implementation: (...args: any[]) => unknown) => {
+  const registerHandler = (channel: string, implementation: (...args: unknown[]) => unknown) => {
     handle(channel, async (_event: unknown, ...args: unknown[]) => {
       try {
         return await implementation(...args);
@@ -27,10 +32,13 @@ export function createHandlerRegistry({ handle, removeHandler = () => {}, assert
     registeredChannels.add(channel);
   };
 
-  const registerManagedRepoHandler = (channel: string, implementation: (...args: any[]) => unknown) => {
+  type ManagedRepoImplementation = (repoPath: string, ...args: unknown[]) => unknown;
+
+  const registerManagedRepoHandler = (channel: string, implementation: ManagedRepoImplementation) => {
     registerHandler(channel, async (repoPath: unknown, ...args: unknown[]) => {
       assertManagedRepo(repoPath);
-      return implementation(repoPath, ...args);
+      // The assertion above guarantees a managed repository path.
+      return (implementation as (...args: unknown[]) => unknown)(repoPath, ...args);
     });
   };
 

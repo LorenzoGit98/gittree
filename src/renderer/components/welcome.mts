@@ -1,13 +1,5 @@
-type WelcomeApp = {
-  showToast: (message: unknown, type?: string) => void;
-  setupClearableSearches?: (scope: ParentNode) => void;
-  components: {
-    repoTabs?: {
-      addRepo: (path: string) => Promise<unknown>;
-      addRepos: (paths: string[]) => Promise<{ added?: string[]; failed?: string[] } | undefined>;
-    };
-  } & Record<string, unknown>;
-};
+
+import type { GitTreeApp } from '../app.mts';
 
 interface ScannedRepository {
   name: string;
@@ -20,7 +12,7 @@ export class WelcomeScreen {
   onboardingContainer: HTMLElement | null;
   steps: string[];
   storageKey: string;
-  app: WelcomeApp | null;
+  app: GitTreeApp | null;
   repositoryPicker: HTMLElement | null;
   repositoryPickerKeydown: ((event: KeyboardEvent) => void) | null;
   scanList: HTMLElement | null;
@@ -55,7 +47,7 @@ export class WelcomeScreen {
     this.scanQuery = '';
   }
 
-  async init(app: WelcomeApp): Promise<void> {
+  async init(app: GitTreeApp): Promise<void> {
     this.app = app;
     const openButton = document.getElementById('btn-open-repo') as HTMLElement | null;
     if (openButton) openButton.onclick = () => this.openRepositoryPicker();

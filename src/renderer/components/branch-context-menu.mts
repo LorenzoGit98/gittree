@@ -6,7 +6,7 @@ interface BranchRef {
 }
 
 interface BranchMetadataShape {
-  branches?: Array<{ name?: string; kind?: string; current?: boolean; upstream?: string }>;
+    branches?: Array<{ name: string; kind: string; current?: boolean; upstream?: string }>;
   remotes?: Array<{ name: string; provider?: { provider?: string } }>;
   current?: string;
   defaultBranch?: string;
@@ -24,28 +24,8 @@ interface OperationStateShape {
   type?: string;
 }
 
-type ContextMenuApp = {
-  state: { repo?: { path?: string } | null; currentBranch?: string | null };
-  dialogs: {
-    form: (options: Record<string, unknown>) => Promise<unknown>;
-    confirm: (options: Record<string, unknown>) => Promise<unknown>;
-  };
-  components: {
-    branchList?: { batchDelete: () => void; batchCompare: () => void };
-    merge?: { open: (branch: string, target: string) => void };
-    compare?: { compare: (branch: string, target: string) => Promise<void> };
-    conflict?: { open: (operationState: unknown) => Promise<void> };
-    settings?: { open: (section: string) => Promise<void> };
-    reflog?: { open: () => Promise<void> };
-    pullRequests?: { setProvider: (provider: string) => Promise<void>; openCreateDialog: (options: Record<string, unknown>) => Promise<void> };
-    repoTabs?: { addRepo: (path: string) => Promise<unknown> };
-  } & Record<string, unknown>;
-  showToast: (message: unknown, type?: string) => void;
-  emit: (event: string, data?: unknown) => void;
-  isCurrentRepo: (repoPath?: string) => boolean;
-  afterBranchCheckout: (result: unknown, repoPath: string) => Promise<void>;
-  setWorkspaceMode: (mode: string) => void;
-};
+
+import type { GitTreeApp } from '../app.mts';
 
 interface MenuItem {
   icon: string;
@@ -59,7 +39,7 @@ interface MenuItem {
 }
 
 export class BranchContextMenu {
-  app: ContextMenuApp;
+  app: GitTreeApp;
   branch: BranchRef | null;
   metadata: BranchMetadataShape | null;
   status: StatusShape | null;
@@ -71,7 +51,7 @@ export class BranchContextMenu {
   onScroll: (event: Event) => void;
   onKeyDown: (event: KeyboardEvent) => void;
 
-  constructor(app: ContextMenuApp) {
+  constructor(app: GitTreeApp) {
     this.app = app;
     this.branch = null;
     this.metadata = null;

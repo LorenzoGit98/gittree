@@ -1,3 +1,5 @@
+import type { GitTreeApp } from '../app.mts';
+
 interface MergeCommit {
   hash: string;
   message: string;
@@ -24,24 +26,9 @@ interface MergePreview {
   changedFiles?: string[] | null;
 }
 
-type MergeApp = {
-  state: { repo?: { path?: string } | null };
-  showToast: (message: unknown, type?: string) => void;
-  emit: (event: string, data?: unknown) => void;
-  setWorkspaceMode: (mode: string) => void;
-  components: {
-    conflict?: { open: (operationState: unknown) => Promise<void> };
-    branchList?: {
-      metadata?: {
-        branches?: Array<{ name?: string; kind?: string; upstream?: string }>;
-        remotes?: Array<{ name?: string }>;
-      };
-    };
-  } & Record<string, unknown>;
-};
 
 export class MergeWorkspace {
-  app: MergeApp;
+  app: GitTreeApp;
   sourceBranch: string | null;
   targetBranch: string | null;
   mergeData: {
@@ -58,7 +45,7 @@ export class MergeWorkspace {
   strategy: string;
   onKeydown: ((event: KeyboardEvent) => void) | null;
 
-  constructor(app: MergeApp) {
+  constructor(app: GitTreeApp) {
     this.app = app;
     this.sourceBranch = null;
     this.targetBranch = null;
@@ -327,7 +314,7 @@ export class MergeWorkspace {
     const lines = DiffParser.parseUnified(diffText);
     const scroll = document.createElement('div');
     const fragment = document.createDocumentFragment();
-    scroll.style.setProperty('--diff-gutter-digits', DiffParser.maxDigits(lines));
+    scroll.style.setProperty('--diff-gutter-digits', String(DiffParser.maxDigits(lines)));
     lines.forEach(line => {
       if (line.kind === 'file') {
         const header = document.createElement('div');

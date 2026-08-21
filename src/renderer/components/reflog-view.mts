@@ -1,3 +1,5 @@
+import type { GitTreeApp } from '../app.mts';
+
 interface ReflogEntry {
   hash: string;
   ref: string;
@@ -5,18 +7,13 @@ interface ReflogEntry {
   date?: string;
 }
 
-type ReflogApp = {
-  state: { repo?: { path?: string } | null };
-  showToast: (message: unknown, type?: string) => void;
-  emit: (event: string, data?: unknown) => void;
-};
 
 export class ReflogView {
-  app: ReflogApp;
+  app: GitTreeApp;
   container: HTMLElement;
   entries: ReflogEntry[];
 
-  constructor(app: ReflogApp) {
+  constructor(app: GitTreeApp) {
     this.app = app;
     this.container = document.getElementById('merge-workspace-overlay') as HTMLElement;
     this.entries = [];

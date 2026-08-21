@@ -1,3 +1,5 @@
+import type { GitTreeApp } from '../app.mts';
+
 interface WorktreeEntry {
   path: string;
   branch?: string;
@@ -22,18 +24,6 @@ interface AgentTask {
   events?: Array<{ type: string; timestamp: unknown }>;
 }
 
-type AgentPanelApp = {
-  state: { repo?: { path?: string } | null; currentBranch?: string | null };
-  pathKey: (value: unknown) => string;
-  showToast: (message: unknown, type?: string) => void;
-  confirmDialog: (title: string, message: string, actionLabel: string, danger?: boolean) => Promise<unknown>;
-  dialogs: {
-    form: (options: Record<string, unknown>) => Promise<Record<string, unknown> | null>;
-  };
-  components: {
-    repoTabs?: { addRepo: (path: string) => Promise<unknown> };
-  } & Record<string, unknown>;
-};
 
 type TerminalLike = {
   cols: number;
@@ -49,7 +39,7 @@ declare const Terminal: new (options?: Record<string, unknown>) => TerminalLike;
 declare const FitAddon: { FitAddon: new () => { fit: () => void } };
 
 export class WorktreeAgentPanel {
-  app: AgentPanelApp;
+  app: GitTreeApp;
   repo: { path?: string } | null;
   worktrees: WorktreeEntry[];
   tasks: AgentTask[];
@@ -64,7 +54,7 @@ export class WorktreeAgentPanel {
   pendingTerminalData: Map<string, { parts: string[]; size: number }>;
   settingsChanged: ((event: CustomEvent) => void) | null;
 
-  constructor(app: AgentPanelApp) {
+  constructor(app: GitTreeApp) {
     this.app = app;
     this.repo = null;
     this.worktrees = [];
@@ -340,6 +330,17 @@ export class WorktreeAgentPanel {
       );
       if (!accepted) return;
     }
+    interface NewSessionDraft {
+      title: string;
+      prompt: string;
+      baseRef: string;
+      branch: string;
+      adapterId: string;
+      setupRecipeId: string;
+      allowMain: boolean;
+      customPath?: boolean;
+      destinationPath?: string | null;
+    }
     const form = await this.app.dialogs.form({
       title: t('agents.newSession'),
       fields: `<label>${this.esc(t('agents.title'))}<input name="title" maxlength="120" required autofocus></label>
@@ -351,20 +352,23 @@ export class WorktreeAgentPanel {
         ${worktree ? '' : `<label class="agent-advanced-path"><input name="customPath" type="checkbox"> ${this.esc(t('agents.customPath'))}</label>`}`,
       cancelLabel: t('common.cancel'),
       actionLabel: t('agents.start'),
-      extract: formElement => ({
-        title: formElement.elements.title.value.trim(),
-        prompt: formElement.elements.prompt.value,
-        baseRef: formElement.elements.baseRef?.value.trim() || 'HEAD',
-        branch: formElement.elements.branch?.value.trim() || '',
-        adapterId: formElement.elements.adapterId.value,
-        setupRecipeId: formElement.elements.setupRecipeId.value,
-        allowMain: Boolean(isMain),
-        customPath: Boolean(formElement.elements.customPath?.checked)
-      })
+      extract: (formElement): NewSessionDraft => {
+        const elements = formElement.elements as unknown as Record<string, HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>;
+        return {
+          title: elements.title.value.trim(),
+          prompt: (elements.prompt as HTMLTextAreaElement).value,
+          baseRef: elements.baseRef?.value.trim() || 'HEAD',
+          branch: elements.branch?.value.trim() || '',
+          adapterId: elements.adapterId.value,
+          setupRecipeId: elements.setupRecipeId.value,
+          allowMain: Boolean(isMain),
+          customPath: Boolean(elements.customPath && (elements.customPath as HTMLInputElement).checked)
+        };
+      }
     });
     if (!form) return;
     if (form.customPath) {
-      form.destinationPath = await window.gitTree.selectDirectory();
+      form.destinationPath = await window.gitTree.selectDirectory() as string | null;
       if (!form.destinationPath) return;
     }
     delete form.customPath;

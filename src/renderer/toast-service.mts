@@ -65,8 +65,8 @@ export class ToastService {
     this.container.addEventListener('mouseleave', this.handleMouseLeave);
   }
 
-  show(message: unknown, type: string = ''): void {
-    const kind: ToastKind = (['success', 'warning', 'error'] as const).includes(type as ToastKind)
+  show(message: string, type: string = ''): void {
+    const kind: ToastKind = (['success', 'warning', 'error'] as ToastKind[]).includes(type as ToastKind)
       ? type as ToastKind
       : 'loading';
     const duration = TOAST_DURATIONS[kind];
@@ -80,7 +80,7 @@ export class ToastService {
       `<button type="button" class="toast-dismiss" aria-label="${this.encode(this.translate('common.close'))}"><i class="ph ph-x" aria-hidden="true"></i></button>` +
       `<span class="toast-progress" aria-hidden="true"></span>`;
     const messageElement = this.container.querySelector('.toast-message');
-    if (messageElement) messageElement.textContent = message as string;
+    if (messageElement) messageElement.textContent = message;
     const progress = this.container.querySelector('.toast-progress') as HTMLElement | null;
     if (progress) progress.style.animationDuration = `${duration}ms`;
     const dismissButton = this.container.querySelector('.toast-dismiss') as HTMLElement | null;

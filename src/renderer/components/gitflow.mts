@@ -1,17 +1,12 @@
-type GitFlowApp = {
-  state: { repo?: { path?: string } | null };
-  components: {
-    conflict?: { open: (operationState: unknown) => Promise<void> };
-  } & Record<string, unknown>;
-  showToast: (message: unknown, type?: string) => void;
-  emit: (event: string, data?: unknown) => void;
-};
+
 
 type GitFlowMode = 'start' | 'finish';
 type GitFlowType = 'feature' | 'release' | 'hotfix';
 
+import type { GitTreeApp } from '../app.mts';
+
 export class GitFlow {
-  app: GitFlowApp;
+  app: GitTreeApp;
   overlay: HTMLElement;
   dialog: HTMLElement;
   mode: GitFlowMode;
@@ -21,7 +16,7 @@ export class GitFlow {
   finishTarget: string | null;
   handedOff: boolean;
 
-  constructor(app: GitFlowApp) {
+  constructor(app: GitTreeApp) {
     this.app = app;
     this.overlay = document.getElementById('modal-overlay') as HTMLElement;
     this.dialog = document.getElementById('modal-dialog') as HTMLElement;

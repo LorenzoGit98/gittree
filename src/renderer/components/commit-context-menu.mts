@@ -1,3 +1,5 @@
+import type { GitTreeApp } from '../app.mts';
+
 interface CommitPreview {
   action: string;
   allowed: boolean;
@@ -9,28 +11,15 @@ interface CommitPreview {
   error?: string;
 }
 
-type CommitMenuApp = {
-  state: { repo?: { path?: string } | null };
-  dialogs: {
-    form: (options: Record<string, unknown>) => Promise<unknown>;
-    confirm: (options: Record<string, unknown>) => Promise<unknown>;
-  };
-  components: {
-    commitCompare?: { open: (hashA: string, hashB: string) => void };
-    conflict?: { open: (operationState: unknown) => Promise<void> };
-  } & Record<string, unknown>;
-  showToast: (message: unknown, type?: string) => void;
-  refresh: (options?: Record<string, unknown>) => Promise<void>;
-};
 
 export class CommitContextMenu {
-  app: CommitMenuApp;
+  app: GitTreeApp;
   hashes: string[];
   previews: Record<string, CommitPreview>;
   generation: number;
   element: HTMLElement;
 
-  constructor(app: CommitMenuApp) {
+  constructor(app: GitTreeApp) {
     this.app = app;
     this.hashes = [];
     this.previews = {};

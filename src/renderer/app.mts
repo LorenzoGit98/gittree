@@ -1,29 +1,133 @@
-/* global WorktreeAgentPanel, InspectorWorkspace */
-class GitTreeApp {
-  constructor() {
-    this.state = { repo: null, activeRepoIndex: -1, currentBranch: null };
-    this.components = {};
-    this.inspectorState = 'open';
-    this.workspaceMode = 'history';
-    this.updateState = null;
-    this._events = {};
-    this.bus = new EventBus();
-    this.dialogs = new DialogService();
-    this.toasts = new ToastService({
-      container: document.getElementById('toast'),
-      translate: key => I18n.t(key),
-      encode: value => HtmlEncoder.encode(value)
-    });
-  }
+import { WelcomeScreen } from './components/welcome.mts';
+import { RepoTabs } from './components/repo-tabs.mts';
+import { SettingsView } from './components/settings-view.mts';
+import { BranchContextMenu } from './components/branch-context-menu.mts';
+import { CommitContextMenu } from './components/commit-context-menu.mts';
+import { BranchListView } from './components/branch-list.mts';
+import { GraphView } from './components/graph-view.mts';
+import { ChangesView } from './components/changes-view.mts';
+import { PullRequestView } from './components/pull-request-view.mts';
+import { DiffViewer } from './components/diff-viewer.mts';
+import { InspectorWorkspace } from './components/inspector-workspace.mts';
+import { GlobalSearch } from './components/search.mts';
+import { BranchCompare } from './components/branch-compare.mts';
+import { CommitCompare } from './components/commit-compare.mts';
+import { MergeWorkspace } from './components/merge-workspace.mts';
+import { ReflogView } from './components/reflog-view.mts';
+import { ConflictResolver } from './components/conflict-resolver.mts';
+import { GitFlow } from './components/gitflow.mts';
+import { StatusBar } from './components/status-bar.mts';
+import { WorktreeAgentPanel } from './components/worktree-agent-panel.mts';
+import { RepositoryWorkspaceController, type RepositoryEntry } from './repository-workspace-controller.mts';
+import { RepositoryLoadSession } from './repository-load-session.mts';
+import { RemoteOperationController } from './remote-operation-controller.mts';
+import { WorkspacePanelMotion } from './workspace-panel-motion.mts';
+import { WorkspaceStateController } from './workspace-state-controller.mts';
+import { ShortcutController } from './shortcut-controller.mts';
+import { WorkspaceResizeController } from './workspace-resize-controller.mts';
+import { EventBus } from './event-bus.mts';
+import { DialogService } from './dialog-service.mts';
+import { ToastService } from './toast-service.mts';
+import { Theme } from './theme.mts';
+import { HtmlEncoder } from './html-encoder.mts';
 
-  pathKey(value) {
+interface AppState {
+  repo: RepositoryEntry | null;
+  activeRepoIndex: number;
+  currentBranch: string | null;
+  stashes: Array<{ message?: string }>;
+}
+
+interface AppComponents {
+  welcome: WelcomeScreen;
+  repoTabs: RepoTabs;
+  settings: SettingsView;
+  branchContextMenu: BranchContextMenu;
+  commitContextMenu: CommitContextMenu;
+  branchList: BranchListView;
+  graphView: GraphView;
+  changes: ChangesView;
+  pullRequests: PullRequestView;
+  diffViewer: DiffViewer;
+  inspectorWorkspace: InspectorWorkspace;
+  search: GlobalSearch;
+  compare: BranchCompare;
+  commitCompare: CommitCompare;
+  merge: MergeWorkspace;
+  reflog: ReflogView;
+  conflict: ConflictResolver;
+  gitflow: GitFlow;
+  statusBar: StatusBar;
+  worktreeAgents: WorktreeAgentPanel;
+}
+
+interface UpdateStatePayload {
+  status?: string;
+  availableVersion?: string;
+  progress?: number;
+  error?: string;
+}
+
+interface InspectorPayload extends Record<string, unknown> {
+  title?: string;
+  meta?: string;
+  theme?: string;
+  tone?: string;
+  mode?: string;
+  modeLabel?: string;
+  eyebrow?: string;
+  wordLevel?: boolean;
+  html?: string;
+  diffText?: string;
+  graph?: Record<string, unknown>;
+  files?: DiffViewer['fileSummaries'];
+  selectedFile?: string | null;
+  filesOpen?: boolean;
+}
+
+export interface CheckoutResult {
+  branch?: string;
+  error?: string;
+  conflictState?: { type?: string };
+  path?: string;
+}
+
+const byId = (id: string): HTMLElement => document.getElementById(id) as HTMLElement;
+
+export class GitTreeApp {
+  state: AppState = { repo: null, activeRepoIndex: -1, currentBranch: null, stashes: [] };
+  components: AppComponents = {} as AppComponents;
+  inspectorState = 'open';
+  workspaceMode = 'history';
+  updateState: UpdateStatePayload | null = null;
+  _events: Record<string, unknown> = {};
+  bus = new EventBus();
+  dialogs = new DialogService();
+  toasts = new ToastService({
+    container: document.getElementById('toast') as HTMLElement,
+    translate: key => window.I18n?.t(key) ?? key,
+    encode: value => HtmlEncoder.encode(value)
+  });
+  repositoryWorkspace: RepositoryWorkspaceController | null = null;
+  remoteOperations: RemoteOperationController | null = null;
+  panelMotion: WorkspacePanelMotion | null = null;
+  workspaceState: WorkspaceStateController | null = null;
+  shortcutController: ShortcutController | null = null;
+  workspaceResize: WorkspaceResizeController | null = null;
+  platform = 'win32';
+  windowState: { isMaximized?: boolean } | null = null;
+  popoutOpen = false;
+  buildInspectorPayload: () => InspectorPayload = () => ({});
+  pushInspectorPayload: () => void = () => {};
+
+  pathKey(value: string): string {
     if (this.repositoryWorkspace) return this.repositoryWorkspace.pathKey(value);
     return window.gitTree?.platform === 'win32'
       ? String(value).toLocaleLowerCase('en-US')
       : String(value);
   }
 
-  isCurrentRepo(repoPath) {
+  isCurrentRepo(repoPath?: string): boolean {
     if (this.repositoryWorkspace) {
       return this.repositoryWorkspace.isCurrentRepository(repoPath);
     }
@@ -31,28 +135,28 @@ class GitTreeApp {
     return Boolean(current) && this.pathKey(repoPath) === this.pathKey(current);
   }
 
-  async init() {
+  async init(): Promise<void> {
     this.components.welcome = new WelcomeScreen();
-    this.components.repoTabs = new RepoTabs(document.getElementById('repo-tab-list'), this, {
+    this.components.repoTabs = new RepoTabs(byId('repo-tab-list'), this, {
       storage: localStorage,
       platform: window.gitTree.platform
     });
     this.components.settings = new SettingsView(this);
     this.components.branchContextMenu = new BranchContextMenu(this);
     this.components.commitContextMenu = new CommitContextMenu(this);
-    this.components.branchList = new BranchListView(document.getElementById('branch-list'), this);
+    this.components.branchList = new BranchListView(byId('branch-list'), this);
     this.components.graphView = new GraphView(
-      document.getElementById('graph-view'), document.getElementById('graph-body'), this
+      byId('graph-view'), byId('graph-body'), this
     );
     this.components.changes = new ChangesView(
-      document.getElementById('changes-view'),
+      byId('changes-view'),
       this
     );
     this.components.pullRequests = new PullRequestView(
-      document.getElementById('pull-requests-view'),
+      byId('pull-requests-view'),
       this
     );
-    this.components.diffViewer = new DiffViewer(document.getElementById('detail-body'), this);
+    this.components.diffViewer = new DiffViewer(byId('detail-body'), this);
     this.components.inspectorWorkspace = new InspectorWorkspace({
       container: document.getElementById('inspector-workspace'),
       graphContainer: document.getElementById('inspector-graph-view'),
@@ -65,9 +169,9 @@ class GitTreeApp {
       onGraphSelect: hash => this.components.graphView.select(hash),
       onGraphRequestMore: () => this.components.graphView.loadNextPage(),
       onFileSelect: path => {
-        if (this.components.diffViewer.scrollToFile(path)) this.pushInspectorPayload?.();
+        if (this.components.diffViewer.scrollToFile(path)) this.pushInspectorPayload();
       },
-      onFilesOpenChange: () => this.pushInspectorPayload?.()
+      onFilesOpenChange: () => this.pushInspectorPayload()
     });
     this.components.inspectorWorkspace.mount();
     this.components.search = new GlobalSearch(this);
@@ -116,18 +220,18 @@ class GitTreeApp {
       }
     });
     this.panelMotion = new WorkspacePanelMotion({
-      workspace: document.getElementById('workspace-body'),
+      workspace: byId('workspace-body'),
       document,
       panels: {
         sidebar: {
-          panel: document.getElementById('sidebar'),
-          toggle: document.getElementById('btn-toggle-sidebar'),
+          panel: byId('sidebar'),
+          toggle: byId('btn-toggle-sidebar'),
           openingAnimation: 'motion-panel-enter-left',
           closingAnimation: 'motion-panel-exit-left'
         },
         inspector: {
-          panel: document.getElementById('detail-panel'),
-          toggle: document.getElementById('btn-toggle-inspector'),
+          panel: byId('detail-panel'),
+          toggle: byId('btn-toggle-inspector'),
           openingAnimation: 'motion-panel-enter-right',
           closingAnimation: 'motion-panel-exit-right'
         }
@@ -177,7 +281,7 @@ class GitTreeApp {
 
     const repos = this.components.repoTabs.repos;
     if (repos && repos.length > 0) {
-      const active = await window.gitTree.getActiveRepo();
+      const active = await window.gitTree.getActiveRepo() as RepositoryEntry | undefined;
       if (active) {
         this.components.repoTabs.syncActiveIndex(active.path);
         this.components.repoTabs.render();
@@ -187,50 +291,50 @@ class GitTreeApp {
     }
   }
 
-  bindEvents() {
-    this.on('repo:changed', (repo) => { this.openRepo(repo); });
+  bindEvents(): void {
+    this.on('repo:changed', (repo) => { this.openRepo(repo as RepositoryEntry); });
     this.on('repo:cleared', () => this.showWelcome());
-    this.on('commit:selected', (hash) => this.onCommitSelected(hash));
+    this.on('commit:selected', (hash) => this.onCommitSelected(hash as string));
     this.on('refresh', () => this.refresh());
 
-    document.getElementById('btn-add-repo-tab').onclick = () => this.components.welcome.openRepositoryPicker();
-    document.querySelectorAll('.settings-open').forEach(button => {
+    byId('btn-add-repo-tab').onclick = () => this.components.welcome.openRepositoryPicker();
+    document.querySelectorAll<HTMLElement>('.settings-open').forEach(button => {
       button.onclick = () => this.components.settings.open(null, {
         scope: button.dataset.settingsScope || 'full'
       });
     });
 
-    document.getElementById('btn-fetch').onclick = () => this.doFetch();
-    document.getElementById('btn-pull').onclick = () => this.doPull();
-    document.getElementById('btn-push').onclick = () => this.doPush();
-    document.getElementById('btn-new-branch').onclick = () => this.components.branchList.promptCreateBranch();
-    document.getElementById('btn-gitflow').onclick = () => this.components.gitflow.open();
-    document.getElementById('btn-terminal').onclick = () => this.openTerminal();
-    document.getElementById('btn-explorer').onclick = () => this.openExplorer();
-    document.getElementById('stash-search').addEventListener('input', event => {
-      this.renderStashes(event.target.value);
+    byId('btn-fetch').onclick = () => this.doFetch();
+    byId('btn-pull').onclick = () => this.doPull();
+    byId('btn-push').onclick = () => this.doPush();
+    byId('btn-new-branch').onclick = () => this.components.branchList.promptCreateBranch();
+    byId('btn-gitflow').onclick = () => this.components.gitflow.open();
+    byId('btn-terminal').onclick = () => this.openTerminal();
+    byId('btn-explorer').onclick = () => this.openExplorer();
+    byId('stash-search').addEventListener('input', event => {
+      this.renderStashes((event.target as HTMLInputElement).value);
     });
-    document.querySelectorAll('.theme-toggle').forEach(button => {
+    document.querySelectorAll<HTMLElement>('.theme-toggle').forEach(button => {
       button.onclick = () => Theme.toggle();
     });
-    document.querySelectorAll('.language-toggle').forEach(button => {
-      button.onclick = () => I18n.toggleLanguage();
+    document.querySelectorAll<HTMLElement>('.language-toggle').forEach(button => {
+      button.onclick = () => window.I18n?.toggleLanguage();
     });
-    document.querySelectorAll('.window-minimize').forEach(button => {
+    document.querySelectorAll<HTMLElement>('.window-minimize').forEach(button => {
       button.onclick = () => window.gitTree.minimizeWindow();
     });
-    document.querySelectorAll('.window-maximize').forEach(button => {
+    document.querySelectorAll<HTMLElement>('.window-maximize').forEach(button => {
       button.onclick = async () => {
-        this.updateWindowChrome(await window.gitTree.toggleMaximizeWindow());
+        this.updateWindowChrome(await window.gitTree.toggleMaximizeWindow() as { isMaximized?: boolean });
       };
     });
-    document.querySelectorAll('.window-close').forEach(button => {
+    document.querySelectorAll<HTMLElement>('.window-close').forEach(button => {
       button.onclick = () => window.gitTree.closeWindow();
     });
-    document.querySelectorAll('.app-header, .welcome-card').forEach(surface => {
+    document.querySelectorAll<HTMLElement>('.app-header, .welcome-card').forEach(surface => {
       surface.addEventListener('dblclick', event => {
-        if (event.target.closest('button, input, .repo-tab')) return;
-        window.gitTree.toggleMaximizeWindow().then(state => this.updateWindowChrome(state));
+        if ((event.target as HTMLElement).closest('button, input, .repo-tab')) return;
+        window.gitTree.toggleMaximizeWindow().then(state => this.updateWindowChrome(state as { isMaximized?: boolean }));
       });
     });
 
@@ -239,81 +343,81 @@ class GitTreeApp {
     this.toasts.mount();
   }
 
-  setupWorkspaceModes() {
+  setupWorkspaceModes(): void {
     this.workspaceState.setMode('history', false);
   }
 
-  workspaceModeKey(repoPath = this.state.repo?.path) {
+  workspaceModeKey(repoPath?: string): string {
     return this.workspaceState.modeKey(repoPath);
   }
 
-  setWorkspaceMode(mode, persist = true) {
-    return this.workspaceState.setMode(mode, persist);
+  setWorkspaceMode(mode: string, persist = true): void {
+    this.workspaceState.setMode(mode, persist);
   }
 
-  setupPlatformChrome() {
+  setupPlatformChrome(): void {
     this.platform = window.gitTree.platform || 'win32';
     this.shortcutController.setPlatform(this.platform);
     document.documentElement.dataset.platform = this.platform;
     this.setupShortcutHints();
-    window.gitTree.onWindowState(state => this.updateWindowChrome(state));
-    window.gitTree.getWindowState().then(state => this.updateWindowChrome(state));
+    window.gitTree.onWindowState(state => this.updateWindowChrome(state as { isMaximized?: boolean }));
+    window.gitTree.getWindowState().then(state => this.updateWindowChrome(state as { isMaximized?: boolean }));
   }
 
   shortcutDefinitions() {
     return this.shortcutController.definitions();
   }
 
-  shortcutLabel(action) {
+  shortcutLabel(action: string): string {
     return this.shortcutController.label(action);
   }
 
-  setupShortcutHints() {
-    return this.shortcutController.refreshHints();
+  setupShortcutHints(): void {
+    this.shortcutController.refreshHints();
   }
 
-  updateWindowChrome(state) {
+  updateWindowChrome(state: { isMaximized?: boolean } | null | undefined): void {
     if (!state) return;
     this.windowState = state;
-    document.querySelectorAll('.window-maximize').forEach(button => {
+    document.querySelectorAll<HTMLElement>('.window-maximize').forEach(button => {
       const isRestore = Boolean(state.isMaximized);
       const restoreIcon = this.platform === 'win32'
         ? 'ph-copy-simple'
         : 'ph-corners-in';
-      button.querySelector('i').className =
-        `ph ${isRestore ? restoreIcon : 'ph-square'}`;
+      const icon = button.querySelector('i') as HTMLElement;
+      icon.className = `ph ${isRestore ? restoreIcon : 'ph-square'}`;
       button.dataset.i18nTitle = isRestore ? 'common.restore' : 'common.maximize';
-      button.title = t(button.dataset.i18nTitle);
+      button.title = t(button.dataset.i18nTitle as string);
       button.setAttribute('aria-label', button.title);
     });
   }
 
-  isPrimaryModifier(event) {
-    return this.shortcutController.isPrimaryModifier(event);
+  isPrimaryModifier(event: MouseEvent | KeyboardEvent): boolean {
+    return this.shortcutController.isPrimaryModifier(event as KeyboardEvent);
   }
 
-  async setupUpdates() {
-    const button = document.getElementById('btn-update');
+  async setupUpdates(): Promise<void> {
+    const button = byId('btn-update') as HTMLButtonElement;
     button.onclick = async () => {
       if (this.updateState?.status === 'available') {
         button.disabled = true;
-        const result = await window.gitTree.downloadUpdate();
+        const result = await window.gitTree.downloadUpdate() as { error?: string };
         if (result?.error) this.showToast(result.error, 'error');
       } else if (this.updateState?.status === 'downloaded') {
         await window.gitTree.installUpdate();
       }
     };
-    window.gitTree.onUpdateState(state => this.handleUpdateState(state));
-    this.handleUpdateState(await window.gitTree.getUpdateState());
+    window.gitTree.onUpdateState(state => this.handleUpdateState(state as UpdateStatePayload));
+    this.handleUpdateState(await window.gitTree.getUpdateState() as UpdateStatePayload);
   }
 
-  handleUpdateState(state) {
+  handleUpdateState(state: UpdateStatePayload | null): void {
     if (!state) return;
     const previousStatus = this.updateState?.status;
     this.updateState = state;
-    const button = document.getElementById('btn-update');
-    const icon = button.querySelector('i');
-    const label = button.querySelector('span');
+    const button = byId('btn-update') as HTMLButtonElement;
+    const icon = button.querySelector('i') as HTMLElement;
+    const label = button.querySelector('span') as HTMLElement;
     button.disabled = state.status === 'downloading' || state.status === 'checking';
     button.classList.toggle(
       'is-hidden',
@@ -338,35 +442,35 @@ class GitTreeApp {
     }
   }
 
-  async openRepo(repo, options = {}) {
+  async openRepo(repo: RepositoryEntry, options?: Record<string, unknown>): Promise<void> {
     return this.repositoryWorkspace.open(repo, options);
   }
 
-  setProjectLoading(loading) {
-    return this.repositoryWorkspace.setLoading(loading);
+  setProjectLoading(loading: boolean): void {
+    this.repositoryWorkspace.setLoading(loading);
   }
 
-  setProjectInteractive() {
-    return this.repositoryWorkspace.setInteractive();
+  setProjectInteractive(): void {
+    this.repositoryWorkspace.setInteractive();
   }
 
-  async loadStashes(repoPath) {
-    const container = document.getElementById('stash-list');
+  async loadStashes(repoPath: string): Promise<void> {
+    const container = byId('stash-list');
     container.classList.add('is-project-loading');
     container.innerHTML = this.projectLoadingMarkup();
     try {
-      const list = await window.gitTree.getStashList(repoPath);
+      const list = await window.gitTree.getStashList(repoPath) as { all?: Array<{ message?: string }> } | undefined;
       if (!this.isCurrentRepo(repoPath)) return;
       this.state.stashes = list?.all || [];
-      this.renderStashes(document.getElementById('stash-search')?.value || '');
+      this.renderStashes((document.getElementById('stash-search') as HTMLInputElement | null)?.value || '');
     } catch {
       this.state.stashes = [];
       container.innerHTML = '';
     } finally { container.classList.remove('is-project-loading'); }
   }
 
-  renderStashes(filter = '') {
-    const container = document.getElementById('stash-list');
+  renderStashes(filter = ''): void {
+    const container = byId('stash-list');
     if (!container) return;
     const needle = String(filter || '').trim().toLowerCase();
     const items = (this.state.stashes || [])
@@ -390,18 +494,18 @@ class GitTreeApp {
         </span>
       </div>
     `).join('');
-    container.querySelectorAll('.stash-item').forEach(item => {
-      item.querySelectorAll('[data-action]').forEach(button => {
+    container.querySelectorAll<HTMLElement>('.stash-item').forEach(item => {
+      item.querySelectorAll<HTMLElement>('[data-action]').forEach(button => {
         button.onclick = event => {
           event.stopPropagation();
-          const index = Number(item.dataset.stashIndex);
+          const index = Number((item as HTMLElement).dataset.stashIndex);
           this.runStashAction(button.dataset.action, index);
         };
       });
     });
   }
 
-  async runStashAction(action, index) {
+  async runStashAction(action: string, index: number): Promise<void> {
     const repo = this.state.repo;
     if (!repo || !Number.isInteger(index)) return;
     if (action === 'drop') {
@@ -420,7 +524,7 @@ class GitTreeApp {
           ? window.gitTree.stashDrop
           : null;
     if (!api) return;
-    const result = await api(repo.path, index);
+    const result = await api(repo.path, index) as { error?: string };
     if (result?.error) { this.showToast(result.error, 'error'); return; }
     if (action === 'pop' || action === 'drop') {
       await this.loadStashes(repo.path);
@@ -431,7 +535,7 @@ class GitTreeApp {
     }
   }
 
-  confirmDialog(title, message, actionLabel, danger = false) {
+  confirmDialog(title: string, message: string, actionLabel: string, danger = false): Promise<unknown> {
     return this.dialogs.confirm({
       title,
       message,
@@ -441,53 +545,59 @@ class GitTreeApp {
     });
   }
 
-  async loadTags(repoPath) {
-    const container = document.getElementById('tag-list');
+  async loadTags(repoPath: string): Promise<void> {
+    const container = byId('tag-list');
     container.classList.add('is-project-loading');
     container.innerHTML = this.projectLoadingMarkup();
     try {
-      const tags = await window.gitTree.getTags(repoPath);
+      const tags = await window.gitTree.getTags(repoPath) as { all?: string[] } | undefined;
       if (!this.isCurrentRepo(repoPath)) return;
       if (!tags?.all?.length) { container.innerHTML = ''; return; }
-      container.innerHTML = tags.all.slice(0, 10).map(t => `
+      container.innerHTML = tags.all.slice(0, 10).map(tag => `
         <div class="branch-item">
           <i class="ph ph-tag branch-icon"></i>
-          <span>${this.esc(t)}</span>
+          <span>${this.esc(tag)}</span>
         </div>
       `).join('');
     } catch { container.innerHTML = ''; }
     finally { container.classList.remove('is-project-loading'); }
   }
 
-  projectLoadingMarkup() {
+  projectLoadingMarkup(): string {
     return `<div class="project-loading-inline" role="status" aria-live="polite">
       <i class="ph ph-circle-notch" aria-hidden="true"></i>
       <span>${t('common.loading')}</span>
     </div>`;
   }
 
-  async updateStatus(repoPath, loadSession = null) {
+  async updateStatus(repoPath: string, loadSession?: { status(): Promise<unknown> } | null): Promise<void> {
     try {
-      const status = await (loadSession?.status() || window.gitTree.getStatus(repoPath));
+      const status = await (loadSession?.status() || window.gitTree.getStatus(repoPath)) as {
+        error?: string;
+        current?: string;
+        ahead?: number;
+        behind?: number;
+        isClean?: boolean;
+      } | undefined;
       if (!status || status.error) return;
       if (!this.isCurrentRepo(repoPath)) return;
-      this.state.currentBranch = status.current;
+      this.state.currentBranch = status.current ?? null;
       const parts = [];
       if (status.ahead) parts.push(`↑${status.ahead}`);
       if (status.behind) parts.push(`↓${status.behind}`);
-      document.getElementById('status-branch').textContent = status.current
+      byId('status-branch').textContent = status.current
         ? t('statusBar.onBranch', { branch: status.current })
         : '';
       const info = parts.length
         ? parts.join(' ')
         : (status.isClean ? t('statusBar.clean') : t('statusBar.modified'));
-      document.getElementById('status-info').textContent = info;
+      byId('status-info').textContent = info;
       this.components.statusBar.setInfo(info);
       this.updatePushPullCounts(status.ahead || 0, status.behind || 0);
     } catch { /* status refresh is best effort */ }
   }
 
-  updatePushPullCounts(ahead = 0, behind = 0) {
+  updatePushPullCounts(ahead = 0, behind = 0): void {
     const pullCount = document.getElementById('btn-pull-count');
     const pushCount = document.getElementById('btn-push-count');
     if (pullCount) {
@@ -504,7 +614,7 @@ class GitTreeApp {
     }
   }
 
-  syncCurrentRepositoryState(repoPath) {
+  syncCurrentRepositoryState(repoPath: string): string {
     if (!this.isCurrentRepo(repoPath)) return '';
     const branchName = this.components.branchList.current || '';
     const currentBranchMetadata = (this.components.branchList.metadata?.branches || [])
@@ -525,14 +635,14 @@ class GitTreeApp {
     return branchName;
   }
 
-  animateContentRefresh(element) {
+  animateContentRefresh(element: HTMLElement | null): void {
     if (!element) return;
     element.classList.remove('content-refresh');
     void element.offsetWidth;
     element.classList.add('content-refresh');
   }
 
-  animateBranchSwitch(element, fromDirection) {
+  animateBranchSwitch(element: HTMLElement | null, fromDirection: string | null): void {
     if (!element) return;
     const next = fromDirection === 'top' ? 'content-refresh-from-top'
       : fromDirection === 'bottom' ? 'content-refresh-from-bottom'
@@ -542,14 +652,14 @@ class GitTreeApp {
     element.classList.add(next);
   }
 
-  async onCommitSelected(hash) {
+  async onCommitSelected(hash: string): Promise<void> {
     if (!this.state.repo) return;
     await this.components.diffViewer.showDiffForCommit(this.state.repo.path, hash);
     this.animateContentRefresh(document.getElementById('detail-body'));
     this.syncInspectorWorkspace();
   }
 
-  syncInspectorWorkspace(options = {}) {
+  syncInspectorWorkspace(options: { push?: boolean } = {}): void {
     const graph = this.components.graphView?.getInspectorSnapshot?.() || {
       revision: 0,
       laneCount: 1,
@@ -559,14 +669,14 @@ class GitTreeApp {
     };
     this.components.inspectorWorkspace?.update({
       graph,
-      selectedHash: graph.selectedHash,
+      selectedHash: graph.selectedHash as string | null,
       files: this.components.diffViewer?.fileSummaries || [],
       selectedFile: this.components.diffViewer?.selectedFilePath || null
     });
-    if (options.push !== false) this.pushInspectorPayload?.();
+    if (options.push !== false) this.pushInspectorPayload();
   }
 
-  async afterBranchCheckout(result = {}, repoPath = null) {
+  async afterBranchCheckout(result: CheckoutResult = {}, repoPath: string | null = null): Promise<void> {
     const repo = this.state.repo;
     const branchName = result.branch;
     if (!repo || !branchName) return;
@@ -598,11 +708,11 @@ class GitTreeApp {
       currentBranchMetadata?.behind || 0
     );
     this.components.statusBar.setBranch(branchName);
-    this.components.welcome?.markStep?.('branch');
-    this.pushInspectorPayload?.();
+    this.components.welcome.markStep?.('branch');
+    this.pushInspectorPayload();
   }
 
-  async refresh(options = {}) {
+  async refresh(options: { silent?: boolean } & Record<string, unknown> = {}): Promise<void> {
     if (!this.state.repo) return;
     if (!options.silent) this.showToast(t('common.loading'));
     await this.openRepo(this.state.repo, options);
@@ -610,29 +720,29 @@ class GitTreeApp {
     if (!options.silent) this.showToast(t('feedback.refreshed'), 'success');
   }
 
-  async doFetch() {
+  async doFetch(): Promise<{ error?: string } | null> {
     return this.remoteOperations.run('fetch');
   }
 
-  async doPull() {
+  async doPull(): Promise<{ error?: string } | null> {
     return this.remoteOperations.run('pull');
   }
 
-  async openTerminal() {
+  async openTerminal(): Promise<void> {
     const repo = this.state.repo;
     if (!repo) return;
-    const result = await window.gitTree.openTerminal(repo.path);
+    const result = await window.gitTree.openTerminal(repo.path) as { error?: string };
     if (result?.error) this.showToast(result.error, 'error');
   }
 
-  async openExplorer() {
+  async openExplorer(): Promise<void> {
     const repo = this.state.repo;
     if (!repo) return;
-    const result = await window.gitTree.openExplorer(repo.path);
+    const result = await window.gitTree.openExplorer(repo.path) as { error?: string };
     if (result?.error) this.showToast(result.error, 'error');
   }
 
-  toolbarButtons() {
+  toolbarButtons(): Record<string, string> {
     return {
       gitflow: 'btn-gitflow',
       terminal: 'btn-terminal',
@@ -640,18 +750,18 @@ class GitTreeApp {
     };
   }
 
-  readToolbarVisibility() {
+  readToolbarVisibility(): Record<string, boolean> {
     const defaults = { gitflow: true, terminal: true, explorer: true };
     try {
-      const parsed = JSON.parse(localStorage.getItem('gittree.settings.toolbar'));
+      const parsed: unknown = JSON.parse(localStorage.getItem('gittree.settings.toolbar') ?? 'null');
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        return { ...defaults, ...parsed };
+        return { ...defaults, ...(parsed as Record<string, boolean>) };
       }
     } catch { /* invalid stored visibility falls back to defaults */ }
     return defaults;
   }
 
-  applyToolbarVisibility() {
+  applyToolbarVisibility(): void {
     const visibility = this.readToolbarVisibility();
     for (const [key, id] of Object.entries(this.toolbarButtons())) {
       const button = document.getElementById(id);
@@ -659,19 +769,19 @@ class GitTreeApp {
     }
   }
 
-  async doPush() {
+  async doPush(): Promise<{ error?: string } | null> {
     return this.remoteOperations.run('push');
   }
 
-  setRemoteActionBusy(activeId, busy) {
+  setRemoteActionBusy(activeId: string, busy: boolean): boolean {
     return this.remoteOperations.setExternalBusy(activeId, busy);
   }
 
-  syncRemoteBusyUI() {
+  syncRemoteBusyUI(): void {
     this.remoteOperations.syncUI();
   }
 
-  showWelcome() {
+  showWelcome(): void {
     this.state.repo = null;
     this.components.changes?.setActive(false);
     this.components.pullRequests?.setActive(false);
@@ -681,14 +791,14 @@ class GitTreeApp {
     this.components.statusBar.clear();
   }
 
-  setupClearableSearches(root = document) {
-    root.querySelectorAll('.search-clearable').forEach(wrapper => {
+  setupClearableSearches(root: ParentNode = document): void {
+    root.querySelectorAll<HTMLElement>('.search-clearable').forEach(wrapper => {
       if (wrapper.dataset.clearBound === '1') return;
-      const input = wrapper.querySelector('input');
-      const button = wrapper.querySelector('.search-clear-btn');
+      const input = wrapper.querySelector<HTMLInputElement>('input');
+      const button = wrapper.querySelector<HTMLButtonElement>('.search-clear-btn');
       if (!input || !button) return;
       wrapper.dataset.clearBound = '1';
-      const sync = () => {
+      const sync = (): void => {
         button.classList.toggle('is-hidden', !input.value);
         button.setAttribute('aria-label', t('common.clearSearch'));
       };
@@ -706,8 +816,8 @@ class GitTreeApp {
     });
   }
 
-  setupResize() {
-    const workspace = document.getElementById('workspace-body');
+  setupResize(): void {
+    const workspace = byId('workspace-body');
     this.workspaceResize = new WorkspaceResizeController({
       workspace,
       document,
@@ -716,8 +826,8 @@ class GitTreeApp {
       cancelFrame: frame => cancelAnimationFrame(frame),
       panels: {
         left: {
-          handle: document.getElementById('resize-handle-left'),
-          panel: document.getElementById('sidebar'),
+          handle: byId('resize-handle-left'),
+          panel: byId('sidebar'),
           min: 220,
           max: 380,
           cssVariable: '--left-panel',
@@ -725,8 +835,8 @@ class GitTreeApp {
           direction: 1
         },
         right: {
-          handle: document.getElementById('resize-handle-right'),
-          panel: document.getElementById('detail-panel'),
+          handle: byId('resize-handle-right'),
+          panel: byId('detail-panel'),
           min: 300,
           max: 620,
           cssVariable: '--right-panel',
@@ -738,20 +848,20 @@ class GitTreeApp {
     this.workspaceResize.mount();
   }
 
-  setupWorkspaceState() {
+  setupWorkspaceState(): void {
     this.workspaceState.mount();
     this.setupInspectorPopout();
   }
 
-  setSidebarCollapsed(collapsed, persist = true) {
-    return this.workspaceState.setSidebarCollapsed(collapsed, persist);
+  setSidebarCollapsed(collapsed: boolean, persist = true): void {
+    this.workspaceState.setSidebarCollapsed(collapsed, persist);
   }
 
-  setupInspectorPopout() {
+  setupInspectorPopout(): void {
     this.popoutOpen = false;
-    this.buildInspectorPayload = () => {
-      const body = document.getElementById('detail-body');
-      const title = document.getElementById('detail-title').textContent;
+    this.buildInspectorPayload = (): InspectorPayload => {
+      const body = byId('detail-body');
+      const title = byId('detail-title').textContent;
       const theme = document.documentElement.dataset.theme || 'light';
       const tone = document.documentElement.dataset.tone || '';
       const mode = this.components.diffViewer?.mode || 'unified';
@@ -760,7 +870,7 @@ class GitTreeApp {
         .map(element => element.textContent.trim())
         .filter(Boolean)
         .join(' · ');
-      const payload = {
+      const payload: InspectorPayload = {
         title,
         meta,
         theme,
@@ -781,35 +891,35 @@ class GitTreeApp {
       }
       return payload;
     };
-    this.pushInspectorPayload = () => {
+    this.pushInspectorPayload = (): void => {
       if (!this.popoutOpen) return;
       window.gitTree.updateInspectorWindow(this.buildInspectorPayload());
     };
     window.gitTree.onInspectorClosed(() => {
       this.popoutOpen = false;
     });
-    window.gitTree.onDeepLinkOpen(repo => {
-      this.components.repoTabs?.addRepo(repo.path);
+    window.gitTree.onDeepLinkOpen((repo: { path?: string }) => {
+      this.components.repoTabs?.addRepo(repo.path as string);
     });
-    document.getElementById('btn-popout-inspector').onclick = async () => {
-      const result = await window.gitTree.openInspectorWindow(this.buildInspectorPayload());
+    byId('btn-popout-inspector').onclick = async () => {
+      const result = await window.gitTree.openInspectorWindow(this.buildInspectorPayload()) as { success?: boolean };
       this.popoutOpen = Boolean(result?.success);
     };
   }
 
-  setInspectorState(state, persist = true) {
-    return this.workspaceState.setInspectorState(state, persist);
+  setInspectorState(state: string, persist = true): void {
+    this.workspaceState.setInspectorState(state, persist);
   }
 
-  animatePanelRestore(workspace) {
-    return this.workspaceState.animatePanelRestore(workspace);
+  animatePanelRestore(workspace: HTMLElement): void {
+    this.workspaceState.animatePanelRestore(workspace);
   }
 
-  setupGlobalShortcuts() {
-    return this.shortcutController.mount();
+  setupGlobalShortcuts(): void {
+    this.shortcutController.mount();
   }
 
-  refreshLocalizedView() {
+  refreshLocalizedView(): void {
     Theme.syncControls();
     this.setupShortcutHints();
     this.updateWindowChrome(this.windowState);
@@ -832,38 +942,38 @@ class GitTreeApp {
     if (this.updateState) this.handleUpdateState(this.updateState);
   }
 
-  showToast(message, type = '') {
+  showToast(message: string, type = ''): void {
     this.toasts.show(message, type);
   }
 
-  dismissToast() {
+  dismissToast(): void {
     this.toasts.dismiss();
   }
 
-  pauseToast() {
+  pauseToast(): void {
     this.toasts.pause();
   }
 
-  resumeToast() {
+  resumeToast(): void {
     this.toasts.resume();
   }
 
-  esc(value) {
+  esc(value: unknown): string {
     return HtmlEncoder.encode(value);
   }
 
-  on(event, cb) {
+  on(event: string, cb: (payload: unknown) => void): () => void {
     return this.bus.on(event, cb);
   }
 
-  emit(event, data) {
+  emit(event: string, data?: unknown): void {
     this.bus.emit(event, data);
   }
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  await I18n.init();
-  I18n.translateDOM();
+  await window.I18n?.init();
+  window.I18n?.translateDOM();
   Theme.apply(document.documentElement.dataset.theme, false);
 
   window.addEventListener('error', (e) => {
@@ -884,7 +994,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const bar = document.createElement('div');
     bar.className = 'system-alert system-alert-warning';
     const message = document.createElement('span');
-    message.textContent = `PROMISE ERROR: ${e.reason?.message || e.reason}`;
+    message.textContent = `PROMISE ERROR: ${e.reason instanceof Error ? e.reason.message : String(e.reason)}`;
     const close = document.createElement('button');
     close.className = 'btn-icon';
     close.innerHTML = '<i class="ph ph-x"></i>';
@@ -898,3 +1008,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.app = app;
   await app.init();
 });
+
+export {};

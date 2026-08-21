@@ -6,6 +6,12 @@ type RemoteBridge = {
 
 type OperationAction = 'fetch' | 'pull' | 'push';
 
+interface RemoteLoadSession {
+  branchMetadata(): Promise<unknown>;
+  status(): Promise<unknown>;
+  operationState(): Promise<{ type?: string }>;
+}
+
 interface OperationConfig {
   buttonId: string;
   progressKey: string;
@@ -34,18 +40,18 @@ export interface RemoteOperationDependencies {
   bridge: RemoteBridge;
   document: Document;
   translate: (key: string) => string;
-  notify: (message: unknown, type?: string) => void;
+  notify: (message: string, type?: string) => void;
   getCurrentRepository: () => { path?: string } | null;
   isCurrentRepository: (repoPath?: string) => boolean;
   repoTabs: {
     setSyncBusy: (repoPath: string, busy: boolean) => void;
     refreshAllSync: () => Promise<void>;
   };
-  createLoadSession: (repoPath: string) => unknown;
+  createLoadSession: (repoPath: string) => RemoteLoadSession;
   views: {
     refreshGraph: (repoPath: string, options?: Record<string, unknown>) => Promise<void>;
-    refreshBranches: (repoPath: string, loadSession: unknown, options?: Record<string, unknown>) => Promise<void>;
-    refreshStatus: (repoPath: string, loadSession: unknown) => Promise<void>;
+    refreshBranches: (repoPath: string, loadSession: RemoteLoadSession, options?: Record<string, unknown>) => Promise<void>;
+    refreshStatus: (repoPath: string, loadSession: RemoteLoadSession) => Promise<void>;
     refreshChanges: (repoPath: string, options?: Record<string, unknown>) => Promise<void>;
     syncCurrent: (repoPath: string) => void;
   };
@@ -61,11 +67,11 @@ export class RemoteOperationController {
   bridge: RemoteBridge;
   document: Document;
   translate: (key: string) => string;
-  notify: (message: unknown, type?: string) => void;
+  notify: (message: string, type?: string) => void;
   getCurrentRepository: () => { path?: string } | null;
   isCurrentRepository: (repoPath?: string) => boolean;
   repoTabs: RemoteOperationDependencies['repoTabs'];
-  createLoadSession: (repoPath: string) => unknown;
+  createLoadSession: (repoPath: string) => RemoteLoadSession;
   views: RemoteOperationDependencies['views'];
   currentOperation: CurrentOperation | null;
   visualGeneration: number;

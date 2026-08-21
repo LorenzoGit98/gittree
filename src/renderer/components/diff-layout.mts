@@ -2,13 +2,13 @@ export interface DiffRow {
   [key: string]: unknown;
 }
 
-export interface FileGroup {
-  header: DiffRow | null;
+export interface FileGroup<Row = DiffRow> {
+  header: Row | null;
   path: string | null;
-  rows: DiffRow[];
+  rows: Row[];
 }
 
-export interface LayoutFile extends FileGroup {
+export interface LayoutFile<Row = DiffRow> extends FileGroup<Row> {
   top: number;
   height: number;
   contentTop: number;
@@ -16,10 +16,13 @@ export interface LayoutFile extends FileGroup {
   end: number;
 }
 
-export function groupRows(rows: unknown, { isFile, pathForFile = () => null }: { isFile?: (row: DiffRow) => boolean; pathForFile?: (row: DiffRow) => string | null } = {}): FileGroup[] {
-  const files: FileGroup[] = [];
-  let current: FileGroup | null = null;
-  for (const row of (rows ?? []) as DiffRow[]) {
+export function groupRows<Row = DiffRow>(
+  rows: unknown,
+  { isFile, pathForFile = () => null }: { isFile?: (row: Row) => boolean; pathForFile?: (row: Row) => string | null } = {}
+): FileGroup<Row>[] {
+  const files: FileGroup<Row>[] = [];
+  let current: FileGroup<Row> | null = null;
+  for (const row of (rows ?? []) as Row[]) {
     if (isFile?.(row)) {
       current = { header: row, path: pathForFile(row), rows: [] };
       files.push(current);
@@ -34,17 +37,17 @@ export function groupRows(rows: unknown, { isFile, pathForFile = () => null }: {
   return files;
 }
 
-export function layoutFiles(files: unknown, {
+export function layoutFiles<Row = DiffRow>(files: unknown, {
   rowHeight = 22,
   headerHeight = 36,
   fileGap = 12
-}: { rowHeight?: number; headerHeight?: number; fileGap?: number } = {}): { files: LayoutFile[]; totalHeight: number } {
+}: { rowHeight?: number; headerHeight?: number; fileGap?: number } = {}): { files: LayoutFile<Row>[]; totalHeight: number } {
   let top = 0;
-  const layout: LayoutFile[] = ((files ?? []) as FileGroup[]).map((file, index) => {
+  const layout: LayoutFile<Row>[] = ((files ?? []) as FileGroup<Row>[]).map((file, index) => {
     const rows = Array.isArray(file.rows) ? file.rows : [];
     const contentTop = file.header ? headerHeight : 0;
     const height = contentTop + rows.length * rowHeight;
-    const result: LayoutFile = {
+    const result: LayoutFile<Row> = {
       ...file,
       rows,
       top,
@@ -53,17 +56,17 @@ export function layoutFiles(files: unknown, {
       rowHeight,
       end: top + height
     };
-    top += height + (index < (files as FileGroup[]).length - 1 ? fileGap : 0);
+    top += height + (index < (files as FileGroup<Row>[]).length - 1 ? fileGap : 0);
     return result;
   });
   return { files: layout, totalHeight: top };
 }
 
-export function visibleFiles(files: unknown, scrollTop: unknown, viewportHeight: unknown, overscan = 220): LayoutFile[] {
+export function visibleFiles<Row = DiffRow>(files: unknown, scrollTop: unknown, viewportHeight: unknown, overscan = 220): LayoutFile<Row>[] {
   const currentTop = Number(scrollTop) || 0;
   const start = Math.max(0, currentTop - overscan);
   const end = Math.max(start, currentTop + (Number(viewportHeight) || 0) + overscan);
-  return ((files ?? []) as LayoutFile[]).filter(file => file.end >= start && file.top <= end);
+  return ((files ?? []) as LayoutFile<Row>[]).filter(file => file.end >= start && file.top <= end);
 }
 
 export const DiffLayout = {

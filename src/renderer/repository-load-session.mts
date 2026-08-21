@@ -1,8 +1,8 @@
-type Bridge = {
-  getBranchMetadata: (repoPath: string) => Promise<unknown>;
-  getStatus: (repoPath: string) => Promise<unknown>;
-  getOperationState: (repoPath: string) => Promise<unknown>;
-} & Record<string, (...args: unknown[]) => unknown>;
+interface Bridge {
+  getBranchMetadata(repoPath: string): Promise<unknown>;
+  getStatus(repoPath: string): Promise<unknown>;
+  getOperationState(repoPath: string): Promise<unknown>;
+}
 
 export class RepositoryLoadSession {
   bridge: Bridge;

@@ -1,3 +1,5 @@
+import type { GitTreeApp } from '../app.mts';
+
 interface ConflictBlock {
   startLine: number;
   endLine: number;
@@ -28,17 +30,6 @@ interface OperationStateInfo {
   error?: unknown;
 }
 
-type ConflictApp = {
-  state: { repo?: { path?: string } | null };
-  showToast: (message: unknown, type?: string) => void;
-  emit: (event: string, data?: unknown) => void;
-  dialogs: {
-    confirm: (options: Record<string, unknown>) => Promise<unknown>;
-  };
-  components: {
-    worktreeAgents?: { openNewSession: (worktree: null, options: Record<string, unknown>) => void };
-  } & Record<string, unknown>;
-};
 
 declare const ConflictHighlight: {
   splitLines: (content: unknown) => string[];
@@ -52,7 +43,7 @@ function rangeLines(start: number, end: number): number[] {
 }
 
 export class ConflictResolver {
-  app: ConflictApp;
+  app: GitTreeApp;
   container: HTMLElement;
   state: OperationStateInfo | null;
   allFiles: string[];
@@ -77,7 +68,7 @@ export class ConflictResolver {
   globalKeysHandler: ((event: KeyboardEvent) => void) | null;
   closeResolveAllMenu: ((event: MouseEvent) => void) | null;
 
-  constructor(app: ConflictApp) {
+  constructor(app: GitTreeApp) {
     this.app = app;
     this.container = document.getElementById('merge-workspace-overlay');
     this.state = null;

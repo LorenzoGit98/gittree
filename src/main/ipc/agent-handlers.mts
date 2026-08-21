@@ -1,5 +1,26 @@
-export function registerAgentHandlers({
+import type { AgentSessionService } from '../agents/agent-session-service.mts';
+import type { RepositoryWorkspace } from '../repository-workspace.mts';
 
+interface OpenDialogResult {
+  canceled: boolean;
+  filePaths?: string[];
+}
+
+interface MainWindowLike {
+  webContents: { send(channel: string, payload: unknown): void };
+}
+
+interface AgentHandlerDependencies {
+  registerHandler: (channel: string, handler: (...args: unknown[]) => unknown) => void;
+  registerManagedRepoHandler: (channel: string, handler: (...args: unknown[]) => unknown) => void;
+  agentSessionService: AgentSessionService;
+  repositoryWorkspace: RepositoryWorkspace;
+  consumeAuthorizedDirectory?: (value: unknown) => unknown;
+  showOpenDialog?: (window: unknown, options: Record<string, unknown>) => Promise<OpenDialogResult>;
+  getMainWindow?: () => MainWindowLike | null;
+}
+
+export function registerAgentHandlers({
   registerHandler,
   registerManagedRepoHandler,
   agentSessionService,
@@ -7,15 +28,7 @@ export function registerAgentHandlers({
   consumeAuthorizedDirectory = value => value,
   showOpenDialog,
   getMainWindow
-}: {
-  registerHandler: (channel: string, handler: (...args: any[]) => unknown) => void;
-  registerManagedRepoHandler: (channel: string, handler: (...args: any[]) => unknown) => void;
-  agentSessionService: any;
-  repositoryWorkspace: any;
-  consumeAuthorizedDirectory?: (value: unknown) => unknown;
-  showOpenDialog?: any;
-  getMainWindow?: any;
-}) {
+}: AgentHandlerDependencies) {
   registerHandler('agent:settings', () => agentSessionService.getSettings());
   registerHandler('agent:root-select', async () => {
     const result = await showOpenDialog(getMainWindow(), {
@@ -39,8 +52,8 @@ export function registerAgentHandlers({
   registerManagedRepoHandler('agent:tasks', repoPath => (
     agentSessionService.listTasks(repoPath)
   ));
-  registerManagedRepoHandler('agent:task-create', (repoPath, options = {}) => {
-    const safeOptions = { ...options };
+  registerManagedRepoHandler('agent:task-create', (repoPath: string, options: Record<string, unknown> = {}) => {
+    const safeOptions: Record<string, unknown> = { ...options };
     delete safeOptions.authorizedDestination;
     if (safeOptions.destinationPath) {
       safeOptions.authorizedDestination = consumeAuthorizedDirectory(safeOptions.destinationPath);
@@ -48,7 +61,7 @@ export function registerAgentHandlers({
     delete safeOptions.destinationPath;
     return agentSessionService.createTask(repoPath, safeOptions);
   });
-  registerManagedRepoHandler('agent:task-create-worktree', (repoPath, worktreePath, options) => (
+  registerManagedRepoHandler('agent:task-create-worktree', (repoPath: string, worktreePath: string, options: Record<string, unknown>) => (
     agentSessionService.createTaskForWorktree(repoPath, worktreePath, options)
   ));
   registerManagedRepoHandler('agent:worktree-open', async (repoPath, worktreePath) => {

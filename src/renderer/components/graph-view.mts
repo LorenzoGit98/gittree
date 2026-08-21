@@ -1,3 +1,4 @@
+import type { GitTreeApp } from '../app.mts';
 import type { LayoutState } from './graph-layout.mts';
 
 interface GraphCommitData {
@@ -50,19 +51,11 @@ interface ViewportState {
   selectionAnchor: string | null;
 }
 
-type GraphViewApp = {
-  syncInspectorWorkspace?: (options?: Record<string, unknown>) => void;
-  emit: (event: string, data?: unknown) => void;
-  isPrimaryModifier: (event: MouseEvent) => boolean;
-  components: {
-    commitContextMenu?: { open: (event: MouseEvent, hashes: string[]) => void };
-  } & Record<string, unknown>;
-};
 
 export class GraphView {
   container: HTMLElement;
   body: HTMLElement;
-  app: GraphViewApp;
+  app: GitTreeApp;
   repoPath: string | null;
   rows: GraphLayoutRow[];
   visibleRows: GraphLayoutRow[];
@@ -107,7 +100,7 @@ export class GraphView {
   sortSelect: HTMLSelectElement | null;
   filterClear: HTMLElement | null;
 
-  constructor(container: HTMLElement, body: HTMLElement, app: GraphViewApp) {
+  constructor(container: HTMLElement, body: HTMLElement, app: GitTreeApp) {
     this.container = container;
     this.body = body;
     this.app = app;

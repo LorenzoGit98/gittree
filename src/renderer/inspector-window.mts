@@ -1,13 +1,31 @@
-/* global InspectorWorkspace */
-const bridge = window.gitTree;
-const body = document.getElementById('inspector-body');
-const title = document.getElementById('inspector-title');
-const meta = document.getElementById('inspector-meta');
-const eyebrow = document.getElementById('inspector-eyebrow');
-const mode = document.getElementById('inspector-mode');
-const word = document.getElementById('inspector-word');
+import { InspectorWorkspace } from './components/inspector-workspace.mts';
 
-const fallbackStrings = {
+interface InspectorPayload {
+  title?: string;
+  meta?: string;
+  theme?: string;
+  tone?: string;
+  mode?: string;
+  modeLabel?: string;
+  eyebrow?: string;
+  wordLevel?: boolean;
+  html?: string;
+  diffText?: string;
+  graph?: Record<string, unknown>;
+  files?: Array<{ path: string; status?: string; additions?: number; deletions?: number }>;
+  selectedFile?: string | null;
+  filesOpen?: boolean;
+}
+
+const bridge = window.gitTree;
+const body = document.getElementById('inspector-body') as HTMLElement;
+const title = document.getElementById('inspector-title') as HTMLElement;
+const meta = document.getElementById('inspector-meta') as HTMLElement;
+const eyebrow = document.getElementById('inspector-eyebrow') as HTMLElement;
+const mode = document.getElementById('inspector-mode') as HTMLElement;
+const word = document.getElementById('inspector-word') as HTMLElement;
+
+const fallbackStrings: Record<string, string> = {
   'details.graphBranch': 'Branch',
   'details.graphMessage': 'Commit message',
   'details.graphNoBranch': 'No branch reference',
@@ -22,10 +40,11 @@ const fallbackStrings = {
   'details.fileRenamed': 'Renamed file'
 };
 
-function translate(key, options = {}) {
+function translate(key: string, options: Record<string, unknown> = {}): string {
   if (window.i18next?.isInitialized) return window.t(key, options);
   if (key === 'details.files') {
-    return `${options.count || 0} ${options.count === 1 ? 'file' : 'files'}`;
+    const count = Number(options.count) || 0;
+    return `${count} ${count === 1 ? 'file' : 'files'}`;
   }
   return fallbackStrings[key] || key;
 }
@@ -43,9 +62,9 @@ const inspectorWorkspace = new InspectorWorkspace({
 inspectorWorkspace.mount();
 
 let receivedPayload = false;
-let lastPayload = null;
+let lastPayload: InspectorPayload | null = null;
 
-function renderEmptyContent() {
+function renderEmptyContent(): void {
   const placeholder = document.createElement('div');
   placeholder.className = 'diff-placeholder';
   const label = document.createElement('span');
@@ -54,7 +73,7 @@ function renderEmptyContent() {
   body.replaceChildren(placeholder);
 }
 
-function renderPayload(payload) {
+function renderPayload(payload: InspectorPayload): void {
   lastPayload = payload;
   if (payload.theme) document.documentElement.dataset.theme = payload.theme;
   if (payload.tone) document.documentElement.dataset.tone = payload.tone;
@@ -80,7 +99,7 @@ function renderPayload(payload) {
 
   inspectorWorkspace.update({
     graph: payload.graph,
-    selectedHash: payload.graph?.selectedHash,
+    selectedHash: (payload.graph as { selectedHash?: string | null } | undefined)?.selectedHash ?? null,
     files: payload.files,
     selectedFile: payload.selectedFile
   }, {
@@ -101,3 +120,5 @@ window.I18n?.init()
   .catch(() => {
     // English fallbacks keep the detached inspector usable.
   });
+
+export {};

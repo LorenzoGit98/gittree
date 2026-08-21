@@ -9,7 +9,7 @@ export interface RepositoryWorkspaceCallbacks {
   loadStashes: (repoPath: string) => Promise<unknown>;
   loadTags: (repoPath: string) => Promise<unknown>;
   loadWorktreeAgents?: (repo: RepositoryEntry) => Promise<unknown>;
-  updateStatus: (repoPath: string, loadSession: unknown) => Promise<unknown>;
+  updateStatus: (repoPath: string, loadSession?: { status(): Promise<unknown> } | null) => Promise<unknown>;
   syncCurrentRepositoryState: (repoPath: string) => string | null | undefined;
 }
 
@@ -24,9 +24,12 @@ export interface RepositoryWorkspaceComponents {
   conflict: { open: (operationState: unknown) => Promise<void> };
 }
 
-type WorkspaceBridge = {
+interface WorkspaceBridge {
   platform?: string;
-} & Record<string, unknown>;
+  getBranchMetadata(repoPath: string): Promise<unknown>;
+  getStatus(repoPath: string): Promise<unknown>;
+  getOperationState(repoPath: string): Promise<unknown>;
+}
 
 export interface RepositoryWorkspaceDependencies {
   bridge: WorkspaceBridge;
@@ -35,7 +38,9 @@ export interface RepositoryWorkspaceDependencies {
   state: { repo: RepositoryEntry | null };
   components: RepositoryWorkspaceComponents;
   createLoadSession: (bridge: WorkspaceBridge, repoPath: string) => {
-    operationState: () => Promise<{ type?: string }>;
+    branchMetadata(): Promise<unknown>;
+    status(): Promise<unknown>;
+    operationState(): Promise<{ type?: string }>;
   };
   callbacks: RepositoryWorkspaceCallbacks;
 }

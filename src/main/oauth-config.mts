@@ -12,12 +12,12 @@ export interface OAuthConfig {
   gitlab: string;
 }
 
-export function loadOAuthConfig(app: { isPackaged: boolean; resourcesPath?: string }): OAuthConfig {
+export function loadOAuthConfig(app: { isPackaged: boolean; resourcesPath?: string | undefined }): OAuthConfig {
   let packaged: Record<string, unknown> = {};
   if (app.isPackaged) {
     try {
       packaged = JSON.parse(
-        fs.readFileSync(path.join((app as any).resourcesPath ?? process.resourcesPath, 'oauth-config.json'), 'utf8')
+        fs.readFileSync(path.join(app.resourcesPath ?? process.resourcesPath, 'oauth-config.json'), 'utf8')
       );
     } catch { /* packaged config is optional */ }
   }

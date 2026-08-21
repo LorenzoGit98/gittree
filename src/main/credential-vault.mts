@@ -77,7 +77,7 @@ export class CredentialVault {
               : {}
           };
         } catch (error) {
-          if ((error as any).code !== 'ENOENT') {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
             throw new Error('The encrypted hosting vault could not be read', { cause: error });
           }
         }
@@ -115,7 +115,7 @@ export class CredentialVault {
     return this.writeQueue;
   }
 
-  async getAccount(provider: unknown): Promise<any> {
+  async getAccount(provider: unknown): Promise<unknown | null> {
     await this.ensureLoaded();
     return this.state.accounts[this.validateProvider(provider)] || null;
   }
@@ -144,7 +144,7 @@ export class CredentialVault {
     return key;
   }
 
-  async getReviewDraft(key: unknown): Promise<any> {
+  async getReviewDraft(key: unknown): Promise<unknown | null> {
     await this.ensureLoaded();
     return this.state.reviewDrafts[this.validateDraftKey(key)] || null;
   }

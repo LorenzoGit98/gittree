@@ -1651,18 +1651,18 @@ const I18n = {
   },
 
   translateDOM(root = document) {
-    root.querySelectorAll('[data-i18n]').forEach(element => {
-      element.textContent = this.t(element.dataset.i18n);
-    });
-    root.querySelectorAll('[data-i18n-placeholder]').forEach(element => {
-      element.placeholder = this.t(element.dataset.i18nPlaceholder);
-    });
-    root.querySelectorAll('[data-i18n-title]').forEach(element => {
-      element.title = this.t(element.dataset.i18nTitle);
-    });
-    root.querySelectorAll('[data-i18n-aria-label]').forEach(element => {
-      element.setAttribute('aria-label', this.t(element.dataset.i18nAriaLabel));
-    });
+    /** @param {HTMLElement} el */
+    const text = (el) => { el.textContent = this.t(el.dataset.i18n); };
+    /** @param {HTMLInputElement} el */
+    const placeholder = (el) => { el.placeholder = this.t(el.dataset.i18nPlaceholder); };
+    /** @param {HTMLElement} el */
+    const title = (el) => { el.title = this.t(el.dataset.i18nTitle); };
+    /** @param {HTMLElement} el */
+    const ariaLabel = (el) => { el.setAttribute('aria-label', this.t(el.dataset.i18nAriaLabel)); };
+    root.querySelectorAll('[data-i18n]').forEach(text);
+    root.querySelectorAll('[data-i18n-placeholder]').forEach(placeholder);
+    root.querySelectorAll('[data-i18n-title]').forEach(title);
+    root.querySelectorAll('[data-i18n-aria-label]').forEach(ariaLabel);
   },
 
   syncControls() {

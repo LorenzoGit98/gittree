@@ -16,7 +16,11 @@ export interface WorkspaceStateDependencies {
     ) => void;
   };
   state: { repo?: { path?: string } | null };
-  components: Record<string, { setActive?: (active: boolean) => void; setInspectorExpanded?: (expanded: boolean) => void } | undefined>;
+  components: {
+    changes?: { setActive(active: boolean): void };
+    pullRequests?: { setActive(active: boolean): void };
+    diffViewer?: { setInspectorExpanded(expanded: boolean): void };
+  };
   viewportWidth: () => number;
   computedStyle: (element: Element) => CSSStyleDeclaration;
   setTimer?: (callback: () => void, delay: number) => unknown;

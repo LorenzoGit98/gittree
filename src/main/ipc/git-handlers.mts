@@ -1,4 +1,15 @@
-async function runWithConflictState(git, operation) {
+import type { GitService } from '../git-service.mts';
+
+interface GitHandlerDependencies {
+  registerManagedRepoHandler: (channel: string, implementation: (...args: unknown[]) => unknown) => void;
+  getGitService: (repoPath: unknown) => GitService;
+  consumeAuthorizedDirectory?: (directoryPath: unknown) => unknown;
+  authorizeCreatedRepository?: (repoPath: unknown) => unknown;
+  assertWorktreeRemovable?: (payload: unknown) => boolean;
+  sendToRenderer?: (channel: string, payload: unknown) => void;
+}
+
+async function runWithConflictState(git: GitService, operation: () => Promise<unknown>) {
   try {
     return await operation();
   } catch (error) {
@@ -19,7 +30,7 @@ export function registerGitHandlers({
   authorizeCreatedRepository = repoPath => repoPath,
   assertWorktreeRemovable = () => true,
   sendToRenderer = () => {}
-}: any) {
+}: GitHandlerDependencies) {
   const forwards = [
     ['git:log', 'getLog'],
     ['git:graph-page', 'getGraphPage'],
@@ -96,7 +107,7 @@ export function registerGitHandlers({
 
   registerManagedRepoHandler('git:worktree-create-managed', async (repoPath, directory, options) => {
     const result = await getGitService(repoPath).createManagedWorktree({
-      ...(options || {}),
+      ...((options ?? {}) as Record<string, unknown>),
       directory: consumeAuthorizedDirectory(directory)
     });
     authorizeCreatedRepository(result.path);
@@ -144,9 +155,9 @@ export function registerGitHandlers({
   ));
 
   registerManagedRepoHandler('git:batch-delete-branches', async (
-    repoPath,
-    branches,
-    force
+    repoPath: unknown,
+    branches: string[],
+    force: boolean
   ) => {
     if (!Array.isArray(branches) || branches.length > 500) {
       return { error: 'Invalid branch list' };

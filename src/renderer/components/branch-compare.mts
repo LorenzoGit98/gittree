@@ -1,8 +1,5 @@
-type CompareApp = {
-  state: { repo?: { path?: string } | null };
-  showToast: (message: unknown, type?: string) => void;
-  emit: (event: string, data?: unknown) => void;
-};
+
+import type { GitTreeApp } from '../app.mts';
 
 interface CompareCommit {
   hash: string;
@@ -20,12 +17,12 @@ interface BranchCompareData {
 }
 
 export class BranchCompare {
-  app: CompareApp;
+  app: GitTreeApp;
   sourceBranch: string | null;
   targetBranch: string | null;
   data: BranchCompareData | null;
 
-  constructor(app: CompareApp) {
+  constructor(app: GitTreeApp) {
     this.app = app;
     this.sourceBranch = null;
     this.targetBranch = null;

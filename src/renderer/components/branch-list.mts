@@ -1,3 +1,5 @@
+import type { GitTreeApp } from '../app.mts';
+
 interface BranchListInfo {
   [key: string]: unknown;
 }
@@ -8,17 +10,17 @@ interface BranchListData {
 }
 
 interface BranchMetadataEntry {
-  kind?: string;
-  name?: string;
+  kind: string;
+  name: string;
   current?: boolean;
   upstream?: string;
   ahead?: number;
   behind?: number;
 }
 
-interface BranchListMetadata {
+export interface BranchListMetadata {
   branches?: BranchMetadataEntry[];
-  remotes?: Array<{ name?: string; provider?: { provider?: string } }>;
+  remotes?: Array<{ name: string; provider?: { provider?: string } }>;
   current?: string;
   defaultBranch?: string;
 }
@@ -29,40 +31,10 @@ interface BranchListStatus {
   isClean?: boolean;
 }
 
-type BranchApp = {
-  state: { repo?: { path?: string } | null };
-  isPrimaryModifier: (event: MouseEvent) => boolean;
-  isCurrentRepo: (repoPath?: string) => boolean;
-  showToast: (message: unknown, type?: string) => void;
-  emit: (event: string, data?: unknown) => void;
-  refresh: (options?: Record<string, unknown>) => Promise<void>;
-  afterBranchCheckout: (result: unknown, repoPath: string) => Promise<void>;
-  setRemoteActionBusy: (buttonId: string, busy: boolean) => void;
-  dialogs: {
-    confirm: (options: Record<string, unknown>) => Promise<unknown>;
-  };
-  components: {
-    branchContextMenu?: {
-      open: (
-        event: MouseEvent,
-        branch: BranchMetadataEntry,
-        metadata: BranchListMetadata | null,
-        status: BranchListStatus | null,
-        operationState: unknown,
-        selectedBranches: BranchMetadataEntry[]
-      ) => void;
-      close?: () => void;
-    };
-    compare?: {
-      compare: (source: string, target: string) => void;
-      compareMatrix: (branches: Array<{ name: string }>) => void;
-    };
-  } & Record<string, unknown>;
-};
 
 export class BranchListView {
   container: HTMLElement;
-  app: BranchApp;
+  app: GitTreeApp;
   data: BranchListData | null;
   filter: string;
   collapsedFolders: Set<string>;
@@ -87,7 +59,7 @@ export class BranchListView {
     newRow: HTMLElement;
   } | null;
 
-  constructor(container: HTMLElement, app: BranchApp) {
+  constructor(container: HTMLElement, app: GitTreeApp) {
     this.container = container;
     this.app = app;
     this.data = null;

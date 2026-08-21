@@ -8,12 +8,14 @@ function isInside(rootPath: string, candidatePath: string): boolean {
   return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
 }
 
+import type { RepositoryEntry } from './repo-manager.mts';
+
 export interface RepositoryStore {
-  getAllRepos: () => any[];
+  getAllRepos: () => RepositoryEntry[];
   getActiveRepo: () => any | null;
-  setActiveRepo: (index: number) => any | null;
-  addRepo: (path: string) => any;
-  addRepos: (paths: string[]) => any;
+  setActiveRepo: (index: number) => RepositoryEntry | null;
+  addRepo: (path: string) => RepositoryEntry;
+  addRepos: (paths: string[]) => { added: RepositoryEntry[]; failed: Array<{ path: string; error: string }> };
   removeRepo: (path: string) => boolean;
   addAuthorizedRepositories?: (paths: string[]) => any;
 }
@@ -58,7 +60,8 @@ export class RepositoryWorkspace {
     }
     const resolved = path.resolve(repoPath);
     if (!mustExist) return path.normalize(resolved);
-    const realpath = (this.fs as any).realpathSync.native || this.fs.realpathSync;
+    const realpath = (this.fs.realpathSync as typeof fs.realpathSync & { native?: typeof fs.realpathSync }).native
+      || this.fs.realpathSync;
     return path.normalize(realpath(resolved));
   }
 
@@ -67,20 +70,20 @@ export class RepositoryWorkspace {
     return this.platform === 'win32' ? normalized.toLocaleLowerCase('en-US') : normalized;
   }
 
-  repositories(): any[] {
+  repositories(): RepositoryEntry[] {
     return this.repoStore.getAllRepos();
   }
 
-  list(): any[] {
+  list(): RepositoryEntry[] {
     return this.repositories().map(repository => ({ ...repository }));
   }
 
-  active(): any | null {
+  active(): RepositoryEntry | null {
     const repository = this.repoStore.getActiveRepo();
     return repository ? { ...repository } : null;
   }
 
-  setActive(index: number): any | null {
+  setActive(index: number): RepositoryEntry | null {
     const repository = this.repoStore.setActiveRepo(index);
     return repository ? { ...repository } : null;
   }
@@ -100,7 +103,7 @@ export class RepositoryWorkspace {
     return keys;
   }
 
-  managedRepository(repoPath: unknown): any | null {
+  managedRepository(repoPath: unknown): RepositoryEntry | null {
     const requestedKeys = this.pathKeys(repoPath);
     if (requestedKeys.size === 0) return null;
     return this.repositories().find(repository => {
@@ -158,7 +161,9 @@ export class RepositoryWorkspace {
     if (!root) throw new Error('Repository scan root was not authorized');
     this.activeScanRoots.delete(rootKey);
     for (const repository of Array.isArray(repositories) ? repositories : []) {
-      const candidatePath = typeof repository === 'string' ? repository : (repository as any)?.path;
+      const candidatePath = typeof repository === 'string'
+        ? repository
+        : String((repository as { path?: unknown })?.path ?? '');
       try {
         const canonical = this.resolvePath(candidatePath);
         if (isInside(root, canonical)) {
@@ -170,7 +175,7 @@ export class RepositoryWorkspace {
     }
   }
 
-  addTrustedRepository(repoPath: unknown): any {
+  addTrustedRepository(repoPath: unknown): RepositoryEntry {
     const canonical = this.resolvePath(repoPath);
     const managed = this.managedRepository(canonical);
     return managed
@@ -178,19 +183,19 @@ export class RepositoryWorkspace {
       : this.repoStore.addRepo(canonical);
   }
 
-  addAuthorizedRepository(repoPath: unknown): any {
+  addAuthorizedRepository(repoPath: unknown): RepositoryEntry {
     const managed = this.managedRepository(repoPath);
     if (managed) return this.repoStore.addRepo(managed.path);
     return this.repoStore.addRepo(this.consumeAuthorizedDirectory(repoPath));
   }
 
-  addTrustedRepositories(repoPaths: unknown): any {
+  addTrustedRepositories(repoPaths: unknown): { added: RepositoryEntry[]; failed: Array<{ path: string; error: string }> } {
     const canonical = (Array.isArray(repoPaths) ? repoPaths : [])
       .map(repoPath => this.resolvePath(repoPath));
     return this.repoStore.addRepos(canonical);
   }
 
-  addAuthorizedRepositories(repoPaths: unknown): any {
+  addAuthorizedRepositories(repoPaths: unknown): { added: RepositoryEntry[]; failed: Array<{ path: string; error: string }> } {
     const valid: string[] = [];
     const failed: Array<{ path: string; error: string }> = [];
     for (const repoPath of Array.isArray(repoPaths) ? repoPaths : []) {

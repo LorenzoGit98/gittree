@@ -137,14 +137,25 @@ export function parseSplit(patch: unknown): SplitRow[] {
   return output;
 }
 
-export function numberHunk(hunk: { oldRange?: { start: number }; newRange?: { start: number }; lines?: Array<{ content?: unknown; type?: unknown }> }): UnifiedRow[] {
+export interface HunkSourceLine {
+  content?: unknown;
+  type?: unknown;
+}
+
+export interface NumberableHunk {
+  oldRange?: { start?: number };
+  newRange?: { start?: number };
+  lines?: Array<HunkSourceLine | string>;
+}
+
+export function numberHunk(hunk: NumberableHunk): UnifiedRow[] {
   let oldLine = hunk?.oldRange?.start ?? 0;
   let newLine = hunk?.newRange?.start ?? 0;
   return (hunk?.lines ?? []).map(sourceLine => {
     const content = typeof sourceLine === 'string'
       ? sourceLine
-      : String((sourceLine as { content?: unknown })?.content ?? '');
-    const suppliedType = typeof sourceLine === 'object' ? (sourceLine as { type?: unknown })?.type : null;
+      : String((sourceLine as HunkSourceLine)?.content ?? '');
+    const suppliedType = typeof sourceLine === 'object' ? (sourceLine as HunkSourceLine)?.type : null;
     if (content === '\\ No newline at end of file') {
       return { ...(sourceLine as object), content, kind: 'no-newline' as RowKind, oldLine: null, newLine: null } as UnifiedRow;
     }

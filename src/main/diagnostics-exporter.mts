@@ -3,6 +3,9 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import AdmZip from 'adm-zip';
+import type { UpdateState } from './update-service.mts';
+import type { Logger } from './logger.mts';
+import type { GitVersionInfo } from './git-version.mts';
 
 export function escapeRegularExpression(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -31,8 +34,22 @@ export function repositoryIdentifier(repositoryPath: unknown): string {
   return crypto.createHash('sha256').update(String(repositoryPath)).digest('hex').slice(0, 16);
 }
 
-export function safeJson(value: unknown, repositoryPaths: string[]): any {
+export function safeJson(value: unknown, repositoryPaths: string[]): Record<string, unknown> {
   return JSON.parse(redactText(JSON.stringify(value || {}), repositoryPaths));
+}
+
+interface VersionsInfo {
+  app?: string;
+  electron?: string | null;
+  git?: string;
+  [key: string]: unknown;
+}
+
+interface SystemInfo {
+  platform?: string;
+  arch?: string;
+  release?: string;
+  [key: string]: unknown;
 }
 
 export function buildDiagnosticsData({
@@ -43,12 +60,12 @@ export function buildDiagnosticsData({
   logs = '',
   checks = {}
 }: {
-  versions: any;
-  system: any;
-  updateState: any;
+  versions: VersionsInfo;
+  system: SystemInfo;
+  updateState: UpdateState | null;
   repositories?: Array<{ path?: string }>;
   logs?: string;
-  checks?: any;
+  checks?: Record<string, unknown>;
 }) {
   const repositoryPaths = repositories.map(repository => repository.path).filter(Boolean) as string[];
   return {
@@ -71,7 +88,7 @@ export function buildDiagnosticsData({
   };
 }
 
-function readLogs(logger: any): string {
+function readLogs(logger?: { file?: string }): string {
   if (!logger?.file) return '';
   return [logger.file, `${logger.file}.1`]
     .filter(filename => fs.existsSync(filename))
@@ -79,24 +96,35 @@ function readLogs(logger: any): string {
     .join('\n');
 }
 
+interface DiagnosticsAppLike {
+  isPackaged: boolean;
+  getPath(name: 'userData' | 'temp' | 'logs'): string;
+  getVersion(): string;
+}
+
+interface SaveDialogResult {
+  canceled: boolean;
+  filePath?: string;
+}
+
 export interface DiagnosticsExporterOptions {
-  app: any;
-  showSaveDialog: any;
-  logger: any;
-  getGitVersion: () => Promise<any>;
-  getUpdateState: () => any;
-  getRepositories: () => any[];
-  getChecks?: () => any;
+  app: DiagnosticsAppLike;
+  showSaveDialog: (options: Record<string, unknown>) => Promise<SaveDialogResult>;
+  logger: Logger & { file?: string };
+  getGitVersion: () => Promise<GitVersionInfo>;
+  getUpdateState: () => UpdateState;
+  getRepositories: () => Array<{ path?: string }>;
+  getChecks?: () => Record<string, unknown>;
 }
 
 export class DiagnosticsExporter {
-  app: any;
-  showSaveDialog: any;
-  logger: any;
-  getGitVersion: () => Promise<any>;
-  getUpdateState: () => any;
-  getRepositories: () => any[];
-  getChecks: () => any;
+  app: DiagnosticsAppLike;
+  showSaveDialog: (options: Record<string, unknown>) => Promise<SaveDialogResult>;
+  logger: Logger & { file?: string };
+  getGitVersion: () => Promise<GitVersionInfo>;
+  getUpdateState: () => UpdateState;
+  getRepositories: () => Array<{ path?: string }>;
+  getChecks: () => Record<string, unknown>;
 
   constructor({
     app,
@@ -127,9 +155,9 @@ export class DiagnosticsExporter {
     const diagnostics = buildDiagnosticsData({
       versions: {
         app: this.app.getVersion(),
-        electron: (process as any).versions.electron || null,
+        electron: process.versions.electron || null,
         node: process.versions.node,
-        git: await this.getGitVersion()
+        git: (await this.getGitVersion()).version
       },
       system: { platform: os.platform(), release: os.release(), arch: os.arch() },
       updateState: this.getUpdateState(),
@@ -143,7 +171,7 @@ export class DiagnosticsExporter {
     zip.addFile('checks.json', Buffer.from(JSON.stringify(diagnostics.checks, null, 2)));
     await fs.promises.mkdir(path.dirname(result.filePath), { recursive: true });
     await new Promise<void>((resolve, reject) => {
-      zip.writeZip(result.filePath, (error: any) => error ? reject(error) : resolve());
+      zip.writeZip(result.filePath, error => (error ? reject(error) : resolve()));
     });
     return { success: true };
   }

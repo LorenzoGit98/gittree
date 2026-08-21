@@ -1,3 +1,5 @@
+import type { GitTreeApp } from '../app.mts';
+
 interface CompareFile {
   path: string;
   status: string;
@@ -9,26 +11,24 @@ interface CommitComparison {
   files?: CompareFile[];
 }
 
+import type { NumberableHunk } from './diff-parser.mts';
+
 interface CommitFileDiff {
   error?: string;
   binary?: boolean;
-  hunks?: Array<{ header: string }>;
+  hunks?: Array<NumberableHunk & { header: string }>;
 }
 
-type CommitCompareApp = {
-  state: { repo?: { path?: string } | null };
-  showToast: (message: unknown, type?: string) => void;
-};
 
 export class CommitCompare {
-  app: CommitCompareApp;
+  app: GitTreeApp;
   hashA: string | null;
   hashB: string | null;
   data: CommitComparison | null;
   selectedFile: string | null;
   container: HTMLElement | null;
 
-  constructor(app: CommitCompareApp) {
+  constructor(app: GitTreeApp) {
     this.app = app;
     this.hashA = null;
     this.hashB = null;
@@ -161,7 +161,7 @@ export class CommitCompare {
       lines: DiffParser.numberHunk(hunk)
     }));
     const allLines = numberedHunks.flatMap(item => item.lines);
-    wrapper.style.setProperty('--diff-gutter-digits', DiffParser.maxDigits(allLines));
+    wrapper.style.setProperty('--diff-gutter-digits', String(DiffParser.maxDigits(allLines)));
 
     numberedHunks.forEach(({ hunk, lines }) => {
       const section = document.createElement('section');

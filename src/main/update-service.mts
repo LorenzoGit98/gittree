@@ -1,5 +1,12 @@
 import * as electron from 'electron';
 import * as electronUpdater from 'electron-updater';
+import type { UpdateInfo } from 'builder-util-runtime';
+
+interface DownloadProgress {
+  percent: number;
+  transferred?: number;
+  total?: number;
+}
 
 export interface UpdateState {
   status: string;
@@ -9,11 +16,33 @@ export interface UpdateState {
   error: string | null;
 }
 
+interface UpdateWindow {
+  isDestroyed(): boolean;
+  webContents: { send(channel: string, payload: unknown): void };
+}
+
+interface ElectronAppLike {
+  isPackaged: boolean;
+  getVersion(): string;
+}
+
+interface AutoUpdaterLike {
+  autoDownload: boolean;
+  autoInstallOnAppQuit: boolean;
+  allowDowngrade: boolean;
+  allowPrerelease: boolean;
+  on(event: string, listener: (...args: unknown[]) => void): unknown;
+  removeListener(event: string, listener: (...args: unknown[]) => void): unknown;
+  checkForUpdates(): Promise<unknown>;
+  downloadUpdate(): Promise<unknown>;
+  quitAndInstall(isSilent: boolean, isForceRunAfter: boolean): void;
+}
+
 export class UpdateService {
-  window: any;
+  window: UpdateWindow | null;
   notify: (channel: string, payload: unknown) => void;
-  app: any;
-  autoUpdater: any;
+  app: ElectronAppLike;
+  autoUpdater: AutoUpdaterLike;
   timers: {
     setTimeout: typeof setTimeout;
     setInterval: typeof setInterval;
@@ -22,18 +51,31 @@ export class UpdateService {
     clearInterval: typeof clearInterval;
   };
   initialized: boolean;
-  startupTimer: any;
-  timer: any;
-  updaterListeners: Array<[string, (...args: any[]) => void]>;
+  startupTimer: ReturnType<typeof setTimeout> | null;
+  timer: ReturnType<typeof setInterval> | null;
+  updaterListeners: Array<[string, (...args: unknown[]) => void]>;
   state: UpdateState;
 
-  constructor(window: any, dependencies: any = {}) {
+  constructor(
+    window: UpdateWindow | null,
+    dependencies: {
+      notify?: (channel: string, payload: unknown) => void;
+      app?: ElectronAppLike;
+      autoUpdater?: AutoUpdaterLike;
+      setTimeout?: typeof setTimeout;
+      setInterval?: typeof setInterval;
+      setImmediate?: typeof setImmediate;
+      clearTimeout?: typeof clearTimeout;
+      clearInterval?: typeof clearInterval;
+    } = {}
+  ) {
     this.window = window;
     this.notify = dependencies.notify || ((channel: string, payload: unknown) => {
       if (this.window && !this.window.isDestroyed()) this.window.webContents.send(channel, payload);
     });
-    this.app = dependencies.app || (electron as any).app;
-    this.autoUpdater = dependencies.autoUpdater || (electronUpdater as any).autoUpdater;
+    this.app = dependencies.app || (electron as unknown as { app: ElectronAppLike }).app;
+    this.autoUpdater = dependencies.autoUpdater
+      || (electronUpdater as unknown as { autoUpdater: AutoUpdaterLike }).autoUpdater;
     this.timers = {
       setTimeout: dependencies.setTimeout || setTimeout,
       setInterval: dependencies.setInterval || setInterval,
@@ -54,7 +96,7 @@ export class UpdateService {
     };
   }
 
-  setWindow(window: any): void {
+  setWindow(window: UpdateWindow | null): void {
     this.window = window;
     this.broadcast();
   }
@@ -79,7 +121,7 @@ export class UpdateService {
       status: 'checking',
       error: null
     }));
-    this.listenToUpdater('update-available', (info: any) => this.setState({
+    this.listenToUpdater('update-available', (info: UpdateInfo) => this.setState({
       status: 'available',
       availableVersion: info.version,
       progress: 0,
@@ -91,20 +133,20 @@ export class UpdateService {
       progress: 0,
       error: null
     }));
-    this.listenToUpdater('download-progress', (progress: any) => this.setState({
+    this.listenToUpdater('download-progress', (progress: DownloadProgress) => this.setState({
       status: 'downloading',
       progress: Math.max(0, Math.min(100, Math.round(progress.percent || 0))),
       error: null
     }));
-    this.listenToUpdater('update-downloaded', (info: any) => this.setState({
+    this.listenToUpdater('update-downloaded', (info: UpdateInfo) => this.setState({
       status: 'downloaded',
       availableVersion: info.version,
       progress: 100,
       error: null
     }));
-    this.listenToUpdater('error', (error: any) => this.setState({
+    this.listenToUpdater('error', (error: unknown) => this.setState({
       status: 'error',
-      error: error?.message || String(error)
+      error: error instanceof Error ? error.message : String(error)
     }));
 
     this.startupTimer = this.timers.setTimeout(() => this.check(false), 15000);
@@ -114,7 +156,7 @@ export class UpdateService {
     this.broadcast();
   }
 
-  listenToUpdater(event: string, listener: (...args: any[]) => void): void {
+  listenToUpdater(event: string, listener: (...args: unknown[]) => void): void {
     this.autoUpdater.on(event, listener);
     this.updaterListeners.push([event, listener]);
   }

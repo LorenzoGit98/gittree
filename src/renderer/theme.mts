@@ -86,11 +86,11 @@ export const Theme = {
       ? { icon: 'ph ph-moon', titleKey: 'common.nextDarkTheme' }
       : { icon: 'ph ph-sun', titleKey: 'common.nextLightTheme' };
 
-    document.querySelectorAll('.theme-toggle i').forEach(icon => {
+    document.querySelectorAll<HTMLElement>('.theme-toggle i').forEach(icon => {
       icon.className = control.icon;
     });
     if (window.i18next?.isInitialized) {
-      document.querySelectorAll('.theme-toggle').forEach(button => {
+      document.querySelectorAll<HTMLElement>('.theme-toggle').forEach(button => {
         const label = t(control.titleKey);
         button.title = label;
         button.setAttribute('aria-label', label);

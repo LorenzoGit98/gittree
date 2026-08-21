@@ -1,3 +1,5 @@
+import type { GitTreeApp } from '../app.mts';
+
 interface PRSummary {
   provider: string;
   id: string;
@@ -27,6 +29,18 @@ interface PRThread {
   notes?: Array<{ author: string; body: string; resolvable?: boolean; id?: string }>;
 }
 
+interface PRDetail {
+  error?: string;
+  summary?: PRSummary & { title?: string; source?: string; target?: string };
+  checks?: Array<Record<string, unknown>>;
+  files?: PRFileEntry[];
+  threads?: PRThread[];
+  permissions?: { checkout?: boolean; resolveThreads?: boolean };
+  headSha?: string;
+  mergeability?: string;
+  reviewDraft?: ReviewDraft;
+}
+
 interface ReviewDraft {
   headSha?: string;
   body?: string;
@@ -36,18 +50,10 @@ interface ReviewDraft {
   stale?: boolean;
 }
 
-type PullRequestApp = {
-  showToast: (message: unknown, type?: string) => void;
-  refresh: (options?: Record<string, unknown>) => Promise<void>;
-  dialogs: {
-    form: (options: Record<string, unknown>) => Promise<unknown>;
-    confirm: (options: Record<string, unknown>) => Promise<unknown>;
-  };
-};
 
 export class PullRequestView {
   root: HTMLElement;
-  app: PullRequestApp;
+  app: GitTreeApp;
   repoPath: string | null;
   provider: string;
   filter: string;
@@ -59,7 +65,7 @@ export class PullRequestView {
   loading: boolean;
   active: boolean;
   selected: PRSummary | null;
-  detail: Record<string, any> | null;
+  detail: PRDetail | null;
   draft: ReviewDraft | null;
   rowHeight: number;
   overscan: number;
@@ -70,7 +76,7 @@ export class PullRequestView {
   status: { error?: string; connected?: boolean; configured?: boolean; warning?: string; user?: { login?: string } } | null;
   elements: Record<string, HTMLElement>;
 
-  constructor(root: HTMLElement, app: PullRequestApp) {
+  constructor(root: HTMLElement, app: GitTreeApp) {
     this.root = root;
     this.app = app;
     this.repoPath = null;
@@ -458,10 +464,10 @@ export class PullRequestView {
         this.repoPath,
         this.provider,
         item.number
-      ) as Record<string, unknown>;
+      ) as PRDetail;
       if (this.selected?.id !== item.id) return;
       if (detail?.error) {
-        body.textContent = detail.error as string;
+        body.textContent = detail.error;
         return;
       }
       this.detail = {
@@ -597,7 +603,7 @@ export class PullRequestView {
       return;
     }
     const lines = this.parsePatchLines(file.patch);
-    viewport.style.setProperty('--diff-gutter-digits', DiffParser.maxDigits(lines));
+    viewport.style.setProperty('--diff-gutter-digits', String(DiffParser.maxDigits(lines)));
     const rowHeight = 22;
     const spacer = document.createElement('div');
     spacer.className = 'changes-file-spacer';
@@ -893,10 +899,10 @@ export class PullRequestView {
         <label>${this.esc(t('pullRequests.comment'))}
           <textarea name="body" class="pr-inline-comment" maxlength="65536" required autofocus></textarea>
         </label>`,
-      extract: form => form.elements.body.value.trim(),
+      extract: form => (form.elements.namedItem('body') as HTMLTextAreaElement).value.trim(),
       cancelLabel: t('common.cancel'),
       actionLabel: t('pullRequests.saveDraft')
-    }).then((value: unknown) => (value as string) ?? '');
+    });
   }
 
   confirm(title: string, message: string): Promise<unknown> {
@@ -926,7 +932,7 @@ export class PullRequestView {
         <label>PAT
           <input name="pat" class="commit-input pat-input" type="password" maxlength="200" required autofocus autocomplete="off">
         </label>`,
-      extract: form => form.elements.pat.value.trim() || null,
+      extract: form => (form.elements.namedItem('pat') as HTMLInputElement).value.trim() || null,
       cancelLabel: t('common.cancel'),
       actionLabel: t('pullRequests.connect')
     });

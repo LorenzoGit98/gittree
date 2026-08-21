@@ -8,7 +8,7 @@ export type ShortcutAction = 'open' | 'search' | 'fetch' | 'pull' | 'push' | 'ne
 
 export interface ShortcutCallbacks {
   openRepository: () => void;
-  search: () => void;
+  search?: () => void;
   fetch: () => void;
   pull: () => void;
   push: () => void;

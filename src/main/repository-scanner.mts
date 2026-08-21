@@ -23,7 +23,7 @@ export const IGNORED_DIRECTORIES = new Set<string>([
   'vendor'
 ]);
 
-function isCanceled(signal: any): boolean {
+function isCanceled(signal: { aborted?: boolean } | null | undefined): boolean {
   return Boolean(signal && signal.aborted);
 }
 
@@ -36,7 +36,8 @@ async function hasGitMarker(directoryPath: string): Promise<boolean> {
     const value = await fs.promises.readFile(markerPath, 'utf8');
     return /^\s*gitdir\s*:/i.test(value);
   } catch (error) {
-    if (error && ((error as any).code === 'ENOENT' || (error as any).code === 'ENOTDIR')) return false;
+    const code = (error as NodeJS.ErrnoException | undefined)?.code;
+    if (error && (code === 'ENOENT' || code === 'ENOTDIR')) return false;
     throw error;
   }
 }
@@ -53,13 +54,15 @@ export interface ScanOptions {
   maxRepositories?: number;
 }
 
-export async function scanRepositories(rootPath: unknown, options: ScanOptions = {}): Promise<{
+export interface ScanResult {
   repositories: Array<{ path: string; name: string; relativePath: string }>;
   scannedDirectories: number;
   skipped: number;
   canceled: boolean;
   limitReached: boolean;
-}> {
+}
+
+export async function scanRepositories(rootPath: unknown, options: ScanOptions = {}): Promise<ScanResult> {
   if (typeof rootPath !== 'string' || !rootPath.trim()) {
     throw new TypeError('The workspace root must be a directory.');
   }

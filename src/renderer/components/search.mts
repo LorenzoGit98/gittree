@@ -1,22 +1,4 @@
-type SearchComponents = {
-  repoTabs?: { repos?: Array<{ name?: string; path?: string }>; selectRepo?: (index: number) => void };
-  branchList?: {
-    checkoutRemote?: (local: unknown, remote: string) => void;
-    checkout?: (name: unknown) => void;
-    promptCreateBranch?: () => void;
-  };
-} & Record<string, unknown>;
 
-type SearchApp = {
-  state: { repo?: { path?: string } | null };
-  components: SearchComponents;
-  isPrimaryModifier: (event: KeyboardEvent) => boolean;
-  showToast: (message: unknown, type?: string) => void;
-  emit: (event: string, data?: unknown) => void;
-  doFetch: () => void;
-  doPull: () => void;
-  doPush: () => void;
-};
 
 interface SearchItem {
   type: string;
@@ -26,8 +8,10 @@ interface SearchItem {
   data: Record<string, unknown>;
 }
 
+import type { GitTreeApp } from '../app.mts';
+
 export class GlobalSearch {
-  app: SearchApp;
+  app: GitTreeApp;
   overlay: HTMLElement;
   input: HTMLInputElement;
   results: HTMLElement;
@@ -38,7 +22,7 @@ export class GlobalSearch {
   visible: boolean;
   aiSearching: boolean;
 
-  constructor(app: SearchApp) {
+  constructor(app: GitTreeApp) {
     this.app = app;
     this.overlay = document.getElementById('search-overlay') as HTMLElement;
     this.input = document.getElementById('search-input') as HTMLInputElement;
@@ -328,10 +312,10 @@ export class GlobalSearch {
     this.hide();
     if (item.type === 'branch') {
       if ((item.data.name as string).startsWith('remotes/')) {
-        const local = (item.data.name as string).replace('remotes/', '').split('/').pop();
+        const local = (item.data.name as string).replace('remotes/', '').split('/').pop() ?? '';
         this.app.components.branchList.checkoutRemote(local, (item.data.name as string).replace('remotes/', ''));
       } else {
-        this.app.components.branchList.checkout(item.data.name);
+        this.app.components.branchList.checkout(item.data.name as string);
       }
     } else if (item.type === 'commit') {
       this.app.emit('commit:selected', item.data.hash);

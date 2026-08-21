@@ -1,3 +1,6 @@
+import type { GitTreeApp } from '../app.mts';
+import type { BranchListMetadata } from './branch-list.mts';
+
 interface AgentSettingsPayload {
   agentsEnabled?: boolean;
   worktreeRoot?: string;
@@ -28,22 +31,9 @@ interface AgentAdapterInfo {
   available?: boolean;
 }
 
-type SettingsApp = {
-  state: { repo?: { path?: string } | null };
-  showToast: (message: unknown, type?: string) => void;
-  refresh: (options?: Record<string, unknown>) => Promise<void>;
-  pushInspectorPayload?: () => void;
-  confirmDialog: (title: string, message: string, actionLabel: string, danger?: boolean) => Promise<unknown>;
-  shortcutLabel: (action: string) => string;
-  readToolbarVisibility: () => Record<string, boolean>;
-  applyToolbarVisibility: () => void;
-  components: {
-    branchList?: { metadata?: Record<string, unknown> | null; load: (repoPath: string) => void };
-  } & Record<string, unknown>;
-};
 
 export class SettingsView {
-  app: SettingsApp;
+  app: GitTreeApp;
   overlay: HTMLElement;
   dialog: HTMLElement;
   autoFetchStorageKey: string;
@@ -58,7 +48,7 @@ export class SettingsView {
   // Present in the original source as an unresolved call site; kept as-is.
   declare confirmVaultReset: (() => Promise<unknown>) | undefined;
 
-  constructor(app: SettingsApp) {
+  constructor(app: GitTreeApp) {
     this.app = app;
     this.overlay = document.getElementById('modal-overlay') as HTMLElement;
     this.dialog = document.getElementById('modal-dialog') as HTMLElement;
@@ -99,7 +89,7 @@ export class SettingsView {
       this.overlay.classList.remove('is-hidden');
     }
     try {
-      let metadata = this.app.components.branchList?.metadata as Record<string, unknown> | null | undefined;
+      let metadata = this.app.components.branchList?.metadata ?? null;
       if (repo && !metadata) {
         const response = await window.gitTree.getBranchMetadata(repo.path) as { error?: string } | undefined;
         metadata = response?.error ? null : response as Record<string, unknown>;
@@ -585,10 +575,10 @@ export class SettingsView {
     });
   }
 
-  renderProjectSchedule(schedule: Record<string, unknown> = {}, metadata: Record<string, unknown> | null | undefined = {}): string {
+  renderProjectSchedule(schedule: Record<string, unknown> = {}, metadata: BranchListMetadata | null | undefined = {}): string {
     const enabled = Boolean(schedule.enabled);
     const interval = Number(schedule.intervalMinutes) || 15;
-    const remotes = (metadata?.remotes as Array<{ name?: string }> | undefined) || [];
+    const remotes = metadata?.remotes || [];
     return `<div class="settings-project-controls">
       <label class="settings-switch">
         <input type="checkbox" data-auto-fetch-project${enabled ? ' checked' : ''}>
@@ -1353,13 +1343,13 @@ export class SettingsView {
     }
   }
 
-  readProjectSchedule(value: unknown, metadata: Record<string, unknown> | null | undefined = {}): Record<string, unknown> {
+  readProjectSchedule(value: unknown, metadata: BranchListMetadata | null | undefined = {}): Record<string, unknown> {
     if (value && typeof (value as Record<string, unknown>).enabled === 'boolean') return value as Record<string, unknown>;
     const legacy = Object.values(value || {}).find(item => (item as Record<string, unknown>)?.enabled) as Record<string, unknown> | undefined;
     if (legacy) return {
       enabled: true,
       intervalMinutes: legacy.intervalMinutes || 15,
-      remote: legacy.remote || (((metadata?.remotes as Array<{ name?: string }> | undefined) || [])[0]?.name || ''),
+      remote: legacy.remote || metadata?.remotes?.[0]?.name || '',
       nextRunAt: legacy.nextRunAt || Date.now()
     };
     return {
