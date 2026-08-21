@@ -9,7 +9,7 @@ function loadDiffViewer() {
     'src',
     'renderer',
     'components',
-    'diff-viewer.js'
+    'diff-viewer.mts'
   );
   const buttons = new Map();
   const storage = new Map();
@@ -43,7 +43,8 @@ function loadDiffViewer() {
       ));
     }
   })();
-  return require(filename);
+  const mod = require(filename);
+  return mod.DiffViewer || mod.default || mod;
 }
 
 test('maximizing the inspector temporarily selects the side-by-side diff', () => {

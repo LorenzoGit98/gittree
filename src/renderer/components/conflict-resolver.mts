@@ -1,7 +1,83 @@
-/* exported ConflictResolver */
-/* eslint-disable-next-line no-unused-vars -- script-tag global consumed by app.js */
-class ConflictResolver {
-  constructor(app) {
+interface ConflictBlock {
+  startLine: number;
+  endLine: number;
+  startOffset: number;
+  endOffset: number;
+  base?: string | null;
+  current?: string | null;
+  incoming?: string | null;
+  smartCombination?: string | null;
+}
+
+interface ConflictFileState {
+  error?: string;
+  path: string;
+  binary?: boolean;
+  result?: string;
+  blocks?: ConflictBlock[];
+  base?: string;
+  current?: string;
+  incoming?: string;
+  eol?: string;
+  snapshotId?: string;
+}
+
+interface OperationStateInfo {
+  type?: string;
+  conflicts?: string[];
+  error?: unknown;
+}
+
+type ConflictApp = {
+  state: { repo?: { path?: string } | null };
+  showToast: (message: unknown, type?: string) => void;
+  emit: (event: string, data?: unknown) => void;
+  dialogs: {
+    confirm: (options: Record<string, unknown>) => Promise<unknown>;
+  };
+  components: {
+    worktreeAgents?: { openNewSession: (worktree: null, options: Record<string, unknown>) => void };
+  } & Record<string, unknown>;
+};
+
+declare const ConflictHighlight: {
+  splitLines: (content: unknown) => string[];
+  buildHighlightLines: (content: unknown, blocks?: ConflictBlock[]) => Array<{ kind: string; text: string }>;
+};
+
+function rangeLines(start: number, end: number): number[] {
+  const lines = [];
+  for (let line = start; line <= end; line += 1) lines.push(line);
+  return lines;
+}
+
+export class ConflictResolver {
+  app: ConflictApp;
+  container: HTMLElement;
+  state: OperationStateInfo | null;
+  allFiles: string[];
+  currentPath: string | null;
+  current: ConflictFileState | null;
+  resultContent: string;
+  blocks: ConflictBlock[];
+  activeBlockIndex: number;
+  pendingBinaryStrategy: string | null;
+  dirty: boolean;
+  manualEdited: boolean;
+  undoStack: Array<{ content: string; blocks: ConflictBlock[]; activeBlockIndex: number }>;
+  blockCounts: Map<string, number | null>;
+  binaryMap: Map<string, boolean>;
+  fileFilter: string;
+  reparseTimer: ReturnType<typeof setTimeout> | null;
+  explainingBlock: boolean;
+  aiExplanation: { blockIndex: number; summary: string; body: string } | null;
+  layout: string;
+  highlightRows: Array<{ kind: string; text: string }> | null;
+  syncFrame: number;
+  globalKeysHandler: ((event: KeyboardEvent) => void) | null;
+  closeResolveAllMenu: ((event: MouseEvent) => void) | null;
+
+  constructor(app: ConflictApp) {
     this.app = app;
     this.container = document.getElementById('merge-workspace-overlay');
     this.state = null;
@@ -21,6 +97,10 @@ class ConflictResolver {
     this.reparseTimer = null;
     this.explainingBlock = false;
     this.aiExplanation = null;
+    this.highlightRows = null;
+    this.syncFrame = 0;
+    this.globalKeysHandler = null;
+    this.closeResolveAllMenu = null;
     this.layout = localStorage.getItem('gittree.mergeEditor.layout') === 'vertical'
       ? 'vertical'
       : 'horizontal';
@@ -31,12 +111,12 @@ class ConflictResolver {
     });
   }
 
-  async open(state = null) {
+  async open(state: OperationStateInfo | null = null): Promise<void> {
     const repo = this.app.state.repo;
     if (!repo) return;
-    this.state = state?.type ? state : await window.gitTree.getOperationState(repo.path);
+    this.state = state?.type ? state : await window.gitTree.getOperationState(repo.path) as OperationStateInfo;
     if (this.state?.error) {
-      this.app.showToast(this.state.error, 'error');
+      this.app.showToast(this.state.error as string, 'error');
       return;
     }
     if (!this.state?.type) return;
@@ -54,19 +134,19 @@ class ConflictResolver {
     if (this.currentPath) await this.loadFile(this.currentPath);
   }
 
-  remainingFiles() {
+  remainingFiles(): string[] {
     return (this.state?.conflicts || []).filter(file => this.allFiles.includes(file));
   }
 
-  unresolvedCount() {
+  unresolvedCount(): number | null {
     const remaining = this.remainingFiles();
     const known = remaining
       .map(file => this.blockCounts.get(file))
-      .filter(count => Number.isInteger(count));
+      .filter(count => Number.isInteger(count)) as number[];
     return known.length === remaining.length ? known.reduce((sum, count) => sum + count, 0) : null;
   }
 
-  render() {
+  render(): void {
     const conflicts = this.remainingFiles();
     const resolved = this.allFiles.length - conflicts.length;
     const total = this.allFiles.length;
@@ -112,10 +192,10 @@ class ConflictResolver {
         </div>
       </div>`;
 
-    document.getElementById('conflict-abort').onclick = () => this.abort();
+    (document.getElementById('conflict-abort') as HTMLElement).onclick = () => this.abort();
     document.getElementById('conflict-skip')?.addEventListener('click', () => this.skip());
-    document.getElementById('conflict-continue').onclick = () => this.continue();
-    const filterInput = document.getElementById('conflict-file-filter');
+    (document.getElementById('conflict-continue') as HTMLElement).onclick = () => this.continue();
+    const filterInput = document.getElementById('conflict-file-filter') as HTMLInputElement | null;
     if (filterInput) {
       filterInput.value = this.fileFilter;
       filterInput.oninput = () => {
@@ -132,7 +212,7 @@ class ConflictResolver {
           this.refreshFileList();
         }
       };
-      document.getElementById('conflict-file-filter-clear').onclick = () => {
+      (document.getElementById('conflict-file-filter-clear') as HTMLElement).onclick = () => {
         filterInput.value = '';
         this.fileFilter = '';
         document.getElementById('conflict-file-filter-clear').classList.add('is-hidden');
@@ -142,7 +222,7 @@ class ConflictResolver {
     this.bindGlobalKeys();
   }
 
-  renderFileList() {
+  renderFileList(): string {
     const needle = this.fileFilter.trim().toLowerCase();
     const remaining = this.remainingFiles();
     const rows = this.allFiles
@@ -168,23 +248,23 @@ class ConflictResolver {
       : `<div class="conflict-file-empty">${this.esc(t('conflicts.noFilesMatch'))}</div>`;
   }
 
-  refreshFileList() {
+  refreshFileList(): void {
     const scroll = document.getElementById('conflict-file-scroll');
     if (!scroll) return;
     scroll.innerHTML = this.renderFileList();
-    scroll.querySelectorAll('[data-file]').forEach(button => {
+    scroll.querySelectorAll<HTMLElement>('[data-file]').forEach(button => {
       button.onclick = async () => {
         if (!await this.confirmDiscard()) return;
-        await this.loadFile(button.dataset.file);
+        await this.loadFile((button as HTMLElement).dataset.file);
       };
     });
   }
 
-  async loadFile(filePath) {
+  async loadFile(filePath: string): Promise<void> {
     const repo = this.app.state.repo;
     if (!repo) return;
     this.currentPath = filePath;
-    this.current = await window.gitTree.readConflict(repo.path, filePath);
+    this.current = await window.gitTree.readConflict(repo.path, filePath) as ConflictFileState;
     if (this.current?.error) {
       this.app.showToast(this.current.error, 'error');
       return;
@@ -203,7 +283,7 @@ class ConflictResolver {
     this.renderEditor();
   }
 
-  renderEditor() {
+  renderEditor(): void {
     if (!this.current) return;
     const editor = document.getElementById('conflict-editor');
     if (!editor) return;
@@ -247,9 +327,9 @@ class ConflictResolver {
       </div>
       ${file.binary ? this.renderBinaryState() : this.renderTextEditor()}`;
 
-    editor.querySelectorAll('[data-binary]').forEach(button => {
+    editor.querySelectorAll<HTMLElement>('[data-binary]').forEach(button => {
       button.onclick = () => {
-        this.pendingBinaryStrategy = button.dataset.binary;
+        this.pendingBinaryStrategy = (button as HTMLElement).dataset.binary;
         this.dirty = true;
         editor.querySelectorAll('[data-binary]').forEach(item => {
           item.classList.toggle('active', item === button);
@@ -257,8 +337,8 @@ class ConflictResolver {
         this.updateMarkButton();
       };
     });
-    editor.querySelectorAll('[data-whole]').forEach(button => {
-      button.onclick = () => this.useWholeFile(button.dataset.whole);
+    editor.querySelectorAll<HTMLElement>('[data-whole]').forEach(button => {
+      button.onclick = () => this.useWholeFile((button as HTMLElement).dataset.whole);
     });
     const resolveAllButton = document.getElementById('conflict-resolve-all');
     if (resolveAllButton) {
@@ -267,17 +347,17 @@ class ConflictResolver {
         const menu = document.querySelector('.conflict-resolve-all-menu');
         menu?.classList.toggle('is-hidden');
       };
-      editor.querySelectorAll('.conflict-resolve-all-item').forEach(item => {
+      editor.querySelectorAll<HTMLElement>('.conflict-resolve-all-item').forEach(item => {
         item.onclick = () => {
           document.querySelector('.conflict-resolve-all-menu')?.classList.add('is-hidden');
-          this.applyToAll(item.dataset.all);
+          this.applyToAll((item as HTMLElement).dataset.all);
         };
       });
       if (this.closeResolveAllMenu) {
         document.removeEventListener('click', this.closeResolveAllMenu);
       }
       document.addEventListener('click', this.closeResolveAllMenu = event => {
-        if (!event.target.closest('.conflict-resolve-all')) {
+        if (!(event.target as HTMLElement).closest('.conflict-resolve-all')) {
           document.querySelector('.conflict-resolve-all-menu')?.classList.add('is-hidden');
         }
       });
@@ -291,13 +371,13 @@ class ConflictResolver {
     document.getElementById('conflict-mark-resolved')?.addEventListener('click', () => this.markResolved());
     document.getElementById('conflict-ai-explain')?.addEventListener('click', () => this.explainBlock());
     document.getElementById('conflict-ai-delegate')?.addEventListener('click', () => this.delegateToAgent());
-    const resultEditor = document.getElementById('conflict-result-editor');
+    const resultEditor = document.getElementById('conflict-result-editor') as HTMLTextAreaElement | null;
     if (resultEditor) resultEditor.value = this.resultContent;
     this.bindTextEditor();
     this.renderAiPanel();
   }
 
-  async explainBlock() {
+  async explainBlock(): Promise<void> {
     const repo = this.app.state.repo;
     if (!repo || this.explainingBlock) return;
     const blockIndex = this.activeBlockIndex;
@@ -308,7 +388,7 @@ class ConflictResolver {
         file: this.currentPath,
         blockIndex,
         language: await this.aiLanguage()
-      });
+      }) as { error?: string; summary?: string; body?: string };
       if (result?.error) {
         this.app.showToast(result.error, 'error');
         return;
@@ -326,11 +406,11 @@ class ConflictResolver {
     }
   }
 
-  setBlockExplainBusy(busy) {
-    const button = document.getElementById('conflict-ai-explain');
+  setBlockExplainBusy(busy: boolean): void {
+    const button = document.getElementById('conflict-ai-explain') as HTMLButtonElement | null;
     if (!button) return;
-    const icon = button.querySelector('i');
-    const label = button.querySelector('span');
+    const icon = button.querySelector('i') as HTMLElement;
+    const label = button.querySelector('span') as HTMLElement;
     button.disabled = busy;
     if (busy) {
       icon.className = 'ph ph-circle-notch';
@@ -341,7 +421,7 @@ class ConflictResolver {
     label.textContent = t('conflicts.aiExplain');
   }
 
-  renderAiPanel() {
+  renderAiPanel(): void {
     const panel = document.getElementById('conflict-ai-panel');
     if (!panel) return;
     const matches = this.aiExplanation
@@ -353,13 +433,13 @@ class ConflictResolver {
     document.getElementById('conflict-ai-title').textContent = this.aiExplanation.summary;
     document.getElementById('conflict-ai-body').textContent = this.aiExplanation.body;
     panel.classList.remove('is-hidden');
-    document.getElementById('conflict-ai-close').onclick = () => {
+    (document.getElementById('conflict-ai-close') as HTMLElement).onclick = () => {
       panel.classList.add('is-hidden');
     };
   }
 
-  async aiLanguage() {
-    const settings = await window.gitTree.getAiSettings().catch(() => null);
+  async aiLanguage(): Promise<string> {
+    const settings = await window.gitTree.getAiSettings().catch(() => null) as { language?: string } | null;
     if (settings?.language === 'en' || settings?.language === 'it') {
       return settings.language;
     }
@@ -367,7 +447,7 @@ class ConflictResolver {
     return current.startsWith('it') ? 'it' : 'en';
   }
 
-  delegateToAgent() {
+  delegateToAgent(): void {
     const panel = this.app.components?.worktreeAgents;
     if (!panel) return;
     const block = this.blocks[this.activeBlockIndex];
@@ -389,7 +469,7 @@ class ConflictResolver {
     panel.openNewSession(null, { prefillPrompt: prompt });
   }
 
-  renderBinaryState() {
+  renderBinaryState(): string {
     return `
       <div class="conflict-binary-state">
         <i class="ph ph-file-lock" aria-hidden="true"></i>
@@ -401,7 +481,7 @@ class ConflictResolver {
       </div>`;
   }
 
-  renderTextEditor() {
+  renderTextEditor(): string {
     const active = this.blocks[this.activeBlockIndex] || null;
     const currentRanges = this.blocks.map(block => this.locateLines(this.current.current, block.current));
     const incomingRanges = this.blocks.map(block => this.locateLines(this.current.incoming, block.incoming));
@@ -471,20 +551,20 @@ class ConflictResolver {
       </div>`;
   }
 
-  sourcePane(label, content, kind, blockRanges, activeIndex) {
+  sourcePane(label: string, content: string, kind: string, blockRanges: Array<{ start: number; end: number } | null>, activeIndex: number): string {
     return `<section class="conflict-pane conflict-source-pane">
       <div class="conflict-pane-header ${kind}">${this.esc(label)}</div>
       ${this.codePane(content, kind, true, blockRanges?.[activeIndex] || null, blockRanges || [])}
     </section>`;
   }
 
-  codePane(content, kind, synchronized, activeRange, blockRanges) {
+  codePane(content: string, kind: string, synchronized: boolean, activeRange: { start: number; end: number } | null, blockRanges: Array<{ start: number; end: number } | null>): string {
     const lines = ConflictHighlight.splitLines(content).map(line => line.replace(/\r?\n|\r$/, ''));
     const active = activeRange
       ? new Set(rangeLines(activeRange.start, activeRange.end))
-      : new Set();
+      : new Set<number>();
     const blocks = blockRanges
-      .map(range => range ? new Set(rangeLines(range.start, range.end)) : new Set());
+      .map(range => range ? new Set(rangeLines(range.start, range.end)) : new Set<number>());
     const dimmed = blockRanges.length > 0 && !activeRange;
     return `<div class="conflict-code-scroll${synchronized ? ' is-synchronized' : ''}" data-pane="${kind}">
       <pre class="conflict-code-gutter" aria-hidden="true">${lines.map((_, index) => index + 1).join('\n')}</pre>
@@ -499,7 +579,7 @@ class ConflictResolver {
     </div>`;
   }
 
-  buildResultLayer() {
+  buildResultLayer(): void {
     const layer = document.getElementById('conflict-highlight-layer');
     if (!layer) return;
     const rows = ConflictHighlight.buildHighlightLines(this.resultContent, this.blocks);
@@ -510,7 +590,7 @@ class ConflictResolver {
     }).join('');
     this.highlightRows = rows;
 
-    const textarea = document.getElementById('conflict-result-editor');
+    const textarea = document.getElementById('conflict-result-editor') as HTMLTextAreaElement | null;
     if (textarea) {
       this.refreshResultGutter(textarea, document.querySelector('.conflict-result-gutter'));
       this.syncHighlightScroll(textarea);
@@ -518,7 +598,7 @@ class ConflictResolver {
     this.positionActionBar();
   }
 
-  positionActionBar() {
+  positionActionBar(): void {
     const bar = document.getElementById('conflict-action-bar');
     const stack = document.getElementById('conflict-result-stack');
     if (!bar || !stack) return;
@@ -530,7 +610,7 @@ class ConflictResolver {
     const rowIndex = Math.max(0, block.startLine - 1);
     const lineHeight = 21;
     const paddingTop = 8;
-    const top = paddingTop + rowIndex * lineHeight - (document.getElementById('conflict-result-editor')?.scrollTop || 0);
+    const top = paddingTop + rowIndex * lineHeight - ((document.getElementById('conflict-result-editor') as HTMLTextAreaElement | null)?.scrollTop || 0);
     stack.style.setProperty('--action-bar-top', `${top}px`);
     bar.innerHTML = `
       <span class="conflict-action-bar-label"><i class="ph ph-warning-circle" aria-hidden="true"></i>${this.esc(t('conflicts.blockCount', {
@@ -543,12 +623,12 @@ class ConflictResolver {
       <button class="btn btn-small" data-choice="smart" ${block.smartCombination === null ? 'disabled' : ''}>${this.esc(t('conflicts.smartCombination'))}</button>
     `;
     bar.classList.remove('is-hidden');
-    bar.querySelectorAll('[data-choice]').forEach(button => {
-      button.onclick = () => this.applyBlockChoice(button.dataset.choice);
+    bar.querySelectorAll<HTMLElement>('[data-choice]').forEach(button => {
+      button.onclick = () => this.applyBlockChoice((button as HTMLElement).dataset.choice);
     });
   }
 
-  syncHighlightScroll(textarea) {
+  syncHighlightScroll(textarea: HTMLTextAreaElement): void {
     const layer = document.getElementById('conflict-highlight-layer');
     const gutter = document.querySelector('.conflict-result-gutter');
     const stack = document.getElementById('conflict-result-stack');
@@ -561,20 +641,20 @@ class ConflictResolver {
     if (bar) bar.classList.toggle('is-hidden', !this.blocks.length);
   }
 
-  bindTextEditor() {
+  bindTextEditor(): void {
     if (this.current?.binary) return;
     document.getElementById('conflict-previous')?.addEventListener('click', () => this.jumpToBlock(this.activeBlockIndex - 1));
     document.getElementById('conflict-next')?.addEventListener('click', () => this.jumpToBlock(this.activeBlockIndex + 1));
-    document.querySelectorAll('[data-choice]').forEach(button => {
-      button.onclick = () => this.applyBlockChoice(button.dataset.choice);
+    document.querySelectorAll<HTMLElement>('[data-choice]').forEach(button => {
+      button.onclick = () => this.applyBlockChoice((button as HTMLElement).dataset.choice);
     });
 
     this.bindResultEditor();
     this.bindSourcePanes();
   }
 
-  bindResultEditor() {
-    const textarea = document.getElementById('conflict-result-editor');
+  bindResultEditor(): void {
+    const textarea = document.getElementById('conflict-result-editor') as HTMLTextAreaElement | null;
     if (!textarea) return;
     this.buildResultLayer();
     const active = this.blocks[this.activeBlockIndex];
@@ -595,7 +675,7 @@ class ConflictResolver {
     textarea.addEventListener('keydown', event => this.handleEditorKeys(event));
   }
 
-  handleEditorKeys(event) {
+  handleEditorKeys(event: KeyboardEvent): void {
     if (event.altKey && event.key === 'ArrowUp') {
       event.preventDefault();
       this.jumpToBlock(this.activeBlockIndex - 1);
@@ -616,7 +696,7 @@ class ConflictResolver {
       this.undo();
     }
     if (!this.manualEdited && this.blocks[this.activeBlockIndex] && !event.ctrlKey && !event.metaKey && !event.altKey) {
-      const choice = { c: 'current', i: 'incoming', b: 'both' }[event.key.toLowerCase()];
+      const choice = ({ c: 'current', i: 'incoming', b: 'both' } as Record<string, string>)[event.key.toLowerCase()];
       if (choice) {
         event.preventDefault();
         this.applyBlockChoice(choice);
@@ -624,13 +704,13 @@ class ConflictResolver {
     }
   }
 
-  bindSourcePanes() {
-    const synchronized = [...document.querySelectorAll('.conflict-code-scroll.is-synchronized')];
+  bindSourcePanes(): void {
+    const synchronized = [...document.querySelectorAll<HTMLElement>('.conflict-code-scroll.is-synchronized')];
     synchronized.forEach(source => {
       source.addEventListener('scroll', () => {
         if (this.syncFrame) return;
         this.syncFrame = requestAnimationFrame(() => {
-          this.syncFrame = null;
+          this.syncFrame = 0;
           const maximum = Math.max(1, source.scrollHeight - source.clientHeight);
           const ratio = source.scrollTop / maximum;
           synchronized.forEach(target => {
@@ -642,10 +722,10 @@ class ConflictResolver {
         });
       }, { passive: true });
     });
-    const pane = document.querySelector('.conflict-code-scroll[data-pane="current"]') ||
-      document.querySelector('.conflict-code-scroll[data-pane="incoming"]');
+    const pane = document.querySelector<HTMLElement>('.conflict-code-scroll[data-pane="current"]') ||
+      document.querySelector<HTMLElement>('.conflict-code-scroll[data-pane="incoming"]');
     if (pane) {
-      pane.parentElement.querySelectorAll('.conflict-pane-row[data-pane-line]').forEach(row => {
+      pane.parentElement.querySelectorAll<HTMLElement>('.conflict-pane-row[data-pane-line]').forEach(row => {
         row.addEventListener('click', () => {
           const line = Number(row.dataset.paneLine);
           const ranges = pane.dataset.pane === 'current'
@@ -658,13 +738,13 @@ class ConflictResolver {
     }
   }
 
-  jumpToBlock(index) {
+  jumpToBlock(index: number): void {
     if (index < 0 || index >= this.blocks.length) return;
     this.activeBlockIndex = index;
     this.renderEditor();
   }
 
-  locateLines(content, needle) {
+  locateLines(content: string, needle: string): { start: number; end: number } | null {
     if (!needle || needle === '') return null;
     const position = String(content || '').indexOf(needle);
     if (position === -1) return null;
@@ -674,18 +754,18 @@ class ConflictResolver {
     return { start, end: start + lines - 1 };
   }
 
-  blockPaneRange(block) {
+  blockPaneRange(block: ConflictBlock): { start: number; end: number } | null {
     return this.locateLines(this.current?.current || '', block.current);
   }
 
-  scheduleReparse() {
+  scheduleReparse(): void {
     clearTimeout(this.reparseTimer);
     this.reparseTimer = setTimeout(async () => {
       const repo = this.app.state.repo;
       if (!repo || !this.currentPath || this.container.classList.contains('is-hidden')) return;
-      const result = await window.gitTree.parseConflictBlocks(repo.path, this.resultContent);
-      if (result?.error) return;
-      this.blocks = (result || []).map(block => ({ ...block }));
+      const result = await window.gitTree.parseConflictBlocks(repo.path, this.resultContent) as { error?: string } | ConflictBlock[];
+      if ((result as { error?: string })?.error) return;
+      this.blocks = ((result as ConflictBlock[]) || []).map(block => ({ ...block }));
       this.activeBlockIndex = Math.min(this.activeBlockIndex, Math.max(0, this.blocks.length - 1));
       this.blockCounts.set(this.currentPath, this.blocks.length);
       this.updateMarkButton();
@@ -694,7 +774,7 @@ class ConflictResolver {
     }, 500);
   }
 
-  useWholeFile(kind) {
+  useWholeFile(kind: string): void {
     this.snapshot();
     this.resultContent = kind === 'current' ? this.current.current : this.current.incoming;
     this.blocks = [];
@@ -705,7 +785,7 @@ class ConflictResolver {
     this.renderEditor();
   }
 
-  applyToAll(choice) {
+  applyToAll(choice: string): void {
     if (!this.blocks.length) return;
     this.snapshot();
     const eol = this.current.eol === 'crlf' ? '\r\n' : '\n';
@@ -734,18 +814,18 @@ class ConflictResolver {
     this.renderEditor();
   }
 
-  snapshot() {
+  snapshot(): void {
     this.undoStack.push({
       content: this.resultContent,
       blocks: this.blocks.map(block => ({ ...block })),
       activeBlockIndex: this.activeBlockIndex
     });
     if (this.undoStack.length > 30) this.undoStack.shift();
-    const undoButton = document.getElementById('conflict-undo');
+    const undoButton = document.getElementById('conflict-undo') as HTMLButtonElement | null;
     if (undoButton) undoButton.disabled = false;
   }
 
-  undo() {
+  undo(): void {
     const snapshot = this.undoStack.pop();
     if (!snapshot) return;
     this.resultContent = snapshot.content;
@@ -754,12 +834,12 @@ class ConflictResolver {
     this.manualEdited = false;
     this.dirty = true;
     this.blockCounts.set(this.currentPath, this.blocks.length);
-    const undoButton = document.getElementById('conflict-undo');
+    const undoButton = document.getElementById('conflict-undo') as HTMLButtonElement | null;
     if (undoButton) undoButton.disabled = this.undoStack.length === 0;
     this.renderEditor();
   }
 
-  applyBlockChoice(choice) {
+  applyBlockChoice(choice: string): void {
     const block = this.blocks[this.activeBlockIndex];
     if (!block) return;
     if (choice === 'ignore') {
@@ -792,27 +872,27 @@ class ConflictResolver {
     this.renderEditor();
   }
 
-  refreshResultGutter(textarea, gutter) {
+  refreshResultGutter(textarea: HTMLTextAreaElement, gutter: Element | null): void {
     const count = Math.max(1, textarea.value.split(/\r?\n/).length);
     if (gutter) gutter.textContent = Array.from({ length: count }, (_, index) => index + 1).join('\n');
   }
 
-  canMarkResolved() {
+  canMarkResolved(): boolean {
     if (!this.current) return false;
     if (this.current.binary) return Boolean(this.pendingBinaryStrategy);
     return (this.blocks.length === 0 || this.manualEdited) && !this.hasConflictMarkers();
   }
 
-  hasConflictMarkers() {
+  hasConflictMarkers(): boolean {
     return /^(?:<<<<<<<|>>>>>>>)(?:\s|$)/m.test(this.resultContent);
   }
 
-  updateMarkButton() {
-    const button = document.getElementById('conflict-mark-resolved');
+  updateMarkButton(): void {
+    const button = document.getElementById('conflict-mark-resolved') as HTMLButtonElement | null;
     if (button) button.disabled = !this.canMarkResolved();
   }
 
-  async markResolved() {
+  async markResolved(): Promise<void> {
     if (!this.canMarkResolved()) {
       this.app.showToast(t('conflicts.unresolvedWarning'), 'warning');
       return;
@@ -822,14 +902,14 @@ class ConflictResolver {
     await this.resolve(strategy, this.resultContent);
   }
 
-  async resolve(strategy, content = '') {
+  async resolve(strategy: string, content = ''): Promise<void> {
     const repo = this.app.state.repo;
     if (!repo || !this.currentPath) return;
     const result = await window.gitTree.resolveConflict(repo.path, this.currentPath, {
       strategy,
       snapshotId: this.current.snapshotId,
       ...(strategy === 'manual' ? { content } : {})
-    });
+    }) as { error?: string; state?: OperationStateInfo };
     if (result?.error) {
       this.app.showToast(result.error, 'error');
       if (/changed externally/i.test(result.error)) await this.loadFile(this.currentPath);
@@ -860,13 +940,13 @@ class ConflictResolver {
     if (this.currentPath) await this.loadFile(this.currentPath);
   }
 
-  async continue() {
+  async continue(): Promise<void> {
     if (this.state?.conflicts?.length) return;
     const repo = this.app.state.repo;
-    const result = await window.gitTree.continueOperation(repo.path);
+    const result = await window.gitTree.continueOperation(repo.path) as { error?: string };
     if (result?.error) {
       this.app.showToast(result.error, 'error');
-      const state = await window.gitTree.getOperationState(repo.path);
+      const state = await window.gitTree.getOperationState(repo.path) as OperationStateInfo;
       if (state?.type) await this.open(state);
       return;
     }
@@ -875,10 +955,10 @@ class ConflictResolver {
     this.app.emit('refresh');
   }
 
-  async abort() {
+  async abort(): Promise<void> {
     if (!await this.confirm(t('conflicts.abortTitle'), t('conflicts.abortConfirm'))) return;
     const repo = this.app.state.repo;
-    const result = await window.gitTree.abortOperation(repo.path);
+    const result = await window.gitTree.abortOperation(repo.path) as { error?: string };
     if (result?.error) {
       this.app.showToast(result.error, 'error');
       return;
@@ -887,10 +967,10 @@ class ConflictResolver {
     this.app.emit('refresh');
   }
 
-  async skip() {
+  async skip(): Promise<void> {
     if (!await this.confirm(t('conflicts.skipTitle'), t('conflicts.skipConfirm'))) return;
     const repo = this.app.state.repo;
-    const result = await window.gitTree.skipOperation(repo.path);
+    const result = await window.gitTree.skipOperation(repo.path) as { error?: string; state?: OperationStateInfo };
     if (result?.error) {
       this.app.showToast(result.error, 'error');
       return;
@@ -903,7 +983,7 @@ class ConflictResolver {
     this.app.emit('refresh');
   }
 
-  bindGlobalKeys() {
+  bindGlobalKeys(): void {
     if (this.globalKeysHandler) {
       document.removeEventListener('keydown', this.globalKeysHandler);
     }
@@ -916,8 +996,8 @@ class ConflictResolver {
         this.jumpToBlock(this.activeBlockIndex + direction);
       }
       if (!event.altKey && !event.ctrlKey && !event.metaKey && !this.manualEdited) {
-        const choice = { c: 'current', i: 'incoming', b: 'both' }[event.key.toLowerCase()];
-        if (choice && !event.target.closest?.('textarea, input')) {
+        const choice = ({ c: 'current', i: 'incoming', b: 'both' } as Record<string, string>)[event.key.toLowerCase()];
+        if (choice && !(event.target as HTMLElement).closest?.('textarea, input')) {
           event.preventDefault();
           this.applyBlockChoice(choice);
         }
@@ -926,12 +1006,12 @@ class ConflictResolver {
     document.addEventListener('keydown', this.globalKeysHandler);
   }
 
-  async confirmDiscard() {
+  async confirmDiscard(): Promise<boolean> {
     if (!this.dirty) return true;
-    return this.confirm(t('conflicts.discardTitle'), t('conflicts.discardConfirm'));
+    return this.confirm(t('conflicts.discardTitle'), t('conflicts.discardConfirm')) as Promise<boolean>;
   }
 
-  confirm(title, message) {
+  confirm(title: string, message: string): Promise<unknown> {
     return this.app.dialogs.confirm({
       title,
       message,
@@ -941,7 +1021,7 @@ class ConflictResolver {
     });
   }
 
-  hide() {
+  hide(): void {
     this.container.classList.add('is-hidden');
     this.container.innerHTML = '';
     this.state = null;
@@ -958,13 +1038,16 @@ class ConflictResolver {
     }
   }
 
-  esc(value) {
+  esc(value: unknown): string {
     return HtmlEncoder.encode(value);
   }
 }
 
-function rangeLines(start, end) {
-  const lines = [];
-  for (let line = start; line <= end; line += 1) lines.push(line);
-  return lines;
+if (typeof window !== 'undefined') {
+  (window as unknown as { ConflictResolver: typeof ConflictResolver }).ConflictResolver = ConflictResolver;
+}
+
+declare const module: { exports: unknown } | undefined;
+if (typeof module !== 'undefined' && (module as { exports?: unknown }).exports) {
+  (module as { exports: unknown }).exports = ConflictResolver;
 }

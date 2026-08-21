@@ -1,7 +1,93 @@
-/* exported BranchListView */
-/* eslint-disable-next-line no-unused-vars -- script-tag global consumed by app.js */
-class BranchListView {
-  constructor(container, app) {
+interface BranchListInfo {
+  [key: string]: unknown;
+}
+
+interface BranchListData {
+  branches?: Record<string, BranchListInfo>;
+  current?: string;
+}
+
+interface BranchMetadataEntry {
+  kind?: string;
+  name?: string;
+  current?: boolean;
+  upstream?: string;
+  ahead?: number;
+  behind?: number;
+}
+
+interface BranchListMetadata {
+  branches?: BranchMetadataEntry[];
+  remotes?: Array<{ name?: string; provider?: { provider?: string } }>;
+  current?: string;
+  defaultBranch?: string;
+}
+
+interface BranchListStatus {
+  error?: unknown;
+  current?: string;
+  isClean?: boolean;
+}
+
+type BranchApp = {
+  state: { repo?: { path?: string } | null };
+  isPrimaryModifier: (event: MouseEvent) => boolean;
+  isCurrentRepo: (repoPath?: string) => boolean;
+  showToast: (message: unknown, type?: string) => void;
+  emit: (event: string, data?: unknown) => void;
+  refresh: (options?: Record<string, unknown>) => Promise<void>;
+  afterBranchCheckout: (result: unknown, repoPath: string) => Promise<void>;
+  setRemoteActionBusy: (buttonId: string, busy: boolean) => void;
+  dialogs: {
+    confirm: (options: Record<string, unknown>) => Promise<unknown>;
+  };
+  components: {
+    branchContextMenu?: {
+      open: (
+        event: MouseEvent,
+        branch: BranchMetadataEntry,
+        metadata: BranchListMetadata | null,
+        status: BranchListStatus | null,
+        operationState: unknown,
+        selectedBranches: BranchMetadataEntry[]
+      ) => void;
+      close?: () => void;
+    };
+    compare?: {
+      compare: (source: string, target: string) => void;
+      compareMatrix: (branches: Array<{ name: string }>) => void;
+    };
+  } & Record<string, unknown>;
+};
+
+export class BranchListView {
+  container: HTMLElement;
+  app: BranchApp;
+  data: BranchListData | null;
+  filter: string;
+  collapsedFolders: Set<string>;
+  collapsedGroups: Set<string>;
+  selectedBranchKey: string | null;
+  selectedBranchElement: HTMLElement | null;
+  selectedBranchKeys: Set<string>;
+  selectionAnchorKey: string | null;
+  metadata: BranchListMetadata | null;
+  status: BranchListStatus | null;
+  operationState: unknown;
+  checkoutBusy: boolean;
+  switchFromDirection: string | null;
+  branchMetadataByKey: Map<string, BranchMetadataEntry>;
+  searchInput: HTMLInputElement | null;
+  loading: boolean;
+  shouldReveal: boolean;
+  rowStaggerIndex: number;
+  activeGhost: {
+    ghost: HTMLElement;
+    animation: Animation;
+    newRow: HTMLElement;
+  } | null;
+
+  constructor(container: HTMLElement, app: BranchApp) {
     this.container = container;
     this.app = app;
     this.data = null;
@@ -18,7 +104,11 @@ class BranchListView {
     this.checkoutBusy = false;
     this.switchFromDirection = null;
     this.branchMetadataByKey = new Map();
-    this.searchInput = document.getElementById('branch-search');
+    this.loading = false;
+    this.shouldReveal = false;
+    this.rowStaggerIndex = 0;
+    this.activeGhost = null;
+    this.searchInput = document.getElementById('branch-search') as HTMLInputElement | null;
     if (this.searchInput) {
       this.searchInput.addEventListener('input', () => {
         this.filter = this.searchInput.value.toLowerCase();
@@ -26,22 +116,22 @@ class BranchListView {
       });
     }
     this.container.addEventListener('click', event => {
-      const row = event.target.closest('.branch-item');
+      const row = (event.target as HTMLElement).closest('.branch-item') as HTMLElement | null;
       if (row && this.container.contains(row)) this.selectBranchRow(row, event);
     });
     this.container.addEventListener('dblclick', event => {
-      const row = event.target.closest('.branch-item');
+      const row = (event.target as HTMLElement).closest('.branch-item') as HTMLElement | null;
       if (row && this.container.contains(row)) this.activateBranchRow(row);
     });
     this.container.addEventListener('keydown', event => {
       if (event.key !== 'Enter') return;
-      const row = event.target.closest('.branch-item');
+      const row = (event.target as HTMLElement).closest('.branch-item') as HTMLElement | null;
       if (!row || !this.container.contains(row)) return;
       event.preventDefault();
       this.activateBranchRow(row);
     });
     this.container.addEventListener('contextmenu', event => {
-      const row = event.target.closest('.branch-item');
+      const row = (event.target as HTMLElement).closest('.branch-item') as HTMLElement | null;
       if (!row || !this.container.contains(row)) return;
       const key = row.dataset.selectionKey;
       if (!this.selectedBranchKeys.has(key)) this.selectBranchRow(row, event);
@@ -54,13 +144,13 @@ class BranchListView {
         event, branch, this.metadata, this.status, this.operationState, selectedBranches
       );
     });
-    
+
     // Inizializza le scorciatoie da tastiera (ESC per dismettere selezione)
     this.initKeyboardShortcuts();
   }
 
   // Aggiungi listener per ESC su tutta la finestra
-  initKeyboardShortcuts() {
+  initKeyboardShortcuts(): void {
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape' && this.selectedBranchKeys.size > 0) {
         this.dismissSelection();
@@ -68,7 +158,11 @@ class BranchListView {
     });
   }
 
-  async load(repoPath, loadSession = null, options = {}) {
+  async load(
+    repoPath: string,
+    loadSession: { branchMetadata(): Promise<unknown>; status(): Promise<unknown>; operationState(): Promise<unknown> } | null = null,
+    options: { background?: boolean } = {}
+  ): Promise<void> {
     const background = options.background === true;
     this.setLoading(true, { preserveContent: background });
     try {
@@ -78,7 +172,12 @@ class BranchListView {
         loadSession?.branchMetadata() || window.gitTree.getBranchMetadata(repoPath),
         loadSession?.status() || window.gitTree.getStatus(repoPath),
         loadSession?.operationState() || window.gitTree.getOperationState(repoPath)
-      ]);
+      ]) as [
+        BranchListData & { error?: string },
+        BranchListMetadata & { error?: unknown },
+        BranchListStatus,
+        { error?: unknown }
+      ];
       if (!this.app.isCurrentRepo(repoPath)) return;
       if (result?.error) {
         this.data = null;
@@ -120,7 +219,7 @@ class BranchListView {
     finally { this.setLoading(false); }
   }
 
-  setLoading(loading, { preserveContent = false } = {}) {
+  setLoading(loading: boolean, { preserveContent = false }: { preserveContent?: boolean } = {}): void {
     this.loading = loading;
     this.container.classList.toggle('is-project-loading', loading);
     this.container.setAttribute('aria-busy', String(loading));
@@ -132,10 +231,10 @@ class BranchListView {
     }
   }
 
-  setCurrentBranch(branchName) {
+  setCurrentBranch(branchName: string): void {
     if (!branchName) return;
-    const oldRow = this.container.querySelector('.branch-item.active');
-    const newRow = this.container.querySelector(
+    const oldRow = this.container.querySelector<HTMLElement>('.branch-item.active');
+    const newRow = this.container.querySelector<HTMLElement>(
       `.branch-item[data-remote="false"][data-branch-name="${CSS.escape(branchName)}"]`
     );
     if (this.data) this.data.current = branchName;
@@ -146,13 +245,13 @@ class BranchListView {
     }
     const willSlide = Boolean(oldRow && newRow && oldRow !== newRow);
     if (willSlide) newRow.classList.add('active-bg-animating');
-    this.container.querySelectorAll('.branch-item[data-remote="false"]').forEach(row => {
+    this.container.querySelectorAll<HTMLElement>('.branch-item[data-remote="false"]').forEach(row => {
       row.classList.toggle('active', row.dataset.branchName === branchName);
     });
     if (willSlide) this.slideActiveBackground(oldRow, newRow);
   }
 
-  slideActiveBackground(oldRow, newRow) {
+  slideActiveBackground(oldRow: HTMLElement, newRow: HTMLElement): void {
     if (this.activeGhost) {
       this.activeGhost.animation.cancel();
       this.activeGhost.ghost.remove();
@@ -213,7 +312,7 @@ class BranchListView {
     };
   }
 
-  render() {
+  render(): void {
     this.container.innerHTML = '';
     this.selectedBranchElement = null;
     this.rowStaggerIndex = 0;
@@ -222,7 +321,8 @@ class BranchListView {
     const current = this.data.current;
     const f = this.filter;
 
-    let locals = [], remotes = [];
+    let locals: Array<{ name: string; full?: string; info: BranchListInfo }> = [];
+    let remotes: Array<{ name: string; full?: string; info: BranchListInfo }> = [];
     for (const [name, info] of Object.entries(branches)) {
       if (name.startsWith('remotes/')) {
         remotes.push({ name: name.replace('remotes/', ''), full: name, info });
@@ -258,7 +358,14 @@ class BranchListView {
     this.container.appendChild(frag);
   }
 
-  renderCollapsibleGroup(frag, label, groupId, branches, current, isRemote) {
+  renderCollapsibleGroup(
+    frag: DocumentFragment,
+    label: string,
+    groupId: string,
+    branches: Array<{ name: string; full?: string; info: BranchListInfo }>,
+    current: string,
+    isRemote: boolean
+  ): void {
     const collapsed = this.collapsedGroups.has(groupId);
 
     const header = document.createElement('div');
@@ -275,8 +382,8 @@ class BranchListView {
     body.className = `branch-group-body${collapsed ? ' is-collapsed' : ''}`;
     body.dataset.groupBody = groupId;
 
-    const folders = new Map();
-    const root = [];
+    const folders = new Map<string, Array<{ name: string; full?: string; info: BranchListInfo }>>();
+    const root: Array<{ name: string; full?: string; info: BranchListInfo }> = [];
 
     branches.forEach(b => {
       const idx = b.name.lastIndexOf('/');
@@ -319,7 +426,7 @@ class BranchListView {
     frag.appendChild(body);
   }
 
-  toggleGroup(groupId, header) {
+  toggleGroup(groupId: string, header: HTMLElement): void {
     if (this.collapsedGroups.has(groupId)) this.collapsedGroups.delete(groupId);
     else this.collapsedGroups.add(groupId);
     this.persistSet('gittree.sidebar.branchGroups', this.collapsedGroups);
@@ -329,21 +436,26 @@ class BranchListView {
       ?.classList.toggle('is-collapsed', collapsed);
   }
 
-  toggleFolder(folderKey, header) {
+  toggleFolder(folderKey: string, header: HTMLElement): void {
     if (this.collapsedFolders.has(folderKey)) this.collapsedFolders.delete(folderKey);
     else this.collapsedFolders.add(folderKey);
     this.persistSet('gittree.sidebar.branchFolders', this.collapsedFolders);
     const collapsed = this.collapsedFolders.has(folderKey);
     header.querySelector('.branch-folder-arrow')?.classList.toggle('collapsed', collapsed);
-    this.container.querySelectorAll(
+    this.container.querySelectorAll<HTMLElement>(
       `.branch-item[data-folder-key="${CSS.escape(folderKey)}"]`
     ).forEach(row => row.classList.toggle('is-folder-collapsed', collapsed));
   }
 
-  branchRow(branch, current, isRemote = false, displayName = branch.name) {
+  branchRow(
+    branch: { name: string; full?: string; info: BranchListInfo },
+    current: string,
+    isRemote = false,
+    displayName: string = branch.name
+  ): HTMLElement {
     const el = document.createElement('div');
     el.className = 'branch-item';
-    el.style.setProperty('--item-index', Math.min(this.rowStaggerIndex || 0, 14));
+    el.style.setProperty('--item-index', String(Math.min(this.rowStaggerIndex || 0, 14)));
     this.rowStaggerIndex = (this.rowStaggerIndex || 0) + 1;
     if (displayName !== branch.name) el.classList.add('is-nested');
     el.tabIndex = 0;
@@ -394,7 +506,7 @@ class BranchListView {
     return el;
   }
 
-  syncBadge(direction, count, upstream) {
+  syncBadge(direction: string, count: number, upstream: string): HTMLElement {
     const key = direction === 'ahead' ? 'sidebar.aheadOfUpstream' : 'sidebar.behindUpstream';
     const label = t(key, { count, upstream });
     const badge = document.createElement('span');
@@ -413,13 +525,13 @@ class BranchListView {
     return badge;
   }
 
-  selectBranchRow(row, event = null) {
+  selectBranchRow(row: HTMLElement, event: MouseEvent | null = null): void {
     const key = row.dataset.selectionKey;
     const toggle = event && this.app.isPrimaryModifier(event);
     const shift = event && event.shiftKey;
 
     if (shift && this.selectionAnchorKey) {
-      const allRows = [...this.container.querySelectorAll('.branch-item')];
+      const allRows = [...this.container.querySelectorAll<HTMLElement>('.branch-item')];
       const keys = allRows.map(r => r.dataset.selectionKey);
       const startIdx = keys.indexOf(this.selectionAnchorKey);
       const endIdx = keys.indexOf(key);
@@ -443,25 +555,25 @@ class BranchListView {
     this.updateBatchBar();
   }
 
-  updateVisibleSelection() {
-    this.container.querySelectorAll('.branch-item').forEach(row => {
+  updateVisibleSelection(): void {
+    this.container.querySelectorAll<HTMLElement>('.branch-item').forEach(row => {
       const isSelected = this.selectedBranchKeys.has(row.dataset.selectionKey);
       row.classList.toggle('selected', isSelected);
       row.classList.toggle('multi-selected', isSelected && this.selectedBranchKeys.size > 1);
     });
-    this.selectedBranchElement = this.container.querySelector(
+    this.selectedBranchElement = this.container.querySelector<HTMLElement>(
       `.branch-item[data-selection-key="${CSS.escape(this.selectedBranchKey || '')}"]`
     );
   }
 
-  updateBatchBar() {
+  updateBatchBar(): void {
     const footer = document.getElementById('batch-operations-footer');
-    const countSpan = footer?.querySelector('.batch-selection-count');
-    const namesContainer = footer?.querySelector('.batch-selected-names');
-    const pullBtn = footer?.querySelector('[data-batch-pull]');
-    const deleteBtn = footer?.querySelector('[data-batch-delete]');
-    const compareBtn = footer?.querySelector('[data-batch-compare]');
-    const dismissBtn = footer?.querySelector('[data-batch-dismiss]');
+    const countSpan = footer?.querySelector<HTMLElement>('.batch-selection-count');
+    const namesContainer = footer?.querySelector<HTMLElement>('.batch-selected-names');
+    const pullBtn = footer?.querySelector<HTMLButtonElement>('[data-batch-pull]');
+    const deleteBtn = footer?.querySelector<HTMLButtonElement>('[data-batch-delete]');
+    const compareBtn = footer?.querySelector<HTMLButtonElement>('[data-batch-compare]');
+    const dismissBtn = footer?.querySelector<HTMLButtonElement>('[data-batch-dismiss]');
 
     if (this.selectedBranchKeys.size > 1) {
       const count = this.selectedBranchKeys.size;
@@ -526,14 +638,14 @@ class BranchListView {
     }
   }
 
-  removeSelectedBranch(key) {
+  removeSelectedBranch(key: string): void {
     if (!this.selectedBranchKeys.delete(key)) return;
     if (this.selectedBranchKeys.size === 0) this.selectionAnchorKey = null;
     this.updateVisibleSelection();
     this.updateBatchBar();
   }
 
-  getSelectedBranches() {
+  getSelectedBranches(): BranchMetadataEntry[] {
     const branches = [];
     for (const key of this.selectedBranchKeys) {
       const [kind, ...nameParts] = key.split(':');
@@ -546,7 +658,7 @@ class BranchListView {
     return branches;
   }
 
-  async batchDelete() {
+  async batchDelete(): Promise<void> {
     const repo = this.app.state.repo;
     if (!repo) return;
     const branches = this.getSelectedBranches().filter(b => b.kind === 'local');
@@ -561,7 +673,10 @@ class BranchListView {
 
     let result = await window.gitTree.batchDeleteBranches(
       repo.path, branches.map(b => b.name), false
-    );
+    ) as {
+      error?: string;
+      results?: Array<{ success?: boolean; branch?: string }>;
+    };
     if (result?.error) { this.app.showToast(result.error, 'error'); return; }
 
     const failed = (result.results || []).filter(r => !r.success);
@@ -577,7 +692,10 @@ class BranchListView {
       if (forceConfirmed) {
         const forceResult = await window.gitTree.batchDeleteBranches(
           repo.path, failed.map(r => r.branch), true
-        );
+        ) as {
+          error?: string;
+          results?: Array<{ success?: boolean; branch?: string }>;
+        };
         if (!forceResult?.error) {
           succeeded.push(...(forceResult.results || []).filter(r => r.success));
         }
@@ -593,26 +711,26 @@ class BranchListView {
     this.app.emit('refresh');
   }
 
-  async batchCompare() {
+  async batchCompare(): Promise<void> {
     const branches = this.getSelectedBranches();
     if (branches.length === 2) {
       this.app.components.compare.compare(branches[0].name, branches[1].name);
     } else if (branches.length > 2) {
-      this.app.components.compare.compareMatrix(branches.slice(0, 8));
+      this.app.components.compare.compareMatrix(branches.slice(0, 8) as Array<{ name: string }>);
     }
   }
 
-  async batchPull() {
+  async batchPull(): Promise<void> {
     const repo = this.app.state.repo;
     if (!repo) return;
-    
+
     const branches = this.getSelectedBranches().filter(b => b.kind === 'local');
     if (!branches.length) return;
-    
+
     // Aggiorna lo stato UI
     const footer = document.getElementById('batch-operations-footer');
-    const infoSection = footer?.querySelector('.batch-selection-info');
-    const namesContainer = footer?.querySelector('.batch-selected-names');
+    const infoSection = footer?.querySelector<HTMLElement>('.batch-selection-info');
+    const namesContainer = footer?.querySelector<HTMLElement>('.batch-selected-names');
     if (infoSection) infoSection.classList.add('is-busy');
     footer?.classList.add('is-busy');
 
@@ -627,9 +745,9 @@ class BranchListView {
         const parts = branch.upstream?.split('/');
         if (parts && parts.length === 2) {
           const [remote, remoteBranch] = parts;
-          const result = await window.gitTree.pull(repo.path, remote, remoteBranch);
+          const result = await window.gitTree.pull(repo.path, remote, remoteBranch) as { error?: string };
 
-          const chip = namesContainer?.querySelector(
+          const chip = namesContainer?.querySelector<HTMLElement>(
             `.batch-selected-names__item[data-branch-name="${CSS.escape(branch.name)}"]`
           );
           if (result.error) {
@@ -673,14 +791,14 @@ class BranchListView {
     }
   }
 
-  dismissSelection() {
+  dismissSelection(): void {
     this.selectedBranchKeys.clear();
     this.selectionAnchorKey = null;
     this.updateVisibleSelection();
     this.updateBatchBar();
   }
 
-  confirmDialog(title, message, actionLabel, danger = false) {
+  confirmDialog(title: string, message: string, actionLabel: string, danger = false): Promise<unknown> {
     return this.app.dialogs.confirm({
       title,
       message,
@@ -690,7 +808,7 @@ class BranchListView {
     });
   }
 
-  activateBranchRow(row) {
+  activateBranchRow(row: HTMLElement): void {
     const branchName = row.dataset.branchName;
     if (!branchName) return;
     if (this.checkoutBusy) return;
@@ -702,18 +820,18 @@ class BranchListView {
     }
   }
 
-  detectSwitchDirection(row) {
-    const activeRow = this.container.querySelector('.branch-item.active');
+  detectSwitchDirection(row: HTMLElement): string | null {
+    const activeRow = this.container.querySelector<HTMLElement>('.branch-item.active');
     if (!activeRow || activeRow === row) return null;
     return row.getBoundingClientRect().top > activeRow.getBoundingClientRect().top
       ? 'top'
       : 'bottom';
   }
 
-  setRowBusy(row, busy) {
+  setRowBusy(row: HTMLElement | null, busy: boolean): void {
     if (!row) return;
     row.classList.toggle('is-checking-out', busy);
-    const icon = row.querySelector('.branch-icon');
+    const icon = row.querySelector<HTMLElement>('.branch-icon');
     if (!icon) return;
     if (busy) {
       icon.dataset.originalIcon = icon.className;
@@ -724,16 +842,16 @@ class BranchListView {
     }
   }
 
-  async checkout(name, row = null) {
+  async checkout(name: string, row: HTMLElement | null = null): Promise<void> {
     const repo = this.app.state.repo;
     if (!repo || this.checkoutBusy) return;
-    row = row || this.container.querySelector(
+    row = row || this.container.querySelector<HTMLElement>(
       `.branch-item[data-branch-kind="local"][data-branch-name="${CSS.escape(name)}"]`
     );
     this.checkoutBusy = true;
     this.setRowBusy(row, true);
     try {
-      const r = await window.gitTree.checkoutBranch(repo.path, name);
+      const r = await window.gitTree.checkoutBranch(repo.path, name) as { error?: string };
       if (r.error) { this.app.showToast(r.error, 'error'); return; }
       if (!this.app.isCurrentRepo(repo.path)) return;
       await this.app.afterBranchCheckout(r, repo.path);
@@ -744,16 +862,16 @@ class BranchListView {
     }
   }
 
-  async checkoutRemote(localName, remoteName, row = null) {
+  async checkoutRemote(localName: string, remoteName: string, row: HTMLElement | null = null): Promise<void> {
     const repo = this.app.state.repo;
     if (!repo || this.checkoutBusy) return;
-    row = row || this.container.querySelector(
+    row = row || this.container.querySelector<HTMLElement>(
       `.branch-item[data-branch-kind="remote"][data-branch-name="${CSS.escape(remoteName)}"]`
     );
     this.checkoutBusy = true;
     this.setRowBusy(row, true);
     try {
-      const r = await window.gitTree.checkoutTrackingBranch(repo.path, remoteName);
+      const r = await window.gitTree.checkoutTrackingBranch(repo.path, remoteName) as { error?: string };
       if (r.error) { this.app.showToast(r.error, 'error'); return; }
       if (!this.app.isCurrentRepo(repo.path)) return;
       await this.app.afterBranchCheckout(r, repo.path);
@@ -764,23 +882,23 @@ class BranchListView {
     }
   }
 
-  async promptCreateBranch() {
+  async promptCreateBranch(): Promise<void> {
     const repo = this.app.state.repo;
     if (!repo) return;
-    const result = await this.quickBranchDialog(repo.path);
+    const result = await this.quickBranchDialog(repo.path) as { success?: boolean; name?: string } | null;
     if (!result?.success) return;
     this.app.showToast(t('feedback.branchCreated', { branch: result.name }), 'success');
     await this.app.refresh({ silent: true });
   }
 
-  createBranch(repoPath, name) {
+  createBranch(repoPath: string, name: string): Promise<unknown> {
     return window.gitTree.createBranch(repoPath, name);
   }
 
-  quickBranchDialog(repoPath) {
+  quickBranchDialog(repoPath: string): Promise<Record<string, unknown> | null> {
     const overlay = document.getElementById('modal-overlay');
     const dialog = document.getElementById('modal-dialog');
-    const prefixes = {
+    const prefixes: Record<string, string> = {
       feature: BranchNaming.detectPrefix('feature', this.metadata),
       bugfix: BranchNaming.detectPrefix('bugfix', this.metadata)
     };
@@ -843,14 +961,14 @@ class BranchListView {
         </form>`;
       overlay.classList.remove('is-hidden');
 
-      const form = dialog.querySelector('form');
-      const input = form.elements.description;
-      const preview = dialog.querySelector('[data-branch-preview]');
-      const convention = dialog.querySelector('[data-branch-convention]');
-      const error = dialog.querySelector('[data-branch-error]');
-      const create = dialog.querySelector('[data-create]');
-      const cancel = dialog.querySelector('[data-cancel]');
-      const typeButtons = [...dialog.querySelectorAll('[data-branch-type]')];
+      const form = dialog.querySelector('form') as HTMLFormElement;
+      const input = (form.elements as unknown as Record<string, HTMLInputElement>).description;
+      const preview = dialog.querySelector<HTMLElement>('[data-branch-preview]');
+      const convention = dialog.querySelector<HTMLElement>('[data-branch-convention]');
+      const error = dialog.querySelector<HTMLElement>('[data-branch-error]');
+      const create = dialog.querySelector<HTMLButtonElement>('[data-create]');
+      const cancel = dialog.querySelector<HTMLButtonElement>('[data-cancel]');
+      const typeButtons = [...dialog.querySelectorAll<HTMLButtonElement>('[data-branch-type]')];
       let selectedType = 'feature';
       let submitting = false;
 
@@ -875,7 +993,7 @@ class BranchListView {
         create.disabled = submitting || !name || exists;
       };
 
-      const finish = value => {
+      const finish = (value: Record<string, unknown> | null) => {
         document.removeEventListener('keydown', onKeydown);
         overlay.removeEventListener('click', onOverlayClick);
         overlay.classList.add('is-hidden');
@@ -886,12 +1004,12 @@ class BranchListView {
         dialog.innerHTML = '';
         resolve(value);
       };
-      const onKeydown = event => {
+      const onKeydown = (event: KeyboardEvent) => {
         if (event.key !== 'Escape' || submitting) return;
         event.preventDefault();
         finish(null);
       };
-      const onOverlayClick = event => {
+      const onOverlayClick = (event: MouseEvent) => {
         if (event.target === overlay && !submitting) finish(null);
       };
 
@@ -924,7 +1042,7 @@ class BranchListView {
         update();
         error.textContent = t('sidebar.creatingBranch');
         try {
-          const result = await this.createBranch(repoPath, name);
+          const result = await this.createBranch(repoPath, name) as { success?: boolean; error?: string; name?: string };
           if (!result?.success || result?.error) {
             throw new Error(result?.error || t('sidebar.branchCreateFailed'));
           }
@@ -937,7 +1055,7 @@ class BranchListView {
           cancel.disabled = false;
           create.querySelector('i').className = 'ph ph-git-branch';
           update();
-          error.textContent = branchError.message || t('sidebar.branchCreateFailed');
+          error.textContent = (branchError as Error).message || t('sidebar.branchCreateFailed');
           input.focus();
         }
       };
@@ -948,22 +1066,31 @@ class BranchListView {
     });
   }
 
-  get current() { return this.data?.current; }
+  get current(): string | undefined { return this.data?.current; }
 
-  restoreSet(storageKey) {
+  restoreSet(storageKey: string): Set<string> {
     try {
-      const parsed = JSON.parse(localStorage.getItem(storageKey));
-      return new Set(Array.isArray(parsed) ? parsed : []);
+      const parsed: unknown = JSON.parse(localStorage.getItem(storageKey) ?? 'null');
+      return new Set(Array.isArray(parsed) ? parsed as string[] : []);
     } catch {
       return new Set();
     }
   }
 
-  persistSet(storageKey, values) {
+  persistSet(storageKey: string, values: Set<string>): void {
     localStorage.setItem(storageKey, JSON.stringify([...values]));
   }
 
-  esc(value) {
+  esc(value: unknown): string {
     return HtmlEncoder.encode(value);
   }
+}
+
+if (typeof window !== 'undefined') {
+  (window as unknown as { BranchListView: typeof BranchListView }).BranchListView = BranchListView;
+}
+
+declare const module: { exports: unknown } | undefined;
+if (typeof module !== 'undefined' && (module as { exports?: unknown }).exports) {
+  (module as { exports: unknown }).exports = BranchListView;
 }

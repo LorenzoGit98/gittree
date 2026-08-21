@@ -1,7 +1,70 @@
-/* exported WorktreeAgentPanel */
-/* global Terminal, FitAddon */
-class WorktreeAgentPanel {
-  constructor(app) {
+interface WorktreeEntry {
+  path: string;
+  branch?: string;
+  head?: string;
+  dirty?: boolean;
+  locked?: boolean;
+}
+
+interface AgentTask {
+  id: string;
+  title?: string;
+  status: string;
+  adapterId?: string;
+  branch?: string;
+  worktreePath: string;
+  repositoryPath?: string;
+  needsAttention?: boolean;
+  wip?: number;
+  ahead?: number;
+  behind?: number;
+  updatedAt?: string;
+  events?: Array<{ type: string; timestamp: unknown }>;
+}
+
+type AgentPanelApp = {
+  state: { repo?: { path?: string } | null; currentBranch?: string | null };
+  pathKey: (value: unknown) => string;
+  showToast: (message: unknown, type?: string) => void;
+  confirmDialog: (title: string, message: string, actionLabel: string, danger?: boolean) => Promise<unknown>;
+  dialogs: {
+    form: (options: Record<string, unknown>) => Promise<Record<string, unknown> | null>;
+  };
+  components: {
+    repoTabs?: { addRepo: (path: string) => Promise<unknown> };
+  } & Record<string, unknown>;
+};
+
+type TerminalLike = {
+  cols: number;
+  rows: number;
+  write: (data: string) => void;
+  open: (container: HTMLElement) => void;
+  loadAddon: (addon: unknown) => void;
+  onData: (callback: (data: string) => void) => void;
+  dispose: () => void;
+};
+
+declare const Terminal: new (options?: Record<string, unknown>) => TerminalLike;
+declare const FitAddon: { FitAddon: new () => { fit: () => void } };
+
+export class WorktreeAgentPanel {
+  app: AgentPanelApp;
+  repo: { path?: string } | null;
+  worktrees: WorktreeEntry[];
+  tasks: AgentTask[];
+  mode: string;
+  enabled: boolean;
+  selectedTaskId: string | null;
+  terminal: TerminalLike | null;
+  fitAddon: { fit: () => void } | null;
+  disposers: Array<(() => void) | undefined>;
+  resizeFrame: number;
+  pendingHeight: number;
+  pendingTerminalData: Map<string, { parts: string[]; size: number }>;
+  settingsChanged: ((event: CustomEvent) => void) | null;
+
+  constructor(app: AgentPanelApp) {
     this.app = app;
     this.repo = null;
     this.worktrees = [];
@@ -15,41 +78,42 @@ class WorktreeAgentPanel {
     this.resizeFrame = 0;
     this.pendingHeight = 0;
     this.pendingTerminalData = new Map();
+    this.settingsChanged = null;
   }
 
-  mount() {
-    document.querySelectorAll('[data-sidebar-mode]').forEach(button => {
+  mount(): void {
+    document.querySelectorAll<HTMLElement>('[data-sidebar-mode]').forEach(button => {
       button.onclick = () => this.setMode(button.dataset.sidebarMode);
     });
     document.getElementById('btn-new-agent-session').onclick = () => this.openNewSession();
     document.getElementById('agent-status-filter').onchange = () => this.renderAgents();
     document.getElementById('agent-provider-filter').onchange = () => this.renderAgents();
-    document.querySelectorAll('[data-agent-drawer-tab]').forEach(button => {
+    document.querySelectorAll<HTMLElement>('[data-agent-drawer-tab]').forEach(button => {
       button.onclick = () => this.setDrawerTab(button.dataset.agentDrawerTab);
     });
     document.getElementById('btn-close-agent-drawer').onclick = () => this.closeDrawer();
     document.getElementById('btn-stop-agent').onclick = () => this.stopSelectedTask();
     this.bindDrawerResize();
     if (window.gitTree.onAgentTaskChanged) {
-      this.disposers.push(window.gitTree.onAgentTaskChanged(task => this.onTaskChanged(task)));
+      this.disposers.push(window.gitTree.onAgentTaskChanged((task: AgentTask) => this.onTaskChanged(task)));
       this.disposers.push(window.gitTree.onAgentTerminalData(payload => this.onTerminalData(payload)));
       this.disposers.push(window.gitTree.onAgentQueueChanged(() => this.renderAgents()));
     }
     this.settingsChanged = event => this.applyEnabledState(event.detail?.agentsEnabled !== false);
-    window.addEventListener('gittree:agent-settings-changed', this.settingsChanged);
-    this.disposers.push(() => window.removeEventListener('gittree:agent-settings-changed', this.settingsChanged));
+    window.addEventListener('gittree:agent-settings-changed', this.settingsChanged as EventListener);
+    this.disposers.push(() => window.removeEventListener('gittree:agent-settings-changed', this.settingsChanged as EventListener));
     this.syncEnabledState();
     const savedHeight = Number(localStorage.getItem('gittree.agentDrawer.height'));
     if (savedHeight >= 180) document.getElementById('agent-drawer').style.height = `${savedHeight}px`;
   }
 
-  async load(repo) {
+  async load(repo: { path?: string }): Promise<void> {
     this.repo = repo;
     if (!repo) return;
     const [worktrees, tasks] = await Promise.all([
       window.gitTree.getWorktrees(repo.path),
       window.gitTree.listAgentTasks(repo.path)
-    ]);
+    ]) as [WorktreeEntry[] | undefined, AgentTask[] | undefined];
     if (!this.repo || this.app.pathKey(this.repo.path) !== this.app.pathKey(repo.path)) return;
     this.worktrees = Array.isArray(worktrees) ? worktrees : [];
     this.tasks = Array.isArray(tasks) ? tasks : [];
@@ -61,10 +125,10 @@ class WorktreeAgentPanel {
     }
   }
 
-  setMode(mode) {
+  setMode(mode: string): void {
     this.mode = mode === 'agents' && this.enabled ? 'agents' : 'repository';
     const agents = this.mode === 'agents';
-    document.querySelectorAll('[data-sidebar-mode]').forEach(button => {
+    document.querySelectorAll<HTMLElement>('[data-sidebar-mode]').forEach(button => {
       const active = button.dataset.sidebarMode === this.mode;
       button.classList.toggle('active', active);
       button.setAttribute('aria-selected', String(active));
@@ -77,12 +141,12 @@ class WorktreeAgentPanel {
     if (agents) this.renderAgents();
   }
 
-  async syncEnabledState() {
-    const settings = await window.gitTree.getAgentSettings();
+  async syncEnabledState(): Promise<void> {
+    const settings = await window.gitTree.getAgentSettings() as { error?: string; agentsEnabled?: boolean };
     if (!settings?.error) this.applyEnabledState(settings?.agentsEnabled !== false);
   }
 
-  applyEnabledState(enabled) {
+  applyEnabledState(enabled: boolean): void {
     this.enabled = Boolean(enabled);
     const modeSwitch = document.getElementById('sidebar-mode-switch');
     modeSwitch?.classList.toggle('is-hidden', !this.enabled);
@@ -99,14 +163,14 @@ class WorktreeAgentPanel {
     this.renderAgents();
   }
 
-  associatedTask(worktreePath) {
+  associatedTask(worktreePath: string): AgentTask | undefined {
     return this.tasks.find(task => (
       this.app.pathKey(task.worktreePath) === this.app.pathKey(worktreePath) &&
       ['queued', 'preparing', 'running', 'stopping'].includes(task.status)
     )) || this.tasks.find(task => this.app.pathKey(task.worktreePath) === this.app.pathKey(worktreePath));
   }
 
-  renderWorktrees() {
+  renderWorktrees(): void {
     const container = document.getElementById('worktree-list');
     document.getElementById('worktree-count').textContent = String(this.worktrees.length);
     if (!this.worktrees.length) {
@@ -135,16 +199,16 @@ class WorktreeAgentPanel {
         </div>
       </div>`;
     }).join('');
-    container.querySelectorAll('.worktree-row').forEach(row => this.bindWorktreeRow(row));
+    container.querySelectorAll<HTMLElement>('.worktree-row').forEach(row => this.bindWorktreeRow(row));
   }
 
-  bindWorktreeRow(row) {
+  bindWorktreeRow(row: HTMLElement): void {
     const worktree = this.worktrees.find(item => item.path === row.dataset.worktreePath);
-    row.querySelector('[data-worktree-menu]').onclick = event => {
+    row.querySelector<HTMLElement>('[data-worktree-menu]').onclick = event => {
       event.stopPropagation();
       row.querySelector('.worktree-actions').classList.toggle('is-hidden');
     };
-    row.querySelectorAll('[data-action]').forEach(button => {
+    row.querySelectorAll<HTMLElement>('[data-action]').forEach(button => {
       button.onclick = async event => {
         event.stopPropagation();
         row.querySelector('.worktree-actions').classList.add('is-hidden');
@@ -153,20 +217,20 @@ class WorktreeAgentPanel {
     });
   }
 
-  async runWorktreeAction(action, worktree) {
+  async runWorktreeAction(action: string, worktree: WorktreeEntry | undefined): Promise<void> {
     if (!this.repo || !worktree) return;
     if (action === 'agent') return this.openNewSession(worktree);
-    if (action === 'terminal') return window.gitTree.openTerminal(worktree.path);
+    if (action === 'terminal') return window.gitTree.openTerminal(worktree.path) as Promise<void>;
     if (action === 'open') {
-      const result = await window.gitTree.openWorktree(this.repo.path, worktree.path);
+      const result = await window.gitTree.openWorktree(this.repo.path, worktree.path) as { error?: string };
       if (result?.error) return this.app.showToast(result.error, 'error');
       await this.app.components.repoTabs.addRepo(worktree.path);
       return;
     }
     if (action === 'lock' || action === 'unlock') {
-      const result = action === 'lock'
+      const result = (action === 'lock'
         ? await window.gitTree.lockWorktree(this.repo.path, worktree.path, 'Locked in GitTree')
-        : await window.gitTree.unlockWorktree(this.repo.path, worktree.path);
+        : await window.gitTree.unlockWorktree(this.repo.path, worktree.path)) as { error?: string };
       if (result?.error) this.app.showToast(result.error, 'error');
       else await this.load(this.repo);
       return;
@@ -177,17 +241,17 @@ class WorktreeAgentPanel {
         t('agents.remove'), true
       );
       if (!confirmed) return;
-      const result = await window.gitTree.removeWorktree(this.repo.path, worktree.path);
+      const result = await window.gitTree.removeWorktree(this.repo.path, worktree.path) as { error?: string };
       if (result?.error) this.app.showToast(result.error, 'error');
       else await this.load(this.repo);
     }
   }
 
-  renderAgents() {
+  renderAgents(): void {
     const container = document.getElementById('agent-card-list');
     if (!container) return;
-    const statusFilter = document.getElementById('agent-status-filter')?.value || '';
-    const providerFilter = document.getElementById('agent-provider-filter')?.value || '';
+    const statusFilter = (document.getElementById('agent-status-filter') as HTMLSelectElement | null)?.value || '';
+    const providerFilter = (document.getElementById('agent-provider-filter') as HTMLSelectElement | null)?.value || '';
     const cards = this.worktrees.map(worktree => ({ worktree, task: this.associatedTask(worktree.path) }))
       .filter(({ task }) => !providerFilter || task?.adapterId === providerFilter)
       .filter(({ task }) => {
@@ -222,23 +286,23 @@ class WorktreeAgentPanel {
         </div>` : this.enabled ? `<button class="btn btn-small" type="button" data-task-action="start">${this.esc(t('agents.startAgent'))}</button>` : ''}
       </article>`;
     }).join('');
-    container.querySelectorAll('.agent-card').forEach(card => this.bindAgentCard(card));
+    container.querySelectorAll<HTMLElement>('.agent-card').forEach(card => this.bindAgentCard(card));
   }
 
-  bindAgentCard(card) {
+  bindAgentCard(card: HTMLElement): void {
     const open = async () => {
       const task = this.tasks.find(item => item.id === card.dataset.taskId);
       const worktree = this.worktrees.find(item => item.path === card.dataset.worktreePath);
       if (!task) return this.openNewSession(worktree);
       await this.activateTask(task);
     };
-    card.onclick = event => { if (!event.target.closest('button')) open(); };
+    card.onclick = event => { if (!(event.target as HTMLElement).closest('button')) open(); };
     card.onkeydown = event => {
-      if ((event.key === 'Enter' || event.key === ' ') && !event.target.closest('button')) {
+      if ((event.key === 'Enter' || event.key === ' ') && !(event.target as HTMLElement).closest('button')) {
         event.preventDefault(); open();
       }
     };
-    card.querySelectorAll('[data-task-action]').forEach(button => {
+    card.querySelectorAll<HTMLElement>('[data-task-action]').forEach(button => {
       button.onclick = async event => {
         event.stopPropagation();
         const action = button.dataset.taskAction;
@@ -248,21 +312,21 @@ class WorktreeAgentPanel {
         } else if (action === 'stop') {
           await window.gitTree.stopAgentTask(card.dataset.taskId);
         } else if (action === 'resume') {
-          const result = await window.gitTree.resumeAgentTask(card.dataset.taskId);
+          const result = await window.gitTree.resumeAgentTask(card.dataset.taskId) as { error?: string };
           if (result?.error) this.app.showToast(result.error, 'error');
         }
       };
     });
   }
 
-  async openNewSession(worktree = null, prefill = {}) {
+  async openNewSession(worktree: WorktreeEntry | null = null, prefill: Record<string, unknown> = {}): Promise<void> {
     if (!this.repo) return;
     if (!this.enabled) return this.app.showToast(t('agents.featureDisabled'), 'error');
     if (!worktree) {
-      const settings = await window.gitTree.getAgentSettings();
+      const settings = await window.gitTree.getAgentSettings() as { error?: string; worktreeRoot?: string };
       if (settings?.error) return this.app.showToast(settings.error, 'error');
       if (!settings.worktreeRoot) {
-        const selected = await window.gitTree.chooseAgentWorktreeRoot();
+        const selected = await window.gitTree.chooseAgentWorktreeRoot() as { error?: string };
         if (!selected || selected.error) {
           if (selected?.error) this.app.showToast(selected.error, 'error');
           return;
@@ -305,17 +369,17 @@ class WorktreeAgentPanel {
     }
     delete form.customPath;
     const result = worktree
-      ? await window.gitTree.createAgentTaskForWorktree(this.repo.path, worktree.path, form)
-      : await window.gitTree.createAgentTask(this.repo.path, form);
+      ? await window.gitTree.createAgentTaskForWorktree(this.repo.path, worktree.path, form) as AgentTask & { error?: string }
+      : await window.gitTree.createAgentTask(this.repo.path, form) as AgentTask & { error?: string };
     if (result?.error) return this.app.showToast(result.error, 'error');
     this.tasks = this.tasks.filter(task => task.id !== result.id).concat(result);
     await this.load(this.repo);
     await this.activateTask(this.tasks.find(task => task.id === result.id) || result);
   }
 
-  async activateTask(task) {
+  async activateTask(task: AgentTask): Promise<void> {
     if (!this.enabled) return this.app.showToast(t('agents.featureDisabled'), 'error');
-    const result = await window.gitTree.openWorktree(task.repositoryPath, task.worktreePath);
+    const result = await window.gitTree.openWorktree(task.repositoryPath, task.worktreePath) as { error?: string };
     if (result?.error) return this.app.showToast(result.error, 'error');
     await this.app.components.repoTabs.addRepo(task.worktreePath);
     this.selectedTaskId = task.id;
@@ -325,10 +389,10 @@ class WorktreeAgentPanel {
     if (task.needsAttention) window.gitTree.acknowledgeAgentAttention(task.id);
   }
 
-  renderDrawer(task) {
+  renderDrawer(task: AgentTask): void {
     document.getElementById('agent-drawer-name').textContent = task.title;
     document.getElementById('agent-drawer-meta').textContent = `${task.adapterId} · ${task.branch || this.basename(task.worktreePath)}`;
-    document.getElementById('btn-stop-agent').disabled = !['queued', 'preparing', 'running', 'stopping'].includes(task.status);
+    (document.getElementById('btn-stop-agent') as HTMLButtonElement).disabled = !['queued', 'preparing', 'running', 'stopping'].includes(task.status);
     const activity = document.getElementById('agent-activity');
     activity.innerHTML = (task.events || []).slice().reverse().map(event => `<div class="agent-event">
       <span class="agent-event-icon"><i class="ph ph-${this.eventIcon(event.type)}"></i></span>
@@ -336,9 +400,9 @@ class WorktreeAgentPanel {
     </div>`).join('') || `<div class="agent-empty">${this.esc(t('agents.noActivity'))}</div>`;
   }
 
-  setDrawerTab(tab) {
+  setDrawerTab(tab: string): void {
     const terminal = tab === 'terminal';
-    document.querySelectorAll('[data-agent-drawer-tab]').forEach(button => {
+    document.querySelectorAll<HTMLElement>('[data-agent-drawer-tab]').forEach(button => {
       const active = button.dataset.agentDrawerTab === tab;
       button.classList.toggle('active', active);
       button.setAttribute('aria-selected', String(active));
@@ -348,7 +412,7 @@ class WorktreeAgentPanel {
     if (terminal) this.ensureTerminal();
   }
 
-  ensureTerminal() {
+  ensureTerminal(): void {
     if (this.terminal || typeof Terminal === 'undefined') return;
     this.terminal = new Terminal({
       scrollback: 1000,
@@ -372,7 +436,7 @@ class WorktreeAgentPanel {
     requestAnimationFrame(() => this.fitTerminal());
   }
 
-  fitTerminal() {
+  fitTerminal(): void {
     if (!this.terminal) return;
     try {
       this.fitAddon?.fit();
@@ -382,7 +446,7 @@ class WorktreeAgentPanel {
     } catch { /* terminal may be attached to an inactive task */ }
   }
 
-  onTerminalData(payload) {
+  onTerminalData(payload: { taskId?: string; data?: unknown }): void {
     if (!payload?.taskId) return;
     const data = String(payload.data || '');
     if (payload.taskId === this.selectedTaskId && this.terminal) {
@@ -398,7 +462,7 @@ class WorktreeAgentPanel {
     this.pendingTerminalData.set(payload.taskId, pending);
   }
 
-  flushTerminalData() {
+  flushTerminalData(): void {
     if (!this.terminal || !this.selectedTaskId) return;
     const pending = this.pendingTerminalData.get(this.selectedTaskId);
     if (!pending?.parts.length) return;
@@ -406,7 +470,7 @@ class WorktreeAgentPanel {
     this.terminal.write(pending.parts.join(''));
   }
 
-  onTaskChanged(task) {
+  onTaskChanged(task: AgentTask): void {
     const index = this.tasks.findIndex(item => item.id === task.id);
     if (index >= 0) this.tasks.splice(index, 1, task);
     else if (this.repo && this.app.pathKey(task.repositoryPath) === this.app.pathKey(this.repo.path)) this.tasks.push(task);
@@ -415,22 +479,22 @@ class WorktreeAgentPanel {
     if (task.id === this.selectedTaskId) this.renderDrawer(task);
   }
 
-  async stopSelectedTask() {
+  async stopSelectedTask(): Promise<void> {
     if (!this.selectedTaskId) return;
-    const result = await window.gitTree.stopAgentTask(this.selectedTaskId);
+    const result = await window.gitTree.stopAgentTask(this.selectedTaskId) as { error?: string };
     if (result?.error) this.app.showToast(result.error, 'error');
   }
 
-  closeDrawer() {
+  closeDrawer(): void {
     document.getElementById('agent-drawer').classList.add('is-hidden');
   }
 
-  bindDrawerResize() {
+  bindDrawerResize(): void {
     const handle = document.getElementById('agent-drawer-resize');
     const drawer = document.getElementById('agent-drawer');
     let startY = 0;
     let startHeight = 0;
-    const move = event => {
+    const move = (event: PointerEvent) => {
       const mainHeight = drawer.parentElement.clientHeight;
       this.pendingHeight = Math.max(180, Math.min(mainHeight - 220, startHeight + startY - event.clientY));
       if (this.resizeFrame) return;
@@ -464,21 +528,21 @@ class WorktreeAgentPanel {
     };
   }
 
-  eventIcon(type) {
-    return ({ queued: 'queue', preparing: 'package', running: 'play', attention: 'bell', gitChanged: 'git-diff', completed: 'check-circle', failed: 'warning-circle', stopping: 'stop', stopped: 'stop-circle', interrupted: 'plugs', archived: 'archive' })[type] || 'circle';
+  eventIcon(type: string): string {
+    return ({ queued: 'queue', preparing: 'package', running: 'play', attention: 'bell', gitChanged: 'git-diff', completed: 'check-circle', failed: 'warning-circle', stopping: 'stop', stopped: 'stop-circle', interrupted: 'plugs', archived: 'archive' } as Record<string, string>)[type] || 'circle';
   }
 
-  formatTime(value) {
-    try { return new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)); } catch { return ''; }
+  formatTime(value: unknown): string {
+    try { return new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value as string)); } catch { return ''; }
   }
 
-  basename(value) {
-    return String(value || '').replace(/[\\/]+$/, '').split(/[\\/]/).pop() || value;
+  basename(value: unknown): string {
+    return String(value || '').replace(/[\\/]+$/, '').split(/[\\/]/).pop() || (value as string);
   }
 
-  esc(value) { return HtmlEncoder.encode(String(value ?? '')); }
+  esc(value: unknown): string { return HtmlEncoder.encode(String(value ?? '')); }
 
-  destroy() {
+  destroy(): void {
     this.disposers.forEach(dispose => dispose?.());
     this.disposers = [];
     this.pendingTerminalData.clear();
@@ -487,4 +551,11 @@ class WorktreeAgentPanel {
   }
 }
 
-if (typeof module !== 'undefined') module.exports = WorktreeAgentPanel;
+if (typeof window !== 'undefined') {
+  (window as unknown as { WorktreeAgentPanel: typeof WorktreeAgentPanel }).WorktreeAgentPanel = WorktreeAgentPanel;
+}
+
+declare const module: { exports: unknown } | undefined;
+if (typeof module !== 'undefined' && (module as { exports?: unknown }).exports) {
+  (module as { exports: unknown }).exports = WorktreeAgentPanel;
+}

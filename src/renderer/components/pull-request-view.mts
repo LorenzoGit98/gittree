@@ -1,5 +1,76 @@
-class PullRequestView {
-  constructor(root, app) {
+interface PRSummary {
+  provider: string;
+  id: string;
+  number: number | string;
+  title?: string;
+  source?: string;
+  target?: string;
+  state?: string;
+  draft?: boolean;
+  mergeability?: string;
+  ciStatus?: string;
+  reviewStatus?: string;
+  author?: { login?: string };
+}
+
+interface PRFileEntry {
+  path: string;
+  patch?: string;
+}
+
+interface PRThread {
+  id: string;
+  commentId?: string;
+  resolved?: boolean;
+  author?: string;
+  body?: string;
+  notes?: Array<{ author: string; body: string; resolvable?: boolean; id?: string }>;
+}
+
+interface ReviewDraft {
+  headSha?: string;
+  body?: string;
+  event?: string;
+  inlineComments: Array<{ path: string; line: number; side: string; body: string }>;
+  replies: Array<{ threadId: string; commentId?: string | null; body: string }>;
+  stale?: boolean;
+}
+
+type PullRequestApp = {
+  showToast: (message: unknown, type?: string) => void;
+  refresh: (options?: Record<string, unknown>) => Promise<void>;
+  dialogs: {
+    form: (options: Record<string, unknown>) => Promise<unknown>;
+    confirm: (options: Record<string, unknown>) => Promise<unknown>;
+  };
+};
+
+export class PullRequestView {
+  root: HTMLElement;
+  app: PullRequestApp;
+  repoPath: string | null;
+  provider: string;
+  filter: string;
+  search: string;
+  items: PRSummary[];
+  hashes: Set<string>;
+  page: number;
+  hasMore: boolean;
+  loading: boolean;
+  active: boolean;
+  selected: PRSummary | null;
+  detail: Record<string, any> | null;
+  draft: ReviewDraft | null;
+  rowHeight: number;
+  overscan: number;
+  generation: number;
+  smartCreating: boolean;
+  renderedRange: [number, number] | null;
+  availableProviders: Set<string> | null;
+  status: { error?: string; connected?: boolean; configured?: boolean; warning?: string; user?: { login?: string } } | null;
+  elements: Record<string, HTMLElement>;
+
+  constructor(root: HTMLElement, app: PullRequestApp) {
     this.root = root;
     this.app = app;
     this.repoPath = null;
@@ -19,6 +90,9 @@ class PullRequestView {
     this.overscan = 10;
     this.generation = 0;
     this.smartCreating = false;
+    this.renderedRange = null;
+    this.availableProviders = null;
+    this.status = null;
     this.elements = {
       list: document.getElementById('pr-list'),
       notice: document.getElementById('pr-notice'),
@@ -30,11 +104,11 @@ class PullRequestView {
     this.bind();
   }
 
-  bind() {
-    document.querySelectorAll('[data-pr-provider]').forEach(button => {
+  bind(): void {
+    document.querySelectorAll<HTMLElement>('[data-pr-provider]').forEach(button => {
       button.onclick = () => this.setProvider(button.dataset.prProvider);
     });
-    document.querySelectorAll('[data-pr-filter]').forEach(button => {
+    document.querySelectorAll<HTMLElement>('[data-pr-filter]').forEach(button => {
       button.onclick = () => {
         this.filter = button.dataset.prFilter;
         document.querySelectorAll('[data-pr-filter]').forEach(item => {
@@ -44,16 +118,16 @@ class PullRequestView {
       };
     });
     let searchTimer = 0;
-    this.elements.search.oninput = () => {
+    (this.elements.search as HTMLInputElement).oninput = () => {
       clearTimeout(searchTimer);
       searchTimer = setTimeout(() => {
-        this.search = this.elements.search.value.trim();
+        this.search = (this.elements.search as HTMLInputElement).value.trim();
         this.reload();
-      }, 250);
+      }, 250) as unknown as number;
     };
-    this.elements.auth.onclick = () => this.toggleAuthentication();
-    this.elements.create.onclick = () => this.openCreateDialog();
-    this.elements.createAi.onclick = () => this.openSmartCreate();
+    (this.elements.auth as HTMLButtonElement).onclick = () => this.toggleAuthentication();
+    (this.elements.create as HTMLButtonElement).onclick = () => this.openCreateDialog();
+    (this.elements.createAi as HTMLButtonElement).onclick = () => this.openSmartCreate();
     let frame = 0;
     this.elements.list.onscroll = () => {
       if (frame) return;
@@ -67,7 +141,7 @@ class PullRequestView {
         if (this.elements.list.scrollTop / available >= 0.85) this.loadNextPage();
       });
     };
-    window.gitTree.onProviderState(state => {
+    window.gitTree.onProviderState((state: { provider: string; phase: string; error?: string }) => {
       if (state.provider !== this.provider) return;
       if (state.phase === 'connected') {
         this.showNotice(t('pullRequests.connected'), '');
@@ -78,11 +152,14 @@ class PullRequestView {
     });
   }
 
-  async load(repoPath, loadSession = null) {
+  async load(repoPath: string, loadSession: { branchMetadata(): Promise<unknown> } | null = null): Promise<void> {
     this.repoPath = repoPath;
     const metadata = await (
       loadSession?.branchMetadata() || window.gitTree.getBranchMetadata(repoPath)
-    );
+    ) as {
+      error?: string;
+      remotes?: Array<{ provider?: { host?: string; provider?: string } }>;
+    } | undefined;
     this.availableProviders = new Set(
       (metadata?.remotes || [])
         .map(remote => remote.provider)
@@ -101,7 +178,7 @@ class PullRequestView {
     }
   }
 
-  setActive(active) {
+  setActive(active: boolean): void {
     this.active = active;
     this.root.classList.toggle('is-hidden', !active);
     if (active && this.repoPath) {
@@ -109,7 +186,7 @@ class PullRequestView {
     }
   }
 
-  async setProvider(provider) {
+  async setProvider(provider: string): Promise<void> {
     if (!['github', 'gitlab', 'azure'].includes(provider)) return;
     this.provider = provider;
     localStorage.setItem('gittree.pr.provider', provider);
@@ -118,8 +195,8 @@ class PullRequestView {
     await this.reload();
   }
 
-  syncProviderControls() {
-    document.querySelectorAll('[data-pr-provider]').forEach(button => {
+  syncProviderControls(): void {
+    document.querySelectorAll<HTMLButtonElement>('[data-pr-provider]').forEach(button => {
       const active = button.dataset.prProvider === this.provider;
       button.classList.toggle('active', active);
       button.setAttribute('aria-selected', String(active));
@@ -129,16 +206,16 @@ class PullRequestView {
     });
   }
 
-  async refreshStatus() {
-    this.status = await window.gitTree.getProviderStatus(this.provider);
+  async refreshStatus(): Promise<void> {
+    this.status = await window.gitTree.getProviderStatus(this.provider) as typeof this.status;
     if (this.status?.error) {
       this.showNotice(this.status.error, 'warning');
-      this.elements.create.disabled = true;
-      this.elements.createAi.disabled = true;
+      (this.elements.create as HTMLButtonElement).disabled = true;
+      (this.elements.createAi as HTMLButtonElement).disabled = true;
       return;
     }
-    const label = this.elements.auth.querySelector('span');
-    const icon = this.elements.auth.querySelector('i');
+    const label = this.elements.auth.querySelector('span') as HTMLElement;
+    const icon = this.elements.auth.querySelector('i') as HTMLElement;
     if (this.status.connected) {
       label.textContent = this.status.user?.login || t('pullRequests.disconnect');
       icon.className = 'ph ph-user-circle-check';
@@ -148,11 +225,11 @@ class PullRequestView {
       icon.className = 'ph ph-plugs-connected';
       this.elements.auth.title = '';
     }
-    this.elements.create.disabled = !(
+    (this.elements.create as HTMLButtonElement).disabled = !(
       this.status.connected
       && this.availableProviders?.has(this.provider)
     );
-    this.elements.createAi.disabled = this.smartCreating || this.elements.create.disabled;
+    (this.elements.createAi as HTMLButtonElement).disabled = this.smartCreating || (this.elements.create as HTMLButtonElement).disabled;
     if (this.status.warning) this.showNotice(this.status.warning, 'warning');
     else if (!this.availableProviders?.has(this.provider)) {
       this.showNotice(t('pullRequests.noRemote', { provider: this.provider }), 'warning');
@@ -163,22 +240,22 @@ class PullRequestView {
     }
   }
 
-  async toggleAuthentication() {
+  async toggleAuthentication(): Promise<void> {
     if (this.status?.connected) {
       if (!await this.confirm(
         t('pullRequests.disconnectTitle'),
         t('pullRequests.disconnectConfirm')
       )) return;
-      const result = await window.gitTree.logoutProvider(this.provider);
+      const result = await window.gitTree.logoutProvider(this.provider) as { error?: string };
       if (result?.error) this.app.showToast(result.error, 'error');
       await this.refreshStatus();
       await this.reload();
       return;
     }
     if (this.provider === 'azure') {
-      const token = await this.promptPat();
+      const token = await this.promptPat() as string | null;
       if (!token) return;
-      const result = await window.gitTree.setPat(this.provider, token, this.repoPath);
+      const result = await window.gitTree.setPat(this.provider, token, this.repoPath) as { error?: string };
       if (result?.error) {
         this.showNotice(result.error, 'warning');
         return;
@@ -187,7 +264,7 @@ class PullRequestView {
       await this.reload();
       return;
     }
-    const result = await window.gitTree.loginProvider(this.provider);
+    const result = await window.gitTree.loginProvider(this.provider) as { error?: string; userCode?: string };
     if (result?.error) {
       this.showNotice(result.error, 'warning');
       return;
@@ -198,7 +275,7 @@ class PullRequestView {
     );
   }
 
-  async reload() {
+  async reload(): Promise<void> {
     this.generation += 1;
     this.loading = false;
     this.items = [];
@@ -217,7 +294,7 @@ class PullRequestView {
     await this.loadNextPage(true);
   }
 
-  async loadNextPage(reset = false) {
+  async loadNextPage(reset = false): Promise<void> {
     if ((!reset && this.loading) || (!reset && !this.hasMore)) return;
     this.loading = true;
     this.renderViewport(true);
@@ -228,7 +305,7 @@ class PullRequestView {
         this.repoPath,
         this.provider,
         { filter: this.filter, search: this.search, page }
-      );
+      ) as { error?: string; items?: PRSummary[]; hasMore?: boolean };
       if (generation !== this.generation) return;
       if (result?.error) throw new Error(result.error);
       for (const item of result.items || []) {
@@ -241,7 +318,7 @@ class PullRequestView {
       this.hasMore = Boolean(result.hasMore);
       this.renderViewport(true);
     } catch (error) {
-      if (generation === this.generation) this.showNotice(error.message, 'warning');
+      if (generation === this.generation) this.showNotice((error as Error).message, 'warning');
     } finally {
       if (generation === this.generation) {
         this.loading = false;
@@ -250,7 +327,7 @@ class PullRequestView {
     }
   }
 
-  renderViewport(force = false) {
+  renderViewport(force = false): void {
     const list = this.elements.list;
     if (!this.items.length) {
       list.innerHTML = '';
@@ -268,7 +345,7 @@ class PullRequestView {
       list.appendChild(empty);
       return;
     }
-    let spacer = list.querySelector('.pr-list-spacer');
+    let spacer = list.querySelector<HTMLElement>('.pr-list-spacer');
     if (!spacer) {
       list.innerHTML = '';
       spacer = document.createElement('div');
@@ -294,7 +371,7 @@ class PullRequestView {
     spacer.replaceChildren(fragment);
   }
 
-  createRow(item, index) {
+  createRow(item: PRSummary, index: number): HTMLElement {
     const row = document.createElement('button');
     row.type = 'button';
     row.className = 'pr-row';
@@ -328,7 +405,7 @@ class PullRequestView {
     return row;
   }
 
-  statusKey(item) {
+  statusKey(item: Partial<PRSummary>): string {
     const state = String(item?.state || '').toLowerCase();
     const mergeability = String(item?.mergeability || item?.ciStatus || '').toLowerCase();
     if (item?.draft) return 'draft';
@@ -340,7 +417,7 @@ class PullRequestView {
     return 'open';
   }
 
-  statusLabel(key) {
+  statusLabel(key: string): string {
     if (key === 'draft') return t('pullRequests.draft');
     if (key === 'merged') return t('pullRequests.statusMerged');
     if (key === 'closed') return t('pullRequests.statusClosed');
@@ -349,7 +426,7 @@ class PullRequestView {
     return t('pullRequests.statusOpen');
   }
 
-  statusBadge(item, mergeability) {
+  statusBadge(item: Partial<PRSummary>, mergeability?: string): HTMLElement {
     const provider = item?.provider || this.provider || 'github';
     const key = mergeability?.toLowerCase?.().includes('conflict')
       ? 'conflict'
@@ -361,14 +438,14 @@ class PullRequestView {
     );
   }
 
-  badge(text, className) {
+  badge(text: string, className: string): HTMLElement {
     const badge = document.createElement('span');
     badge.className = className;
     badge.textContent = text;
     return badge;
   }
 
-  async select(item) {
+  async select(item: PRSummary): Promise<void> {
     this.selected = item;
     this.renderViewport(true);
     const title = document.getElementById('detail-title');
@@ -381,10 +458,10 @@ class PullRequestView {
         this.repoPath,
         this.provider,
         item.number
-      );
+      ) as Record<string, unknown>;
       if (this.selected?.id !== item.id) return;
       if (detail?.error) {
-        body.textContent = detail.error;
+        body.textContent = detail.error as string;
         return;
       }
       this.detail = {
@@ -395,8 +472,8 @@ class PullRequestView {
         threads: detail.threads || [],
         permissions: detail.permissions || {}
       };
-      this.draft = detail.reviewDraft || {
-        headSha: detail.headSha || '',
+      this.draft = (detail.reviewDraft as ReviewDraft | undefined) ?? {
+        headSha: (detail.headSha as string) || '',
         body: '',
         event: 'COMMENT',
         inlineComments: [],
@@ -406,11 +483,11 @@ class PullRequestView {
       this.renderDetail();
     } catch (error) {
       if (this.selected?.id !== item.id) return;
-      body.textContent = error.message || String(error);
+      body.textContent = (error as Error).message || String(error);
     }
   }
 
-  renderDetail() {
+  renderDetail(): void {
     const body = document.getElementById('detail-body');
     body.innerHTML = '';
     const wrapper = document.createElement('div');
@@ -440,7 +517,7 @@ class PullRequestView {
       checkout.className = 'btn btn-small';
       checkout.innerHTML = `<i class="ph ph-git-branch"></i>${this.esc(t('pullRequests.checkoutSource'))}`;
       checkout.onclick = () => this.checkoutSource().catch(error => {
-        this.app.showToast(error.message || String(error), 'error');
+        this.app.showToast((error as Error).message || String(error), 'error');
       });
       summary.appendChild(checkout);
     }
@@ -453,7 +530,7 @@ class PullRequestView {
     body.appendChild(wrapper);
   }
 
-  createStaleNotice() {
+  createStaleNotice(): HTMLElement {
     const notice = document.createElement('div');
     notice.className = 'pr-stale';
     const text = document.createElement('p');
@@ -472,7 +549,7 @@ class PullRequestView {
     return notice;
   }
 
-  createFileSection() {
+  createFileSection(): HTMLElement {
     const section = document.createElement('section');
     section.className = 'pr-detail-section';
     const heading = document.createElement('h3');
@@ -482,7 +559,7 @@ class PullRequestView {
     section.appendChild(heading);
     const files = document.createElement('div');
     files.className = 'pr-detail-facts';
-    (this.detail.files || []).slice(0, 100).forEach((file, index) => {
+    (this.detail.files || []).slice(0, 100).forEach((file: PRFileEntry, index: number) => {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'chip';
@@ -502,7 +579,7 @@ class PullRequestView {
     return section;
   }
 
-  renderPatch(file, container) {
+  renderPatch(file: PRFileEntry, container: HTMLElement): void {
     container.innerHTML = '';
     const card = document.createElement('div');
     card.className = 'pr-file';
@@ -569,7 +646,7 @@ class PullRequestView {
     paint();
   }
 
-  parsePatchLines(patch) {
+  parsePatchLines(patch: string): Array<{ content: string; type: string; oldLine: number | null; newLine: number | null }> {
     return DiffParser.parseUnified(patch).map(line => ({
       ...line,
       type: ['file', 'header', 'no-newline'].includes(line.kind)
@@ -578,8 +655,8 @@ class PullRequestView {
     }));
   }
 
-  async addInlineComment(filePath, line) {
-    const body = await this.commentDialog(filePath, line);
+  async addInlineComment(filePath: string, line: number): Promise<void> {
+    const body = await this.commentDialog(filePath, line) as string;
     if (!body) return;
     this.draft.inlineComments.push({
       path: filePath,
@@ -591,7 +668,7 @@ class PullRequestView {
     this.app.showToast(t('pullRequests.draftSaved'), 'success');
   }
 
-  createThreadSection() {
+  createThreadSection(): HTMLElement {
     const section = document.createElement('section');
     section.className = 'pr-detail-section';
     const heading = document.createElement('h3');
@@ -599,7 +676,7 @@ class PullRequestView {
       count: this.detail.threads?.length || 0
     });
     section.appendChild(heading);
-    (this.detail.threads || []).slice(0, 50).forEach(thread => {
+    (this.detail.threads || []).slice(0, 50).forEach((thread: PRThread) => {
       const item = document.createElement('article');
       item.className = 'pr-thread';
       const content = document.createElement('p');
@@ -635,7 +712,7 @@ class PullRequestView {
     return section;
   }
 
-  createReviewComposer() {
+  createReviewComposer(): HTMLElement {
     const section = document.createElement('section');
     section.className = 'pr-review-composer';
     const heading = document.createElement('h3');
@@ -666,7 +743,7 @@ class PullRequestView {
       this.draft.body = body.value;
       this.draft.event = event.value;
       clearTimeout(timer);
-      timer = setTimeout(() => this.saveDraft(), 400);
+      timer = setTimeout(() => this.saveDraft(), 400) as unknown as number;
     };
     body.oninput = persist;
     event.onchange = persist;
@@ -701,7 +778,7 @@ class PullRequestView {
     return section;
   }
 
-  async saveDraft() {
+  async saveDraft(): Promise<void> {
     if (!this.selected || !this.draft) return;
     if (!/^[a-f0-9]{7,64}$/i.test(this.draft.headSha || '')) return;
     const result = await window.gitTree.saveReviewDraft(
@@ -715,18 +792,18 @@ class PullRequestView {
         inlineComments: this.draft.inlineComments || [],
         replies: this.draft.replies || []
       }
-    );
+    ) as { error?: string };
     if (result?.error) this.app.showToast(result.error, 'error');
   }
 
-  async submitReview() {
+  async submitReview(): Promise<void> {
     if (this.draft.stale) return;
     const result = await window.gitTree.submitReview(
       this.repoPath,
       this.provider,
       this.selected.number,
       this.draft
-    );
+    ) as { error?: string };
     if (result?.error) {
       this.app.showToast(result.error, 'error');
       return;
@@ -735,8 +812,8 @@ class PullRequestView {
     await this.select(this.selected);
   }
 
-  async resolveThread(thread, resolved) {
-    let noteId = null;
+  async resolveThread(thread: PRThread, resolved: boolean): Promise<void> {
+    let noteId: string | undefined | null = null;
     if (thread.notes) {
       noteId = [...thread.notes].reverse().find(note => note.resolvable)?.id;
     }
@@ -746,7 +823,7 @@ class PullRequestView {
       this.selected.number,
       { id: thread.id, noteId },
       resolved
-    );
+    ) as { error?: string };
     if (result?.error) {
       this.app.showToast(result.error, 'error');
       return;
@@ -754,11 +831,11 @@ class PullRequestView {
     await this.select(this.selected);
   }
 
-  async replyThread(thread) {
+  async replyThread(thread: PRThread): Promise<void> {
     const body = await this.commentDialog(
       t('pullRequests.reply'),
       thread.id
-    );
+    ) as string;
     if (!body) return;
     this.draft.replies.push({
       threadId: thread.id,
@@ -769,7 +846,7 @@ class PullRequestView {
     this.app.showToast(t('pullRequests.draftSaved'), 'success');
   }
 
-  async checkoutSource() {
+  async checkoutSource(): Promise<void> {
     const request = {
       number: this.detail.summary.number,
       source: this.detail.summary.source,
@@ -781,7 +858,7 @@ class PullRequestView {
       this.provider,
       request,
       false
-    );
+    ) as { error?: string; allowed?: boolean; source?: string; localBranch?: string; reason?: string };
     if (preview?.error) {
       this.app.showToast(preview.error, 'error');
       return;
@@ -801,7 +878,7 @@ class PullRequestView {
       this.provider,
       request,
       true
-    );
+    ) as { error?: string };
     if (result?.error) {
       this.app.showToast(result.error, 'error');
       return;
@@ -809,7 +886,7 @@ class PullRequestView {
     await this.app.refresh({ silent: true });
   }
 
-  commentDialog(filePath, line) {
+  commentDialog(filePath: string, line: string | number): Promise<string> {
     return this.app.dialogs.form({
       title: t('pullRequests.inlineTitle'),
       fields: `<p>${this.esc(`${filePath}:${line}`)}</p>
@@ -819,10 +896,10 @@ class PullRequestView {
       extract: form => form.elements.body.value.trim(),
       cancelLabel: t('common.cancel'),
       actionLabel: t('pullRequests.saveDraft')
-    }).then(value => value ?? '');
+    }).then((value: unknown) => (value as string) ?? '');
   }
 
-  confirm(title, message) {
+  confirm(title: string, message: string): Promise<unknown> {
     return this.app.dialogs.confirm({
       title,
       message,
@@ -832,17 +909,17 @@ class PullRequestView {
     });
   }
 
-  showNotice(message, type) {
+  showNotice(message: string, type: string): void {
     this.elements.notice.textContent = message;
     this.elements.notice.className = `pr-notice${type ? ` ${type}` : ''}`;
   }
 
-  hideNotice() {
+  hideNotice(): void {
     this.elements.notice.className = 'pr-notice is-hidden';
     this.elements.notice.textContent = '';
   }
 
-  async promptPat() {
+  async promptPat(): Promise<unknown> {
     return this.app.dialogs.form({
       title: t('pullRequests.azurePatPrompt') || 'Azure DevOps PAT',
       fields: `<p>${this.esc(t('pullRequests.azurePatHint') || 'Create a PAT at https://dev.azure.com with Code (Read & Write) scope.')}</p>
@@ -855,8 +932,8 @@ class PullRequestView {
     });
   }
 
-  branchOptions(metadata) {
-    const names = new Set();
+  branchOptions(metadata: { branches?: Array<{ kind?: string; name?: string }> } | null | undefined): string[] {
+    const names = new Set<string>();
     for (const branch of metadata?.branches || []) {
       if (branch.kind === 'local' && branch.name) {
         names.add(branch.name);
@@ -871,8 +948,14 @@ class PullRequestView {
     return [...names].sort((a, b) => a.localeCompare(b));
   }
 
-  async loadCreateDefaults() {
-    const metadata = await window.gitTree.getBranchMetadata(this.repoPath);
+  async loadCreateDefaults(): Promise<{ metadata: Record<string, unknown>; branches: string[]; source: string; target: string; remoteName: string | null }> {
+    const metadata = await window.gitTree.getBranchMetadata(this.repoPath) as {
+      error?: string;
+      current?: string;
+      defaultBranch?: string;
+      branches?: Array<{ kind?: string; name?: string }>;
+      remotes?: Array<{ name?: string; provider?: { provider?: string } }>;
+    };
     if (metadata?.error) throw new Error(metadata.error);
     const branches = this.branchOptions(metadata);
     const source = (metadata.current && branches.includes(metadata.current)
@@ -884,10 +967,10 @@ class PullRequestView {
     const remoteName = (metadata.remotes || []).find(item => (
       item.provider?.provider === this.provider
     ))?.name || null;
-    return { metadata, branches, source, target, remoteName };
+    return { metadata: metadata as Record<string, unknown>, branches, source, target, remoteName };
   }
 
-  async openSmartCreate() {
+  async openSmartCreate(): Promise<void> {
     if (this.smartCreating || !this.repoPath) return;
     if (!this.status?.connected) {
       this.app.showToast(t('pullRequests.connect'), 'warning');
@@ -902,7 +985,7 @@ class PullRequestView {
         source: loaded.source,
         target: loaded.target,
         language: await this.aiLanguage()
-      });
+      }) as { error?: string; summary?: string; body?: string };
       if (result?.error) {
         this.app.showToast(result.error, 'error');
         return;
@@ -915,7 +998,7 @@ class PullRequestView {
         force: true
       };
     } catch (error) {
-      this.app.showToast(error?.message || t('common.error'), 'error');
+      this.app.showToast((error as Error)?.message || t('common.error'), 'error');
       return;
     } finally {
       this.smartCreating = false;
@@ -924,10 +1007,10 @@ class PullRequestView {
     await this.openCreateDialog(defaults);
   }
 
-  setSmartCreateBusy(busy) {
-    const button = this.elements.createAi;
-    const icon = button.querySelector('i');
-    const label = button.querySelector('span');
+  setSmartCreateBusy(busy: boolean): void {
+    const button = this.elements.createAi as HTMLButtonElement;
+    const icon = button.querySelector('i') as HTMLElement;
+    const label = button.querySelector('span') as HTMLElement;
     button.disabled = busy;
     if (busy) {
       icon.className = 'ph ph-circle-notch';
@@ -941,8 +1024,8 @@ class PullRequestView {
     );
   }
 
-  async openCreateDialog(defaults = {}) {
-    if (this.elements.create.disabled && !defaults.force) {
+  async openCreateDialog(defaults: Record<string, unknown> = {}): Promise<void> {
+    if ((this.elements.create as HTMLButtonElement).disabled && !defaults.force) {
       if (!this.status?.connected) {
         this.app.showToast(t('pullRequests.connect'), 'warning');
         return;
@@ -957,35 +1040,36 @@ class PullRequestView {
         <span>${this.esc(t('common.loading'))}</span>
       </div>`;
     overlay.classList.remove('is-hidden');
-    let values;
-    let remoteName;
+    let values: Record<string, unknown> | undefined;
+    let remoteName: string | null;
     try {
       const loaded = await this.loadCreateDefaults();
       const branches = loaded.branches;
-      const source = defaults.source && branches.includes(defaults.source)
-        ? defaults.source
+      const source = defaults.source && branches.includes(defaults.source as string)
+        ? defaults.source as string
         : loaded.source;
-      const target = defaults.target && branches.includes(defaults.target)
-        ? defaults.target
+      const target = defaults.target && branches.includes(defaults.target as string)
+        ? defaults.target as string
         : loaded.target;
       remoteName = loaded.remoteName;
       values = await this.createPullRequestDialog({
         source,
         target,
         branches,
-        title: defaults.title || '',
-        body: defaults.body || '',
+        title: (defaults.title as string) || '',
+        body: (defaults.body as string) || '',
         workItems: ''
       });
       if (!values) return;
       if (this.provider === 'azure') {
         this.azureCreatePrefill(source, target).then(prefill => {
-          const form = dialog.querySelector('.pr-create-form');
+          const form = dialog.querySelector('.pr-create-form') as HTMLFormElement | null;
           if (!form) return;
-          if (!form.elements.title.value) form.elements.title.value = prefill.title;
-          if (!form.elements.body.value) form.elements.body.value = prefill.body;
-          if (form.elements.workItems && !form.elements.workItems.value) {
-            form.elements.workItems.value = prefill.workItems;
+          const fields = form.elements as unknown as Record<string, HTMLInputElement | HTMLTextAreaElement>;
+          if (!fields.title.value) fields.title.value = String(prefill.title);
+          if (!fields.body.value) fields.body.value = String(prefill.body);
+          if (fields.workItems && !fields.workItems.value) {
+            fields.workItems.value = prefill.workItems;
           }
         }).catch(() => {});
       }
@@ -993,18 +1077,18 @@ class PullRequestView {
       dialog.classList.remove('pr-create-dialog');
       overlay.classList.add('is-hidden');
       dialog.innerHTML = '';
-      this.app.showToast(error?.message || t('common.error'), 'error');
+      this.app.showToast((error as Error)?.message || t('common.error'), 'error');
       return;
     }
-    this.elements.create.disabled = true;
+    (this.elements.create as HTMLButtonElement).disabled = true;
     try {
       if (values.pushSource && remoteName) {
         const pushed = await window.gitTree.push(
           this.repoPath,
           remoteName,
-          values.source,
+          values.source as string,
           true
-        );
+        ) as { error?: string };
         if (pushed?.error) {
           this.app.showToast(pushed.error, 'error');
           return;
@@ -1014,7 +1098,7 @@ class PullRequestView {
         this.repoPath,
         this.provider,
         values
-      );
+      ) as { error?: string; warnings?: string[]; pullRequest?: { number?: number | string; id?: string } };
       if (result?.error) {
         this.app.showToast(result.error, 'error');
         return;
@@ -1026,7 +1110,7 @@ class PullRequestView {
         this.app.showToast(warning, 'warning');
       }
       this.filter = 'authored';
-      document.querySelectorAll('[data-pr-filter]').forEach(item => {
+      document.querySelectorAll<HTMLElement>('[data-pr-filter]').forEach(item => {
         item.classList.toggle('active', item.dataset.prFilter === 'authored');
       });
       await this.reload();
@@ -1040,11 +1124,14 @@ class PullRequestView {
     }
   }
 
-  async azureCreatePrefill(source, target) {
+  async azureCreatePrefill(source: string, target: string): Promise<{ title: string; body: string; workItems: string }> {
     if (!source || !target || source === target) {
       return { title: '', body: '', workItems: '' };
     }
-    const comparison = await window.gitTree.compareBranches(this.repoPath, target, source);
+    const comparison = await window.gitTree.compareBranches(this.repoPath, target, source) as {
+      error?: string;
+      commits?: Array<{ message?: unknown; hash?: unknown }>;
+    };
     if (comparison?.error) {
       return { title: '', body: '', workItems: '' };
     }
@@ -1059,7 +1146,14 @@ class PullRequestView {
     };
   }
 
-  createPullRequestDialog({ source, target, branches, title = '', body = '', workItems = '' }) {
+  createPullRequestDialog({ source, target, branches, title = '', body = '', workItems = '' }: {
+    source: string;
+    target: string;
+    branches: string[];
+    title?: string;
+    body?: string;
+    workItems?: string;
+  }): Promise<Record<string, unknown> | null> {
     const overlay = document.getElementById('modal-overlay');
     const dialog = document.getElementById('modal-dialog');
     const options = branches.map(name => (
@@ -1119,36 +1213,37 @@ class PullRequestView {
           </div>
         </form>`;
       overlay.classList.remove('is-hidden');
-      const form = dialog.querySelector('form');
-      form.elements.source.value = source;
-      form.elements.target.value = target;
-      form.elements.body.value = body;
-      if (form.elements.workItems) {
-        form.elements.workItems.value = workItems;
+      const form = dialog.querySelector('form') as HTMLFormElement;
+      const fields = form.elements as unknown as Record<string, HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>;
+      fields.source.value = source;
+      fields.target.value = target;
+      fields.body.value = body;
+      if (fields.workItems) {
+        fields.workItems.value = workItems;
       }
-      const aiButton = dialog.querySelector('#pr-ai-generate');
+      const aiButton = dialog.querySelector('#pr-ai-generate') as HTMLButtonElement | null;
       if (aiButton) {
         aiButton.onclick = async () => {
           aiButton.disabled = true;
-          const aiIcon = aiButton.querySelector('i');
-          const aiLabel = aiButton.querySelector('span');
+          const aiIcon = aiButton.querySelector('i') as HTMLElement;
+          const aiLabel = aiButton.querySelector('span') as HTMLElement;
           aiIcon.className = 'ph ph-circle-notch';
           aiLabel.textContent = t('pullRequests.aiGenerating');
           try {
             const result = await window.gitTree.generatePrDescription(this.repoPath, {
-              source: form.elements.source.value,
-              target: form.elements.target.value,
+              source: fields.source.value,
+              target: fields.target.value,
               language: await this.aiLanguage()
-            });
+            }) as { error?: string; summary?: string; body?: string };
             if (result?.error) {
               this.app.showToast(result.error, 'error');
               return;
             }
-            if (!form.elements.title.value && result.summary) {
-              form.elements.title.value = result.summary;
+            if (!fields.title.value && result.summary) {
+              fields.title.value = result.summary;
             }
-            if (!form.elements.body.value && result.body) {
-              form.elements.body.value = result.body;
+            if (!fields.body.value && result.body) {
+              fields.body.value = result.body;
             }
             this.app.showToast(t('pullRequests.aiGenerated'), 'success');
           } finally {
@@ -1158,38 +1253,38 @@ class PullRequestView {
           }
         };
       }
-      const finish = value => {
+      const finish = (value: Record<string, unknown> | null) => {
         dialog.classList.remove('pr-create-dialog');
         overlay.classList.add('is-hidden');
         dialog.innerHTML = '';
         resolve(value);
       };
-      form.querySelector('[data-cancel]').onclick = () => finish(null);
+      (form.querySelector('[data-cancel]') as HTMLElement).onclick = () => finish(null);
       form.onsubmit = event => {
         event.preventDefault();
-        const nextTitle = form.elements.title.value.trim();
+        const nextTitle = fields.title.value.trim();
         if (!nextTitle) return;
         finish({
           title: nextTitle,
-          body: form.elements.body.value,
-          source: form.elements.source.value,
-          target: form.elements.target.value,
-          reviewers: form.elements.reviewers.value,
-          assignees: form.elements.assignees?.value || '',
-          labels: form.elements.labels.value,
-          workItems: form.elements.workItems?.value || '',
-          draft: form.elements.draft.checked,
-          pushSource: form.elements.pushSource.checked,
-          maintainerCanModify: form.elements.maintainerCanModify?.checked !== false,
-          removeSourceBranch: Boolean(form.elements.removeSourceBranch?.checked)
+          body: fields.body.value,
+          source: fields.source.value,
+          target: fields.target.value,
+          reviewers: fields.reviewers.value,
+          assignees: fields.assignees?.value || '',
+          labels: fields.labels.value,
+          workItems: fields.workItems?.value || '',
+          draft: (fields.draft as HTMLInputElement).checked,
+          pushSource: (fields.pushSource as HTMLInputElement).checked,
+          maintainerCanModify: (fields.maintainerCanModify as HTMLInputElement)?.checked !== false,
+          removeSourceBranch: Boolean((fields.removeSourceBranch as HTMLInputElement)?.checked)
         });
       };
-      form.elements.title.focus();
+      fields.title.focus();
     });
   }
 
-  async aiLanguage() {
-    const settings = await window.gitTree.getAiSettings().catch(() => null);
+  async aiLanguage(): Promise<string> {
+    const settings = await window.gitTree.getAiSettings().catch(() => null) as { language?: string } | null;
     if (settings?.language === 'en' || settings?.language === 'it') {
       return settings.language;
     }
@@ -1197,9 +1292,16 @@ class PullRequestView {
     return current.startsWith('it') ? 'it' : 'en';
   }
 
-  esc(value) {
+  esc(value: unknown): string {
     return HtmlEncoder.encode(value);
   }
 }
 
-window.PullRequestView = PullRequestView;
+if (typeof window !== 'undefined') {
+  (window as unknown as { PullRequestView: typeof PullRequestView }).PullRequestView = PullRequestView;
+}
+
+declare const module: { exports: unknown } | undefined;
+if (typeof module !== 'undefined' && (module as { exports?: unknown }).exports) {
+  (module as { exports: unknown }).exports = PullRequestView;
+}

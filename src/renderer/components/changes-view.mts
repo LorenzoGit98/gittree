@@ -1,5 +1,66 @@
-class ChangesView {
-  constructor(root, app) {
+import type { ChangesFileList } from './changes-file-list.mts';
+
+interface ChangeFile {
+  path: string;
+  staged?: boolean;
+  unstaged?: boolean;
+  submodule?: boolean;
+  conflicted?: boolean;
+  untracked?: boolean;
+  indexStatus?: string;
+  worktreeStatus?: string;
+}
+
+interface WorkingTreeSnapshot {
+  error?: string;
+  snapshotId: string;
+  files: ChangeFile[];
+  submodules?: unknown[];
+}
+
+interface IdentityInfo {
+  error?: string;
+  configured?: boolean;
+  name?: string;
+  email?: string;
+  signing?: { available?: boolean; enabledByDefault?: boolean; format?: string };
+}
+
+type ChangesApp = {
+  isCurrentRepo: (repoPath?: string) => boolean;
+  showToast: (message: unknown, type?: string) => void;
+  pushInspectorPayload?: () => void;
+  refresh: (options?: Record<string, unknown>) => Promise<void>;
+  dialogs: {
+    confirm: (options: Record<string, unknown>) => Promise<unknown>;
+    form: (options: Record<string, unknown>) => Promise<Record<string, unknown> | null>;
+  };
+  components: {
+    branchList?: { load: (repoPath: string) => void };
+    diffViewer?: { clear: () => void };
+    welcome?: { markStep?: (step: string) => void };
+  } & Record<string, unknown>;
+};
+
+export class ChangesView {
+  root: HTMLElement;
+  app: ChangesApp;
+  repoPath: string | null;
+  snapshot: WorkingTreeSnapshot | null;
+  identity: IdentityInfo | null;
+  active: boolean;
+  inflight: Promise<WorkingTreeSnapshot | null> | null;
+  pollTimer: ReturnType<typeof setInterval> | null;
+  selected: { path: string; staged: boolean } | null;
+  diffRequest: number;
+  generatingCommit: boolean;
+  generatingExplain: boolean;
+  rowHeight: number;
+  overscan: number;
+  fileLists: { unstaged: ChangesFileList; staged: ChangesFileList };
+  elements: Record<string, HTMLElement>;
+
+  constructor(root: HTMLElement, app: ChangesApp) {
     this.root = root;
     this.app = app;
     this.repoPath = null;
@@ -14,12 +75,13 @@ class ChangesView {
     this.generatingExplain = false;
     this.rowHeight = 38;
     this.overscan = 8;
+    const ChangesFileListCtor = (window as unknown as { ChangesFileList: typeof ChangesFileList }).ChangesFileList;
     this.fileLists = {
-      unstaged: new ChangesFileList(
+      unstaged: new ChangesFileListCtor(
         document.getElementById('unstaged-files'),
         { rowHeight: this.rowHeight, overscan: this.overscan }
       ),
-      staged: new ChangesFileList(
+      staged: new ChangesFileListCtor(
         document.getElementById('staged-files'),
         { rowHeight: this.rowHeight, overscan: this.overscan }
       )
@@ -62,24 +124,24 @@ class ChangesView {
     this.bind();
   }
 
-  bind() {
-    this.elements.stageAll.onclick = () => this.mutatePaths(false, this.unstagedFiles());
-    this.elements.unstageAll.onclick = () => this.mutatePaths(true, this.stagedFiles());
-    this.elements.discardAll.onclick = () => this.discardPaths(this.unstagedFiles());
-    this.elements.submodulesInit.onclick = () => this.runSubmoduleAction('init');
-    this.elements.submodulesUpdate.onclick = () => this.runSubmoduleAction('update');
-    this.elements.composer.onsubmit = event => {
+  bind(): void {
+    (this.elements.stageAll as HTMLButtonElement).onclick = () => this.mutatePaths(false, this.unstagedFiles());
+    (this.elements.unstageAll as HTMLButtonElement).onclick = () => this.mutatePaths(true, this.stagedFiles());
+    (this.elements.discardAll as HTMLButtonElement).onclick = () => this.discardPaths(this.unstagedFiles());
+    (this.elements.submodulesInit as HTMLButtonElement).onclick = () => this.runSubmoduleAction('init');
+    (this.elements.submodulesUpdate as HTMLButtonElement).onclick = () => this.runSubmoduleAction('update');
+    (this.elements.composer as HTMLFormElement).onsubmit = event => {
       event.preventDefault();
       this.commit();
     };
-    this.elements.identityButton.onclick = () => this.editIdentity();
-    this.elements.aiCommit.onclick = () => this.generateCommitMessage();
-    this.elements.aiExplain.onclick = () => this.generateExplain();
-    this.elements.explanationClose.onclick = () => this.hideExplanation();
-    this.elements.authorToggle.onchange = () => {
+    (this.elements.identityButton as HTMLButtonElement).onclick = () => this.editIdentity();
+    (this.elements.aiCommit as HTMLButtonElement).onclick = () => this.generateCommitMessage();
+    (this.elements.aiExplain as HTMLButtonElement).onclick = () => this.generateExplain();
+    (this.elements.explanationClose as HTMLButtonElement).onclick = () => this.hideExplanation();
+    (this.elements.authorToggle as HTMLInputElement).onchange = () => {
       this.elements.authorFields.classList.toggle(
         'is-hidden',
-        !this.elements.authorToggle.checked
+        !(this.elements.authorToggle as HTMLInputElement).checked
       );
       this.persistComposer();
     };
@@ -99,7 +161,7 @@ class ChangesView {
     window.addEventListener('blur', () => this.syncPolling());
   }
 
-  async load(repoPath) {
+  async load(repoPath: string): Promise<void> {
     if (this.repoPath !== repoPath) {
       this.repoPath = repoPath;
       this.snapshot = null;
@@ -108,13 +170,13 @@ class ChangesView {
       this.hideExplanation();
       this.restoreComposer();
     }
-    const tasks = [this.refresh(true)];
+    const tasks: Array<Promise<unknown>> = [this.refresh(true)];
     if (this.active) tasks.push(this.refreshIdentity());
     await Promise.all(tasks);
     this.syncPolling();
   }
 
-  setActive(active) {
+  setActive(active: boolean): void {
     this.active = active;
     this.root.classList.toggle('is-hidden', !active);
     this.syncPolling();
@@ -124,7 +186,7 @@ class ChangesView {
     }
   }
 
-  syncPolling() {
+  syncPolling(): void {
     clearInterval(this.pollTimer);
     this.pollTimer = null;
     if (this.active && this.repoPath && document.hasFocus()) {
@@ -132,12 +194,13 @@ class ChangesView {
     }
   }
 
-  async refresh(force = false) {
+  async refresh(force = false): Promise<WorkingTreeSnapshot | null> {
     if (!this.repoPath) return null;
     const pathAtStart = this.repoPath;
     if (this.inflight) return this.inflight;
     this.inflight = window.gitTree.getWorkingTree(pathAtStart)
-      .then(snapshot => {
+      .then((rawSnapshot: unknown) => {
+        const snapshot = rawSnapshot as WorkingTreeSnapshot;
         if (pathAtStart !== this.repoPath) return null;
         if (snapshot?.error) {
           this.app.showToast(snapshot.error, 'error');
@@ -149,7 +212,7 @@ class ChangesView {
         }
         return snapshot;
       })
-      .catch(error => {
+      .catch((error: Error) => {
         this.app.showToast(error.message, 'error');
         return null;
       })
@@ -159,29 +222,29 @@ class ChangesView {
     return this.inflight;
   }
 
-  unstagedFiles() {
+  unstagedFiles(): ChangeFile[] {
     return (this.snapshot?.files || []).filter(file => file.unstaged);
   }
 
-  stagedFiles() {
+  stagedFiles(): ChangeFile[] {
     return (this.snapshot?.files || []).filter(file => file.staged);
   }
 
-  render() {
+  render(): void {
     const unstaged = this.unstagedFiles();
     const staged = this.stagedFiles();
     const hasSubmodules = Boolean(this.snapshot?.submodules?.length);
     this.elements.submoduleBar.classList.toggle('is-hidden', !hasSubmodules);
     this.elements.unstagedCount.textContent = String(unstaged.length);
     this.elements.stagedCount.textContent = String(staged.length);
-    this.elements.stageAll.disabled = unstaged.length === 0;
-    this.elements.unstageAll.disabled = staged.length === 0;
-    this.elements.discardAll.disabled = unstaged.length === 0;
-    this.elements.commitButton.disabled =
-      staged.length === 0 && !this.elements.amend.checked;
-    this.elements.aiCommit.disabled = this.generatingCommit
+    (this.elements.stageAll as HTMLButtonElement).disabled = unstaged.length === 0;
+    (this.elements.unstageAll as HTMLButtonElement).disabled = staged.length === 0;
+    (this.elements.discardAll as HTMLButtonElement).disabled = unstaged.length === 0;
+    (this.elements.commitButton as HTMLButtonElement).disabled =
+      staged.length === 0 && !(this.elements.amend as HTMLInputElement).checked;
+    (this.elements.aiCommit as HTMLButtonElement).disabled = this.generatingCommit
       || (staged.length === 0 && unstaged.length === 0);
-    this.elements.aiExplain.disabled = this.generatingExplain
+    (this.elements.aiExplain as HTMLButtonElement).disabled = this.generatingExplain
       || (staged.length === 0 && unstaged.length === 0);
     if (staged.length === 0 && unstaged.length === 0) {
       this.hideExplanation();
@@ -191,17 +254,17 @@ class ChangesView {
     this.elements.modeCount.classList.toggle('is-hidden', fileCount === 0);
     this.fileLists.unstaged.update(
       unstaged,
-      file => this.createFileRow(file, false),
+      file => this.createFileRow(file as ChangeFile, false),
       t('changes.noUnstaged')
     );
     this.fileLists.staged.update(
       staged,
-      file => this.createFileRow(file, true),
+      file => this.createFileRow(file as ChangeFile, true),
       t('changes.noStaged')
     );
   }
 
-  createFileRow(file, staged) {
+  createFileRow(file: ChangeFile, staged: boolean): HTMLElement {
     const row = document.createElement('div');
     row.className = 'changes-file-row';
     row.setAttribute('role', 'listitem');
@@ -262,11 +325,11 @@ class ChangesView {
     return row;
   }
 
-  async generateCommitMessage() {
+  async generateCommitMessage(): Promise<void> {
     if (this.generatingCommit) return;
     if (!this.repoPath) return;
     const hasText = Boolean(
-      this.elements.summary.value.trim() || this.elements.body.value.trim()
+      (this.elements.summary as HTMLInputElement).value.trim() || (this.elements.body as HTMLTextAreaElement).value.trim()
     );
     if (hasText && !await this.confirmAiReplace()) return;
     this.generatingCommit = true;
@@ -274,13 +337,13 @@ class ChangesView {
     try {
       const result = await window.gitTree.generateCommitMessage(this.repoPath, {
         language: await this.aiLanguage()
-      });
+      }) as { error?: string; summary?: string; body?: string };
       if (result?.error) {
         this.app.showToast(result.error, 'error');
         return;
       }
-      this.elements.summary.value = result.summary || '';
-      this.elements.body.value = result.body || '';
+      (this.elements.summary as HTMLInputElement).value = result.summary || '';
+      (this.elements.body as HTMLTextAreaElement).value = result.body || '';
       this.persistComposer();
       this.app.showToast(t('changes.aiGenerated'), 'success');
     } finally {
@@ -289,7 +352,7 @@ class ChangesView {
     }
   }
 
-  confirmAiReplace() {
+  confirmAiReplace(): Promise<unknown> {
     return this.app.dialogs.confirm({
       title: t('changes.aiReplaceTitle'),
       message: t('changes.aiReplaceConfirm'),
@@ -298,8 +361,8 @@ class ChangesView {
     });
   }
 
-  async aiLanguage() {
-    const settings = await window.gitTree.getAiSettings().catch(() => null);
+  async aiLanguage(): Promise<string> {
+    const settings = await window.gitTree.getAiSettings().catch(() => null) as { language?: string } | null;
     if (settings?.language === 'en' || settings?.language === 'it') {
       return settings.language;
     }
@@ -307,10 +370,10 @@ class ChangesView {
     return current.startsWith('it') ? 'it' : 'en';
   }
 
-  setAiGenerating(generating) {
-    const button = this.elements.aiCommit;
-    const icon = button.querySelector('i');
-    const label = button.querySelector('span');
+  setAiGenerating(generating: boolean): void {
+    const button = this.elements.aiCommit as HTMLButtonElement;
+    const icon = button.querySelector('i') as HTMLElement;
+    const label = button.querySelector('span') as HTMLElement;
     button.disabled = generating;
     if (generating) {
       icon.className = 'ph ph-circle-notch';
@@ -323,7 +386,7 @@ class ChangesView {
       this.stagedFiles().length === 0 && this.unstagedFiles().length === 0;
   }
 
-  async generateExplain() {
+  async generateExplain(): Promise<void> {
     if (this.generatingExplain) return;
     if (!this.repoPath) return;
     this.generatingExplain = true;
@@ -331,7 +394,7 @@ class ChangesView {
     try {
       const result = await window.gitTree.explainChanges(this.repoPath, {
         language: await this.aiLanguage()
-      });
+      }) as { error?: string; summary?: string; body?: string };
       if (result?.error) {
         this.app.showToast(result.error, 'error');
         return;
@@ -346,10 +409,10 @@ class ChangesView {
     }
   }
 
-  setExplainGenerating(generating) {
-    const button = this.elements.aiExplain;
-    const icon = button.querySelector('i');
-    const label = button.querySelector('span');
+  setExplainGenerating(generating: boolean): void {
+    const button = this.elements.aiExplain as HTMLButtonElement;
+    const icon = button.querySelector('i') as HTMLElement;
+    const label = button.querySelector('span') as HTMLElement;
     button.disabled = generating;
     if (generating) {
       icon.className = 'ph ph-circle-notch';
@@ -362,18 +425,18 @@ class ChangesView {
       this.stagedFiles().length === 0 && this.unstagedFiles().length === 0;
   }
 
-  hideExplanation() {
+  hideExplanation(): void {
     this.elements.explanation.classList.add('is-hidden');
     this.elements.explanationTitle.textContent = '';
     this.elements.explanationBody.textContent = '';
   }
 
-  async runSubmoduleAction(action) {
+  async runSubmoduleAction(action: string): Promise<void> {
     if (!this.repoPath) return;
     const api = action === 'init'
       ? window.gitTree.initSubmodules
       : window.gitTree.updateSubmodules;
-    const result = await api(this.repoPath);
+    const result = await api(this.repoPath) as { error?: string };
     if (result?.error) {
       this.app.showToast(result.error, 'error');
       return;
@@ -386,7 +449,7 @@ class ChangesView {
     this.app.components.branchList?.load(this.repoPath);
   }
 
-  async discardPaths(files) {
+  async discardPaths(files: ChangeFile[]): Promise<void> {
     if (!this.snapshot || files.length === 0) return;
     const paths = files.map(file => file.path);
     const confirmed = await this.confirmDiscard(paths.length);
@@ -395,7 +458,7 @@ class ChangesView {
       this.repoPath,
       this.snapshot.snapshotId,
       paths
-    );
+    ) as { error?: string; snapshot?: WorkingTreeSnapshot };
     if (result?.error) {
       this.app.showToast(result.error, 'error');
       await this.refresh(true);
@@ -411,7 +474,7 @@ class ChangesView {
     this.app.showToast(t('changes.discarded'), 'success');
   }
 
-  confirmDiscard(count) {
+  confirmDiscard(count: number): Promise<unknown> {
     return this.app.dialogs.confirm({
       title: t('changes.discardTitle'),
       message: t('changes.discardConfirm', { count }),
@@ -421,21 +484,21 @@ class ChangesView {
     });
   }
 
-  fileStatus(file, staged) {
+  fileStatus(file: ChangeFile, staged: boolean): string {
     if (file.conflicted) return '!';
     if (file.untracked) return '?';
     const code = staged ? file.indexStatus : file.worktreeStatus;
     return code && code !== ' ' ? code : 'M';
   }
 
-  async mutatePaths(unstage, files) {
+  async mutatePaths(unstage: boolean, files: ChangeFile[]): Promise<void> {
     if (!this.snapshot || files.length === 0) return;
     const api = unstage ? window.gitTree.unstagePaths : window.gitTree.stagePaths;
     const result = await api(
       this.repoPath,
       this.snapshot.snapshotId,
       files.map(file => file.path)
-    );
+    ) as { error?: string; snapshot?: WorkingTreeSnapshot };
     if (result?.error) {
       this.app.showToast(result.error, 'error');
       await this.refresh(true);
@@ -450,7 +513,7 @@ class ChangesView {
     }
   }
 
-  async selectFile(file, staged) {
+  async selectFile(file: { path: string }, staged: boolean): Promise<void> {
     this.selected = { path: file.path, staged };
     this.render();
     const request = ++this.diffRequest;
@@ -463,7 +526,13 @@ class ChangesView {
     loading.className = 'diff-placeholder';
     loading.textContent = t('details.loading');
     body.appendChild(loading);
-    const diff = await window.gitTree.getWorkingDiff(this.repoPath, file.path, staged);
+    const diff = await window.gitTree.getWorkingDiff(this.repoPath, file.path, staged) as {
+      error?: string;
+      noDiff?: boolean;
+      binary?: boolean;
+      hunks?: Array<{ header: string; id?: string }>;
+      path?: string;
+    } | undefined;
     if (request !== this.diffRequest) return;
     if (diff?.error) {
       loading.textContent = diff.error;
@@ -473,7 +542,7 @@ class ChangesView {
     this.app.pushInspectorPayload?.();
   }
 
-  renderWorkingDiff(diff, staged) {
+  renderWorkingDiff(diff: { noDiff?: boolean; binary?: boolean; hunks?: Array<{ header: string; id?: string }>; path?: string }, staged: boolean): void {
     const body = document.getElementById('detail-body');
     body.innerHTML = '';
     if (diff.noDiff) {
@@ -543,14 +612,14 @@ class ChangesView {
     body.appendChild(wrapper);
   }
 
-  async mutateHunk(filePath, staged, hunkId) {
+  async mutateHunk(filePath: string, staged: boolean, hunkId: string): Promise<void> {
     const api = staged ? window.gitTree.unstageHunks : window.gitTree.stageHunks;
     const result = await api(
       this.repoPath,
       this.snapshot.snapshotId,
       filePath,
       [hunkId]
-    );
+    ) as { error?: string; snapshot?: WorkingTreeSnapshot };
     if (result?.error) {
       this.app.showToast(result.error, 'error');
       await this.refresh(true);
@@ -567,50 +636,50 @@ class ChangesView {
     }
   }
 
-  composerKey() {
+  composerKey(): string {
     return `gittree.commitDraft:${this.repoPath || ''}`;
   }
 
-  persistComposer() {
+  persistComposer(): void {
     if (!this.repoPath) return;
     localStorage.setItem(this.composerKey(), JSON.stringify({
-      summary: this.elements.summary.value,
-      body: this.elements.body.value,
-      amend: this.elements.amend.checked,
-      signoff: this.elements.signoff.checked,
-      signing: this.elements.signing.checked,
-      authorOverride: this.elements.authorToggle.checked,
-      authorName: this.elements.authorName.value,
-      authorEmail: this.elements.authorEmail.value
+      summary: (this.elements.summary as HTMLInputElement).value,
+      body: (this.elements.body as HTMLTextAreaElement).value,
+      amend: (this.elements.amend as HTMLInputElement).checked,
+      signoff: (this.elements.signoff as HTMLInputElement).checked,
+      signing: (this.elements.signing as HTMLInputElement).checked,
+      authorOverride: (this.elements.authorToggle as HTMLInputElement).checked,
+      authorName: (this.elements.authorName as HTMLInputElement).value,
+      authorEmail: (this.elements.authorEmail as HTMLInputElement).value
     }));
     if (this.snapshot) {
-      this.elements.commitButton.disabled =
-        this.stagedFiles().length === 0 && !this.elements.amend.checked;
+      (this.elements.commitButton as HTMLButtonElement).disabled =
+        this.stagedFiles().length === 0 && !(this.elements.amend as HTMLInputElement).checked;
     }
   }
 
-  restoreComposer() {
-    let draft = {};
+  restoreComposer(): void {
+    let draft: Record<string, unknown> = {};
     try {
       draft = JSON.parse(localStorage.getItem(this.composerKey())) || {};
     } catch { /* invalid draft falls back to empty */ }
-    this.elements.summary.value = draft.summary || '';
-    this.elements.body.value = draft.body || '';
-    this.elements.amend.checked = Boolean(draft.amend);
-    this.elements.signoff.checked = Boolean(draft.signoff);
-    this.elements.signing.checked = Boolean(draft.signing);
-    this.elements.authorToggle.checked = Boolean(draft.authorOverride);
-    this.elements.authorName.value = draft.authorName || '';
-    this.elements.authorEmail.value = draft.authorEmail || '';
+    (this.elements.summary as HTMLInputElement).value = (draft.summary as string) || '';
+    (this.elements.body as HTMLTextAreaElement).value = (draft.body as string) || '';
+    (this.elements.amend as HTMLInputElement).checked = Boolean(draft.amend);
+    (this.elements.signoff as HTMLInputElement).checked = Boolean(draft.signoff);
+    (this.elements.signing as HTMLInputElement).checked = Boolean(draft.signing);
+    (this.elements.authorToggle as HTMLInputElement).checked = Boolean(draft.authorOverride);
+    (this.elements.authorName as HTMLInputElement).value = (draft.authorName as string) || '';
+    (this.elements.authorEmail as HTMLInputElement).value = (draft.authorEmail as string) || '';
     this.elements.authorFields.classList.toggle(
       'is-hidden',
-      !this.elements.authorToggle.checked
+      !(this.elements.authorToggle as HTMLInputElement).checked
     );
   }
 
-  async refreshIdentity() {
+  async refreshIdentity(): Promise<void> {
     if (!this.repoPath) return;
-    const identity = await window.gitTree.getIdentity(this.repoPath);
+    const identity = await window.gitTree.getIdentity(this.repoPath) as IdentityInfo;
     if (identity?.error) {
       this.elements.identityStatus.textContent = identity.error;
       return;
@@ -619,7 +688,7 @@ class ChangesView {
     this.elements.identityStatus.textContent = identity.configured
       ? `${identity.name} <${identity.email}>`
       : t('changes.identityMissing');
-    this.elements.signing.disabled = !identity.signing?.available;
+    (this.elements.signing as HTMLInputElement).disabled = !identity.signing?.available;
     this.elements.signingLabel.title = identity.signing?.available
       ? t('changes.signingReady', { format: identity.signing.format })
       : t('changes.signingUnavailable');
@@ -627,14 +696,14 @@ class ChangesView {
       identity.signing?.enabledByDefault &&
       localStorage.getItem(this.composerKey()) == null
     ) {
-      this.elements.signing.checked = true;
+      (this.elements.signing as HTMLInputElement).checked = true;
     }
   }
 
-  async editIdentity() {
-    const value = await this.identityDialog();
+  async editIdentity(): Promise<boolean> {
+    const value = await this.identityDialog() as { name: string; email: string; scope: string } | null;
     if (!value) return false;
-    const result = await window.gitTree.setIdentity(this.repoPath, value);
+    const result = await window.gitTree.setIdentity(this.repoPath, value) as { error?: string; identity?: IdentityInfo };
     if (result?.error) {
       this.app.showToast(result.error, 'error');
       return false;
@@ -644,7 +713,7 @@ class ChangesView {
     return true;
   }
 
-  identityDialog() {
+  identityDialog(): Promise<unknown> {
     return this.app.dialogs.form({
       title: t('changes.identityTitle'),
       fields: `
@@ -671,40 +740,47 @@ class ChangesView {
     });
   }
 
-  async commit() {
+  async commit(): Promise<void> {
     if (!this.identity?.configured && !(await this.editIdentity())) return;
-    const options = {
-      summary: this.elements.summary.value,
-      body: this.elements.body.value,
-      amend: this.elements.amend.checked,
-      signoff: this.elements.signoff.checked,
-      signing: this.elements.signing.checked
+    const options: Record<string, unknown> = {
+      summary: (this.elements.summary as HTMLInputElement).value,
+      body: (this.elements.body as HTMLTextAreaElement).value,
+      amend: (this.elements.amend as HTMLInputElement).checked,
+      signoff: (this.elements.signoff as HTMLInputElement).checked,
+      signing: (this.elements.signing as HTMLInputElement).checked
     };
-    if (this.elements.authorToggle.checked) {
+    if ((this.elements.authorToggle as HTMLInputElement).checked) {
       options.authorOverride = {
-        name: this.elements.authorName.value,
-        email: this.elements.authorEmail.value
+        name: (this.elements.authorName as HTMLInputElement).value,
+        email: (this.elements.authorEmail as HTMLInputElement).value
       };
     }
-    this.elements.commitButton.disabled = true;
-    const result = await window.gitTree.commitChanges(this.repoPath, options);
+    (this.elements.commitButton as HTMLButtonElement).disabled = true;
+    const result = await window.gitTree.commitChanges(this.repoPath, options) as { error?: string; hash?: string };
     if (result?.error) {
       this.app.showToast(result.error, 'error');
-      this.elements.commitButton.disabled = false;
+      (this.elements.commitButton as HTMLButtonElement).disabled = false;
       return;
     }
-    this.elements.summary.value = '';
-    this.elements.body.value = '';
-    this.elements.amend.checked = false;
+    (this.elements.summary as HTMLInputElement).value = '';
+    (this.elements.body as HTMLTextAreaElement).value = '';
+    (this.elements.amend as HTMLInputElement).checked = false;
     this.persistComposer();
     this.app.showToast(t('changes.commitCreated'), 'success');
     this.app.components.welcome?.markStep?.('commit');
     await this.app.refresh({ selectHash: result.hash, silent: true });
   }
 
-  esc(value) {
+  esc(value: unknown): string {
     return HtmlEncoder.encode(value);
   }
 }
 
-window.ChangesView = ChangesView;
+if (typeof window !== 'undefined') {
+  (window as unknown as { ChangesView: typeof ChangesView }).ChangesView = ChangesView;
+}
+
+declare const module: { exports: unknown } | undefined;
+if (typeof module !== 'undefined' && (module as { exports?: unknown }).exports) {
+  (module as { exports: unknown }).exports = ChangesView;
+}

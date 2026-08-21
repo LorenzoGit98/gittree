@@ -1,10 +1,45 @@
-/* exported DiffViewer */
 /* global DiffLayout */
 const VIRTUAL_DIFF_THRESHOLD = 1200;
 const VIRTUAL_DIFF_OVERSCAN_PX = 440;
 
-class DiffViewer {
-  constructor(bodyEl, app) {
+type DiffViewerApp = {
+  pushInspectorPayload?: () => void;
+  syncInspectorWorkspace?: (options?: Record<string, unknown>) => void;
+  showToast: (message: unknown, type?: string) => void;
+  components?: {
+    inspectorWorkspace?: { setSelectedFile: (path: string | null) => void };
+  } & Record<string, unknown>;
+};
+
+interface CommitDetail {
+  error?: string;
+  diff?: string;
+  message?: string;
+  hash?: string;
+  author_name?: string;
+  date?: string;
+}
+
+export class DiffViewer {
+  body: HTMLElement;
+  app: DiffViewerApp;
+  mode: string;
+  modeBeforeExpanded: string | null;
+  inspectorExpanded: boolean;
+  currentDiff: string | null;
+  fileSummaries: Array<{ path: string; oldPath: string | null; status: string; additions: number; deletions: number }>;
+  selectedFilePath: string | null;
+  virtualLayer: HTMLElement | null;
+  virtualFiles: ReturnType<typeof DiffLayout.layoutFiles>['files'];
+  virtualMode: string | null;
+  virtualScrollRaf: number;
+  fileTargetTimer: number;
+  activeRepoPath: string | null;
+  activeHash: string | null;
+  wordLevel: boolean;
+  handleVirtualScroll: () => void;
+
+  constructor(bodyEl: HTMLElement, app: DiffViewerApp) {
     this.body = bodyEl;
     this.app = app;
     const savedMode = localStorage.getItem('gittree.diff.mode');
@@ -19,6 +54,8 @@ class DiffViewer {
     this.virtualMode = null;
     this.virtualScrollRaf = 0;
     this.fileTargetTimer = 0;
+    this.activeRepoPath = null;
+    this.activeHash = null;
     this.handleVirtualScroll = () => {
       if (this.virtualScrollRaf) return;
       this.virtualScrollRaf = requestAnimationFrame(() => {
@@ -44,7 +81,7 @@ class DiffViewer {
     this.syncModeButtons();
   }
 
-  setMode(mode, options = {}) {
+  setMode(mode: string, options: { persist?: boolean } = {}): void {
     if (!['unified', 'split'].includes(mode)) return;
     this.mode = mode;
     if (options.persist !== false) {
@@ -56,7 +93,7 @@ class DiffViewer {
     this.app.pushInspectorPayload?.();
   }
 
-  syncModeButtons() {
+  syncModeButtons(): void {
     const unifiedButton = document.getElementById('btn-diff-unified');
     const splitButton = document.getElementById('btn-diff-split');
     const wordButton = document.getElementById('btn-diff-word');
@@ -68,7 +105,7 @@ class DiffViewer {
     wordButton?.setAttribute('aria-pressed', String(this.wordLevel));
   }
 
-  appendHighlightedLine(contentEl, text, counterpart) {
+  appendHighlightedLine(contentEl: HTMLElement, text: string, counterpart: string): void {
     if (!this.wordLevel || !text || !counterpart || text === counterpart) {
       contentEl.textContent = text;
       return;
@@ -97,7 +134,7 @@ class DiffViewer {
     contentEl.append(mark, document.createTextNode(text.slice(midEnd)));
   }
 
-  setInspectorExpanded(expanded) {
+  setInspectorExpanded(expanded: boolean): void {
     const nextExpanded = Boolean(expanded);
     if (nextExpanded === this.inspectorExpanded) return;
     this.inspectorExpanded = nextExpanded;
@@ -111,7 +148,7 @@ class DiffViewer {
     }
   }
 
-  async showDiffForCommit(repoPath, hash) {
+  async showDiffForCommit(repoPath: string, hash: string): Promise<void> {
     this.activeRepoPath = repoPath;
     this.activeHash = hash;
     const title = document.getElementById('detail-title');
@@ -125,7 +162,7 @@ class DiffViewer {
     this.body.innerHTML = `<div class="diff-placeholder"><i class="ph ph-circle-notch"></i>${t('details.loading')}</div>`;
     this.app.syncInspectorWorkspace?.({ push: false });
     try {
-      const detail = await window.gitTree.getCommitDetail(repoPath, hash);
+      const detail = await window.gitTree.getCommitDetail(repoPath, hash) as CommitDetail;
       if (detail?.error) { this.body.innerHTML = `<div class="diff-placeholder">${this.esc(detail.error)}</div>`; return; }
       this.currentDiff = detail.diff;
       this.fileSummaries = this.extractFileSummaries(detail.diff);
@@ -135,11 +172,11 @@ class DiffViewer {
       this.syncCommitMeta(detail);
       this.render(detail.diff);
     } catch (e) {
-      this.body.innerHTML = `<div class="diff-placeholder">${this.esc(e.message)}</div>`;
+      this.body.innerHTML = `<div class="diff-placeholder">${this.esc((e as Error).message)}</div>`;
     }
   }
 
-  syncCommitMeta(detail = null) {
+  syncCommitMeta(detail: Partial<CommitDetail> | null = null): void {
     const meta = document.getElementById('detail-meta');
     if (!meta) return;
     const hash = detail?.hash || '';
@@ -158,7 +195,7 @@ class DiffViewer {
     meta.classList.toggle('is-hidden', !hash);
   }
 
-  render(diffText) {
+  render(diffText: string): void {
     this.clearFileTargetTimer();
     if (!diffText) {
       this.disableVirtualization();
@@ -169,7 +206,7 @@ class DiffViewer {
     else this.renderSplit(diffText);
   }
 
-  renderUnified(diffText) {
+  renderUnified(diffText: string): void {
     const lines = DiffParser.parseUnified(diffText);
     if (lines.length > VIRTUAL_DIFF_THRESHOLD) {
       this.renderVirtualized(lines, 'unified');
@@ -178,8 +215,8 @@ class DiffViewer {
     this.disableVirtualization();
     const frag = document.createDocumentFragment();
     this.body.style.setProperty('--diff-gutter-digits', DiffParser.maxDigits(lines));
-    let lastRemoval = null;
-    let target = frag;
+    let lastRemoval: string | null = null;
+    let target: ParentNode = frag;
     let fileIndex = 0;
 
     lines.forEach(line => {
@@ -217,7 +254,7 @@ class DiffViewer {
     this.body.appendChild(frag);
   }
 
-  renderSplit(diffText) {
+  renderSplit(diffText: string): void {
     const lineCount = String(diffText || '').split('\n').length;
     if (lineCount > VIRTUAL_DIFF_THRESHOLD) {
       this.renderVirtualized(DiffParser.parseUnified(diffText), 'split-unified');
@@ -225,10 +262,10 @@ class DiffViewer {
     }
     const wrapper = document.createElement('div');
     wrapper.className = 'diff-split';
-    let columns = null;
-    let target = wrapper;
+    let columns: HTMLElement | null = null;
+    let target: HTMLElement = wrapper;
     let fileIndex = 0;
-    const ensureColumns = () => {
+    const ensureColumns = (): HTMLElement => {
       if (columns) return columns;
       columns = document.createElement('div');
       columns.className = 'diff-split-columns';
@@ -275,15 +312,15 @@ class DiffViewer {
     this.body.appendChild(wrapper);
   }
 
-  renderVirtualized(rows, mode) {
+  renderVirtualized(rows: Parameters<typeof DiffLayout.groupRows>[0], mode: string): void {
     this.disableVirtualization();
     const isUnified = mode === 'unified';
     const isSplit = mode === 'split' || mode === 'split-unified';
     const files = DiffLayout.groupRows(rows, {
-      isFile: row => isUnified || mode === 'split-unified'
+      isFile: (row: Record<string, unknown>) => isUnified || mode === 'split-unified'
         ? row.kind === 'file'
         : row.type === 'full' && row.kind === 'file',
-      pathForFile: row => this.extractPath(row.content) || row.content
+      pathForFile: (row: Record<string, unknown>) => this.extractPath(row.content as string) || row.content as string
     });
     const rowHeight = this.inspectorExpanded ? 24 : 22;
     const layout = DiffLayout.layoutFiles(files, { rowHeight });
@@ -301,7 +338,7 @@ class DiffViewer {
     this.renderVirtualViewport(true);
   }
 
-  renderVirtualViewport(force = false) {
+  renderVirtualViewport(force = false): void {
     if (!this.virtualLayer || !this.virtualMode) return;
     const viewportHeight = this.body.clientHeight || 640;
     const visible = DiffLayout.visibleFiles(
@@ -332,7 +369,7 @@ class DiffViewer {
         Math.ceil((this.body.scrollTop + viewportHeight - file.top - file.contentTop)
           / file.rowHeight) + rowsBeforeViewport
       );
-      let previousRemoval = null;
+      let previousRemoval: string | null = null;
       if (this.virtualMode === 'unified') {
         for (let index = 0; index < firstRow; index += 1) {
           const row = file.rows[index];
@@ -374,7 +411,7 @@ class DiffViewer {
     this.virtualLayer.replaceChildren(fragment);
   }
 
-  createUnifiedLine(line, previousRemoval = null) {
+  createUnifiedLine(line: import('./diff-parser.mts').UnifiedRow, previousRemoval: string | null = null): HTMLElement {
     const element = document.createElement('div');
     element.className = `diff-line ${line.kind === 'no-newline' ? 'header' : line.kind}`;
     element.appendChild(this.lineNumber(line.oldLine, 'old'));
@@ -390,7 +427,7 @@ class DiffViewer {
     return element;
   }
 
-  createSplitLineElements(row) {
+  createSplitLineElements(row: import('./diff-parser.mts').SplitRow): HTMLElement[] {
     if (row.type === 'pair') {
       return [
         this.splitLine(row.left, 'old', row.right?.content),
@@ -400,12 +437,12 @@ class DiffViewer {
     if (row.kind === 'del') {
       return [
         this.splitLine(row, 'old'),
-        this.splitLine({ content: '', kind: 'empty' }, 'new')
+        this.splitLine({ content: '', kind: 'empty', oldLine: null, newLine: null }, 'new')
       ];
     }
     if (row.kind === 'add') {
       return [
-        this.splitLine({ content: '', kind: 'empty' }, 'old'),
+        this.splitLine({ content: '', kind: 'empty', oldLine: null, newLine: null }, 'old'),
         this.splitLine(row, 'new')
       ];
     }
@@ -428,7 +465,7 @@ class DiffViewer {
     return [element];
   }
 
-  disableVirtualization() {
+  disableVirtualization(): void {
     if (this.virtualScrollRaf) {
       cancelAnimationFrame(this.virtualScrollRaf);
       this.virtualScrollRaf = 0;
@@ -443,11 +480,11 @@ class DiffViewer {
     this.virtualMode = null;
   }
 
-  parseSplitRows(diffText) {
+  parseSplitRows(diffText: string): import('./diff-parser.mts').SplitRow[] {
     return DiffParser.parseSplit(diffText);
   }
 
-  splitLine(line, side, counterpart) {
+  splitLine(line: import('./diff-parser.mts').UnifiedRow, side: string, counterpart?: string): HTMLElement {
     const el = document.createElement('div');
     el.className = `diff-line ${line.kind}`;
     el.appendChild(this.lineNumber(side === 'old' ? line.oldLine : line.newLine, side));
@@ -462,19 +499,19 @@ class DiffViewer {
     return el;
   }
 
-  lineNumber(value, side) {
+  lineNumber(value: number | null, side: string): HTMLElement {
     const number = document.createElement('span');
     number.className = `diff-line-num is-${side}`;
     number.textContent = Number.isInteger(value) ? String(value) : '';
     return number;
   }
 
-  extractPath(line) {
+  extractPath(line: string): string | null {
     const m = line.match(/diff --git a\/(.+) b\/(.+)/);
     return m ? m[2] : null;
   }
 
-  createFileHeader(block, content) {
+  createFileHeader(block: HTMLElement, content: string): HTMLElement {
     const path = this.extractPath(content) || content;
     block.dataset.filePath = path;
     const header = document.createElement('div');
@@ -502,10 +539,10 @@ class DiffViewer {
     return header;
   }
 
-  async openBlameDialog(filePath) {
+  async openBlameDialog(filePath: string): Promise<unknown> {
     const repoPath = this.activeRepoPath;
     const hash = this.activeHash;
-    if (!repoPath || !hash) return;
+    if (!repoPath || !hash) return undefined;
     const overlay = document.getElementById('modal-overlay');
     const dialog = document.getElementById('modal-dialog');
     dialog.className = 'confirm-dialog ai-blame-dialog';
@@ -520,7 +557,7 @@ class DiffViewer {
     const language = await this.aiLanguage().catch(() => 'en');
     return new Promise(resolve => {
       let settled = false;
-      const finish = value => {
+      const finish = (value: null) => {
         if (settled) return;
         settled = true;
         document.removeEventListener('keydown', onKeydown);
@@ -531,7 +568,7 @@ class DiffViewer {
         dialog.innerHTML = '';
         resolve(value);
       };
-      const onKeydown = event => {
+      const onKeydown = (event: KeyboardEvent) => {
         if (event.key === 'Escape') finish(null);
       };
       document.addEventListener('keydown', onKeydown);
@@ -540,10 +577,15 @@ class DiffViewer {
         window.gitTree.explainLines(repoPath, { file: filePath, hash, language })
       ]).then(([blameResult, explainResult]) => {
         if (settled) return;
-        const blame = blameResult.status === 'fulfilled' && !blameResult.value?.error
-          ? (blameResult.value?.rows || []).slice(0, 30)
+        const blameValue = blameResult.status === 'fulfilled'
+          ? blameResult.value as { error?: string; rows?: Array<{ hash?: string; author?: string; summary?: string }> } | undefined
+          : undefined;
+        const explanation = explainResult.status === 'fulfilled'
+          ? explainResult.value as { error?: string; summary?: string; body?: string } | null
+          : null;
+        const blame = blameResult.status === 'fulfilled' && !blameValue?.error
+          ? (blameValue?.rows || []).slice(0, 30)
           : [];
-        const explanation = explainResult.status === 'fulfilled' ? explainResult.value : null;
         if (explanation?.error) {
           finish(null);
           this.app.showToast(explanation.error, 'error');
@@ -570,13 +612,13 @@ class DiffViewer {
               <button class="btn btn-primary" type="button" data-close>${this.esc(t('common.cancel'))}</button>
             </div>
           </div>`;
-        dialog.querySelector('[data-close]').onclick = () => finish(null);
+        dialog.querySelector<HTMLElement>('[data-close]').onclick = () => finish(null);
       });
     });
   }
 
-  async aiLanguage() {
-    const settings = await window.gitTree.getAiSettings().catch(() => null);
+  async aiLanguage(): Promise<string> {
+    const settings = await window.gitTree.getAiSettings().catch(() => null) as { language?: string } | null;
     if (settings?.language === 'en' || settings?.language === 'it') {
       return settings.language;
     }
@@ -584,9 +626,9 @@ class DiffViewer {
     return current.startsWith('it') ? 'it' : 'en';
   }
 
-  extractFileSummaries(diffText) {
+  extractFileSummaries(diffText: string): Array<{ path: string; oldPath: string | null; status: string; additions: number; deletions: number }> {
     const summaries = [];
-    let current = null;
+    let current: { path: string; oldPath: string | null; status: string; additions: number; deletions: number } | null = null;
     const finish = () => {
       if (current?.path) summaries.push(current);
       current = null;
@@ -623,14 +665,14 @@ class DiffViewer {
     return summaries;
   }
 
-  scrollToFile(path) {
+  scrollToFile(path: string): boolean {
     if (this.virtualMode) {
       const file = this.virtualFiles.find(item => item.path === path);
       if (!file) return false;
       this.body.scrollTop = file.top;
       this.renderVirtualViewport(true);
     }
-    const blocks = [...this.body.querySelectorAll('.diff-file-block')];
+    const blocks = [...this.body.querySelectorAll<HTMLElement>('.diff-file-block')];
     const block = blocks.find(element => element.dataset.filePath === path);
     if (!block) return false;
     this.selectedFilePath = path;
@@ -649,15 +691,15 @@ class DiffViewer {
     return true;
   }
 
-  clearFileTargetTimer() {
+  clearFileTargetTimer(): void {
     if (!this.fileTargetTimer) return;
     window.clearTimeout(this.fileTargetTimer);
     this.fileTargetTimer = 0;
   }
 
-  esc(value) { return HtmlEncoder.encode(value); }
+  esc(value: unknown): string { return HtmlEncoder.encode(value); }
 
-  clear() {
+  clear(): void {
     this.clearFileTargetTimer();
     this.disableVirtualization();
     this.currentDiff = null;
@@ -674,4 +716,11 @@ class DiffViewer {
   }
 }
 
-if (typeof module !== 'undefined') module.exports = DiffViewer;
+if (typeof window !== 'undefined') {
+  (window as unknown as { DiffViewer: typeof DiffViewer }).DiffViewer = DiffViewer;
+}
+
+declare const module: { exports: unknown } | undefined;
+if (typeof module !== 'undefined' && (module as { exports?: unknown }).exports) {
+  (module as { exports: unknown }).exports = DiffViewer;
+}

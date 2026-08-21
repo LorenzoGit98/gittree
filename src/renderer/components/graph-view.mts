@@ -1,6 +1,113 @@
-/* exported GraphView */
-class GraphView {
-  constructor(container, body, app) {
+import type { LayoutState } from './graph-layout.mts';
+
+interface GraphCommitData {
+  hash: string;
+  subject: string;
+  authorName: string;
+  authorEmail?: string;
+  date: string;
+  parents?: string[];
+}
+
+interface GraphRefEntry {
+  commit: string;
+  fullName: string;
+  shortName: string;
+  type: string;
+}
+
+type GraphLayoutRow = {
+  commit: GraphCommitData;
+  lane: number;
+  incoming: boolean;
+  before: Array<string | null>;
+  parents: Array<{ hash: string; lane: number; kind: string }>;
+};
+
+type WindowGraphLayout = {
+  layoutGraph: (
+    commits: unknown,
+    previousState?: LayoutState
+  ) => { rows: GraphLayoutRow[]; laneCount: number; nextState: LayoutState };
+  createGraphSegments: (
+    row: unknown,
+    rowHeight: number
+  ) => Array<{ lane: number; path: string }>;
+};
+
+interface ColumnDefinition {
+  default: number;
+  min: number;
+  max: number;
+}
+
+interface ViewportState {
+  anchorHash: string | null;
+  anchorOffset: number;
+  scrollTop: number;
+  selectedHash: string | null;
+  selectedHashes: string[];
+  selectionAnchor: string | null;
+}
+
+type GraphViewApp = {
+  syncInspectorWorkspace?: (options?: Record<string, unknown>) => void;
+  emit: (event: string, data?: unknown) => void;
+  isPrimaryModifier: (event: MouseEvent) => boolean;
+  components: {
+    commitContextMenu?: { open: (event: MouseEvent, hashes: string[]) => void };
+  } & Record<string, unknown>;
+};
+
+export class GraphView {
+  container: HTMLElement;
+  body: HTMLElement;
+  app: GraphViewApp;
+  repoPath: string | null;
+  rows: GraphLayoutRow[];
+  visibleRows: GraphLayoutRow[];
+  hashes: Set<string>;
+  refsByHash: Map<string, GraphRefEntry[]>;
+  selectedHash: string | null;
+  selectedHashes: Set<string>;
+  selectionAnchor: string | null;
+  searchTerm: string;
+  filters: { query: string; author: string; ref: string };
+  sortMode: string;
+  historyStateStorageKey: string;
+  offset: number;
+  hasMore: boolean;
+  loading: boolean;
+  layoutState: LayoutState;
+  laneCount: number;
+  generation: number;
+  dataRevision: number;
+  rowHeight: number;
+  overscan: number;
+  raf: number;
+  renderedRange: [number, number];
+  columnStorageKey: string;
+  columnDefinitions: Record<string, ColumnDefinition>;
+  columnWidths: Record<string, number>;
+  hasPersistedColumnWidths: boolean;
+  columnResize: {
+    column: string;
+    handle: HTMLElement;
+    startX: number;
+    startWidth: number;
+    delta: number;
+  } | null;
+  columnResizeRaf: number;
+  formatLocalizedDate: (value: unknown, language: string) => string;
+  layer: HTMLElement;
+  columnHandles: HTMLElement[] | null;
+  filterQuery: HTMLInputElement | null;
+  filterAuthor: HTMLSelectElement | null;
+  filterRef: HTMLSelectElement | null;
+  sortSelect: HTMLSelectElement | null;
+  filterClear: HTMLElement | null;
+
+  constructor(container: HTMLElement, body: HTMLElement, app: GraphViewApp) {
     this.container = container;
     this.body = body;
     this.app = app;
@@ -41,6 +148,12 @@ class GraphView {
     this.columnResize = null;
     this.columnResizeRaf = 0;
     this.formatLocalizedDate = LocalizedDateFormatter.create();
+    this.columnHandles = null;
+    this.filterQuery = null;
+    this.filterAuthor = null;
+    this.filterRef = null;
+    this.sortSelect = null;
+    this.filterClear = null;
 
     this.layer = document.createElement('div');
     this.layer.className = 'graph-virtual-layer';
@@ -50,11 +163,11 @@ class GraphView {
     this.setupHistoryControls();
     this.container.addEventListener('scroll', () => this.scheduleViewport());
     this.container.addEventListener('click', event => {
-      const row = event.target.closest('.graph-row');
+      const row = (event.target as HTMLElement).closest('.graph-row') as HTMLElement | null;
       if (row?.dataset.hash) this.selectFromEvent(row.dataset.hash, event);
     });
     this.container.addEventListener('contextmenu', event => {
-      const row = event.target.closest('.graph-row');
+      const row = (event.target as HTMLElement).closest('.graph-row') as HTMLElement | null;
       if (!row?.dataset.hash) return;
       event.preventDefault();
       if (!this.selectedHashes.has(row.dataset.hash)) this.select(row.dataset.hash, false);
@@ -62,7 +175,7 @@ class GraphView {
     });
   }
 
-  async load(repoPath, options = {}) {
+  async load(repoPath: string, options: { preserveViewport?: boolean } = {}): Promise<void> {
     if (!this.body.contains(this.layer)) {
       this.body.replaceChildren(this.layer);
     }
@@ -98,14 +211,20 @@ class GraphView {
     this.renderViewport();
   }
 
-  async loadNextPage(generation = this.generation, options = {}) {
+  async loadNextPage(generation = this.generation, options: { render?: boolean } = {}): Promise<boolean> {
     if (!this.repoPath || !this.hasMore || this.loading) return false;
     this.loading = true;
     try {
       const page = await window.gitTree.getGraphPage(this.repoPath, {
         offset: this.offset,
         limit: 500
-      });
+      }) as {
+        error?: string;
+        refs?: GraphRefEntry[];
+        commits?: GraphCommitData[];
+        nextOffset?: number;
+        hasMore?: boolean;
+      };
       if (generation !== this.generation) return false;
       if (page?.error) throw new Error(page.error);
 
@@ -120,7 +239,7 @@ class GraphView {
         this.hashes.add(commit.hash);
         return true;
       });
-      const layout = window.GraphLayout.layoutGraph(commits, this.layoutState);
+      const layout = (window as unknown as { GraphLayout: WindowGraphLayout }).GraphLayout.layoutGraph(commits, this.layoutState);
       this.rows.push(...layout.rows);
       this.layoutState = layout.nextState;
       this.laneCount = Math.max(this.laneCount, layout.laneCount);
@@ -136,7 +255,7 @@ class GraphView {
     } catch (error) {
       if (generation === this.generation) {
         this.body.style.height = '100%';
-        this.layer.replaceChildren(this.emptyState('ph-warning-circle', error.message));
+        this.layer.replaceChildren(this.emptyState('ph-warning-circle', (error as Error).message));
       }
       return false;
     } finally {
@@ -144,7 +263,7 @@ class GraphView {
     }
   }
 
-  captureViewportState() {
+  captureViewportState(): ViewportState {
     const viewportTop = Math.max(0, this.container.scrollTop - 36);
     const index = this.visibleRows.length
       ? Math.min(
@@ -162,7 +281,7 @@ class GraphView {
     };
   }
 
-  restoreViewportState(state) {
+  restoreViewportState(state: ViewportState): void {
     if (!state) return;
     this.selectedHashes = new Set(
       state.selectedHashes.filter(hash => this.hashes.has(hash))
@@ -183,7 +302,7 @@ class GraphView {
         : state.scrollTop;
   }
 
-  applyFilter() {
+  applyFilter(): void {
     const globalNeedle = this.searchTerm.trim().toLowerCase();
     const filterNeedle = this.filters.query.trim().toLowerCase();
     const rows = this.rows.filter(row => {
@@ -210,10 +329,10 @@ class GraphView {
     this.body.style.height = `${height}px`;
   }
 
-  sortRows(rows) {
+  sortRows(rows: GraphLayoutRow[]): GraphLayoutRow[] {
     if (this.sortMode === 'topology') return rows;
     const sorted = [...rows];
-    const compareText = (left, right) => left.localeCompare(
+    const compareText = (left: string, right: string): number => left.localeCompare(
       right,
       i18next.language,
       { sensitivity: 'base' }
@@ -230,7 +349,7 @@ class GraphView {
     return sorted;
   }
 
-  scheduleViewport() {
+  scheduleViewport(): void {
     if (this.raf) return;
     this.raf = requestAnimationFrame(() => {
       this.raf = 0;
@@ -240,7 +359,7 @@ class GraphView {
     });
   }
 
-  renderViewport(force = false) {
+  renderViewport(force = false): void {
     if (!this.visibleRows.length) {
       this.body.style.height = '100%';
       this.layer.replaceChildren(this.emptyState('ph-git-commit', t('history.empty')));
@@ -255,12 +374,12 @@ class GraphView {
     if (!force && start === this.renderedRange[0] && end === this.renderedRange[1]) return;
     this.renderedRange = [start, end];
 
-    const reusableRows = new Map();
-    const spareRows = [];
+    const reusableRows = new Map<string, HTMLElement>();
+    const spareRows: HTMLElement[] = [];
     if (!force) {
       for (const element of this.layer.children) {
-        if (element.classList.contains('graph-row') && element.dataset.hash) {
-          reusableRows.set(element.dataset.hash, element);
+        if (element.classList.contains('graph-row') && (element as HTMLElement).dataset.hash) {
+          reusableRows.set((element as HTMLElement).dataset.hash, element as HTMLElement);
         }
       }
       const visibleHashes = new Set(
@@ -289,7 +408,7 @@ class GraphView {
     this.layer.replaceChildren(fragment);
   }
 
-  createRow(layoutRow, index) {
+  createRow(layoutRow: GraphLayoutRow, index: number): HTMLElement {
     const row = document.createElement('div');
     row.className = 'graph-row';
 
@@ -315,7 +434,7 @@ class GraphView {
     return row;
   }
 
-  updateRow(row, layoutRow, index) {
+  updateRow(row: HTMLElement, layoutRow: GraphLayoutRow, index: number): void {
     const commit = layoutRow.commit;
     const selected = this.selectedHashes.has(commit.hash);
     row.className = `graph-row${selected ? ' selected' : ''}`;
@@ -323,13 +442,15 @@ class GraphView {
     row.style.transform = `translateY(${index * this.rowHeight}px)`;
     row.setAttribute('aria-selected', String(selected));
 
-    const [graph, message, author, date, hash] = row.children;
+    const [graph, message, author, date, hash] = row.children as unknown as [
+      HTMLElement, HTMLElement, HTMLElement, HTMLElement, HTMLElement
+    ];
     graph.replaceChildren(
       this.sortMode === 'topology'
         ? this.createGraphSvg(layoutRow)
         : this.createSortMarker()
     );
-    const [refs, subject] = message.children;
+    const [refs, subject] = message.children as unknown as [HTMLElement, HTMLElement];
     refs.replaceChildren(...(this.refsByHash.get(commit.hash) || []).map(ref => {
       const badge = document.createElement('span');
       badge.className = `badge badge-${ref.type}`;
@@ -343,52 +464,52 @@ class GraphView {
     hash.textContent = commit.hash.slice(0, 7);
   }
 
-  createSortMarker() {
+  createSortMarker(): HTMLElement {
     const marker = document.createElement('div');
     marker.className = 'graph-sort-marker';
     marker.innerHTML = '<i class="ph ph-git-commit" aria-hidden="true"></i>';
     return marker;
   }
 
-  createGraphSvg(row) {
+  createGraphSvg(row: GraphLayoutRow): SVGElement {
     const namespace = 'http://www.w3.org/2000/svg';
     const width = Math.min(240, Math.max(64, this.laneCount * 18 + 20));
-    const x = lane => 12 + lane * 18;
+    const x = (lane: number): number => 12 + lane * 18;
     const svg = document.createElementNS(namespace, 'svg');
     svg.setAttribute('class', 'graph-lanes');
     svg.setAttribute('viewBox', `0 0 ${width} ${this.rowHeight}`);
     svg.setAttribute('aria-hidden', 'true');
     svg.style.width = `${width}px`;
 
-    for (const segment of window.GraphLayout.createGraphSegments(row, this.rowHeight)) {
+    for (const segment of (window as unknown as { GraphLayout: WindowGraphLayout }).GraphLayout.createGraphSegments(row, this.rowHeight)) {
       svg.appendChild(this.svgPath(segment.path, segment.lane));
     }
 
     const circle = document.createElementNS(namespace, 'circle');
-    circle.setAttribute('cx', x(row.lane));
-    circle.setAttribute('cy', 19);
-    circle.setAttribute('r', row.parents.length > 1 ? 5 : 4);
+    circle.setAttribute('cx', String(x(row.lane)));
+    circle.setAttribute('cy', '19');
+    circle.setAttribute('r', String(row.parents.length > 1 ? 5 : 4));
     circle.setAttribute('class', `graph-lane-node graph-lane-${row.lane % 8}${row.parents.length > 1 ? ' is-merge' : ''}`);
     svg.appendChild(circle);
     if ((this.refsByHash.get(row.commit.hash) || []).some(ref => ref.type === 'head')) {
       const head = document.createElementNS(namespace, 'circle');
-      head.setAttribute('cx', x(row.lane));
-      head.setAttribute('cy', 19);
-      head.setAttribute('r', 8);
+      head.setAttribute('cx', String(x(row.lane)));
+      head.setAttribute('cy', '19');
+      head.setAttribute('r', '8');
       head.setAttribute('class', 'graph-head-indicator');
       svg.appendChild(head);
     }
     return svg;
   }
 
-  svgPath(data, lane) {
+  svgPath(data: string, lane: number): SVGElement {
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', data);
     path.setAttribute('class', `graph-lane-path graph-lane-${lane % 8}`);
     return path;
   }
 
-  updateGraphWidth() {
+  updateGraphWidth(): void {
     if (this.hasPersistedColumnWidths) return;
     const width = Math.min(240, Math.max(64, this.laneCount * 18 + 20));
     this.resizeColumn(
@@ -398,7 +519,7 @@ class GraphView {
     );
   }
 
-  restoreColumnWidths() {
+  restoreColumnWidths(): { widths: Record<string, number>; persisted: boolean } {
     const defaults = Object.fromEntries(
       Object.entries(this.columnDefinitions).map(([column, definition]) => [
         column,
@@ -406,14 +527,14 @@ class GraphView {
       ])
     );
     try {
-      const stored = JSON.parse(localStorage.getItem(this.columnStorageKey));
+      const stored: unknown = JSON.parse(localStorage.getItem(this.columnStorageKey) ?? 'null');
       if (!stored || typeof stored !== 'object' || Array.isArray(stored)) {
         return { widths: defaults, persisted: false };
       }
       let restored = false;
       for (const [column, definition] of Object.entries(this.columnDefinitions)) {
-        if (!Number.isFinite(stored[column])) continue;
-        defaults[column] = this.clampColumnWidth(stored[column], definition);
+        if (!Number.isFinite((stored as Record<string, unknown>)[column])) continue;
+        defaults[column] = this.clampColumnWidth((stored as Record<string, number>)[column], definition);
         restored = true;
       }
       return { widths: defaults, persisted: restored };
@@ -422,9 +543,9 @@ class GraphView {
     }
   }
 
-  setupColumnResize() {
+  setupColumnResize(): void {
     this.columnHandles = [
-      ...this.container.querySelectorAll('.graph-column-resizer')
+      ...this.container.querySelectorAll<HTMLElement>('.graph-column-resizer')
     ];
     for (const handle of this.columnHandles) {
       const column = handle.dataset.column;
@@ -457,7 +578,7 @@ class GraphView {
     this.updateColumnHandleLabels();
   }
 
-  startColumnResize(column, handle, clientX) {
+  startColumnResize(column: string, handle: HTMLElement, clientX: number): void {
     this.cancelColumnResize();
     this.columnResize = {
       column,
@@ -470,7 +591,7 @@ class GraphView {
     document.documentElement.classList.add('is-resizing-history-columns');
   }
 
-  previewColumnResize(clientX) {
+  previewColumnResize(clientX: number): void {
     if (!this.columnResize) return;
     const { column, startX, startWidth } = this.columnResize;
     const definition = this.columnDefinitions[column];
@@ -485,7 +606,7 @@ class GraphView {
     });
   }
 
-  finishColumnResize(clientX) {
+  finishColumnResize(clientX: number): void {
     if (!this.columnResize) return;
     this.previewColumnResize(clientX);
     const { column, startWidth, delta } = this.columnResize;
@@ -493,7 +614,7 @@ class GraphView {
     this.cancelColumnResize();
   }
 
-  cancelColumnResize() {
+  cancelColumnResize(): void {
     if (this.columnResizeRaf) {
       cancelAnimationFrame(this.columnResizeRaf);
       this.columnResizeRaf = 0;
@@ -506,7 +627,7 @@ class GraphView {
     document.documentElement.classList.remove('is-resizing-history-columns');
   }
 
-  resizeColumn(column, width, persist = true) {
+  resizeColumn(column: string, width: number, persist = true): void {
     const definition = this.columnDefinitions[column];
     if (!definition) return;
     this.columnWidths[column] = this.clampColumnWidth(width, definition);
@@ -514,7 +635,7 @@ class GraphView {
     if (persist) this.persistColumnWidths();
   }
 
-  setColumnWidths(widths, persist = true) {
+  setColumnWidths(widths: Record<string, number> | null | undefined, persist = true): void {
     for (const [column, definition] of Object.entries(this.columnDefinitions)) {
       if (!Number.isFinite(widths?.[column])) continue;
       this.columnWidths[column] = this.clampColumnWidth(widths[column], definition);
@@ -523,14 +644,14 @@ class GraphView {
     if (persist) this.persistColumnWidths();
   }
 
-  applyColumnWidths() {
+  applyColumnWidths(): void {
     for (const [column, width] of Object.entries(this.columnWidths)) {
       this.container.style.setProperty(`--graph-column-${column}`, `${width}px`);
     }
     this.updateColumnHandleLabels();
   }
 
-  persistColumnWidths() {
+  persistColumnWidths(): void {
     try {
       localStorage.setItem(this.columnStorageKey, JSON.stringify(this.columnWidths));
       this.hasPersistedColumnWidths = true;
@@ -539,24 +660,24 @@ class GraphView {
     }
   }
 
-  updateColumnHandleLabels() {
+  updateColumnHandleLabels(): void {
     if (!this.columnHandles) return;
     for (const handle of this.columnHandles) {
       const column = handle.dataset.column;
       const label = t(`history.${column}`);
       const definition = this.columnDefinitions[column];
       handle.setAttribute('aria-label', t('history.resizeColumn', { column: label }));
-      handle.setAttribute('aria-valuemin', definition.min);
-      handle.setAttribute('aria-valuemax', definition.max);
-      handle.setAttribute('aria-valuenow', this.columnWidths[column]);
+      handle.setAttribute('aria-valuemin', String(definition.min));
+      handle.setAttribute('aria-valuemax', String(definition.max));
+      handle.setAttribute('aria-valuenow', String(this.columnWidths[column]));
     }
   }
 
-  setupHistoryControls() {
-    this.filterQuery = document.getElementById('history-filter-query');
-    this.filterAuthor = document.getElementById('history-filter-author');
-    this.filterRef = document.getElementById('history-filter-ref');
-    this.sortSelect = document.getElementById('history-sort');
+  setupHistoryControls(): void {
+    this.filterQuery = document.getElementById('history-filter-query') as HTMLInputElement | null;
+    this.filterAuthor = document.getElementById('history-filter-author') as HTMLSelectElement | null;
+    this.filterRef = document.getElementById('history-filter-ref') as HTMLSelectElement | null;
+    this.sortSelect = document.getElementById('history-sort') as HTMLSelectElement | null;
     this.filterClear = document.getElementById('history-filter-clear');
     this.filterQuery?.addEventListener('input', () => {
       this.filters.query = this.filterQuery.value;
@@ -582,17 +703,17 @@ class GraphView {
     });
   }
 
-  commitHistoryState() {
+  commitHistoryState(): void {
     this.persistHistoryState();
     this.container.scrollTop = 0;
     this.applyFilter();
     this.renderViewport(true);
   }
 
-  updateAuthorOptions() {
+  updateAuthorOptions(): void {
     if (!this.filterAuthor) return;
     const selected = this.filters.author;
-    const authors = new Map();
+    const authors = new Map<string, string>();
     for (const row of this.rows) {
       const email = row.commit.authorEmail || row.commit.authorName;
       if (!email || authors.has(email)) continue;
@@ -617,8 +738,8 @@ class GraphView {
     }
   }
 
-  restoreHistoryState() {
-    let stored = {};
+  restoreHistoryState(): void {
+    let stored: Record<string, { query?: unknown; author?: unknown; ref?: unknown; sort?: unknown }> = {};
     try {
       stored = JSON.parse(localStorage.getItem(this.historyStateStorageKey)) || {};
     } catch { /* invalid stored history state is ignored */ }
@@ -626,8 +747,8 @@ class GraphView {
     this.filters = {
       query: typeof state.query === 'string' ? state.query : '',
       author: typeof state.author === 'string' ? state.author : '',
-      ref: ['all', 'branches', 'tags', 'head', 'none'].includes(state.ref)
-        ? state.ref
+      ref: ['all', 'branches', 'tags', 'head', 'none'].includes(state.ref as string)
+        ? state.ref as string
         : 'all'
     };
     this.sortMode = [
@@ -637,11 +758,11 @@ class GraphView {
       'author',
       'subject',
       'hash'
-    ].includes(state.sort) ? state.sort : 'topology';
+    ].includes(state.sort as string) ? state.sort as string : 'topology';
     this.syncHistoryControls();
   }
 
-  persistHistoryState() {
+  persistHistoryState(): void {
     if (!this.repoPath) return;
     try {
       const stored = JSON.parse(localStorage.getItem(this.historyStateStorageKey)) || {};
@@ -652,18 +773,18 @@ class GraphView {
     }
   }
 
-  syncHistoryControls() {
+  syncHistoryControls(): void {
     if (this.filterQuery) this.filterQuery.value = this.filters.query;
     if (this.filterAuthor) this.filterAuthor.value = this.filters.author;
     if (this.filterRef) this.filterRef.value = this.filters.ref;
     if (this.sortSelect) this.sortSelect.value = this.sortMode;
   }
 
-  clampColumnWidth(width, definition) {
+  clampColumnWidth(width: number, definition: ColumnDefinition): number {
     return Math.round(Math.min(definition.max, Math.max(definition.min, width)));
   }
 
-  select(hash, emit = true) {
+  select(hash: string, emit = true): void {
     this.selectedHash = hash;
     this.selectedHashes.clear();
     this.selectedHashes.add(hash);
@@ -673,7 +794,7 @@ class GraphView {
     if (emit) this.app.emit('commit:selected', hash);
   }
 
-  selectFromEvent(hash, event) {
+  selectFromEvent(hash: string, event: MouseEvent): void {
     const toggle = this.app.isPrimaryModifier(event);
     if (event.shiftKey && this.selectionAnchor) {
       const start = this.visibleRows.findIndex(row => row.commit.hash === this.selectionAnchor);
@@ -705,7 +826,7 @@ class GraphView {
     if (this.selectedHash) this.app.emit('commit:selected', this.selectedHash);
   }
 
-  getInspectorSnapshot(maxRows = 2000) {
+  getInspectorSnapshot(maxRows = 2000): Record<string, unknown> {
     const rows = this.rows.slice(0, Math.max(0, maxRows)).map(layoutRow => ({
       hash: layoutRow.commit.hash,
       subject: layoutRow.commit.subject || '',
@@ -731,25 +852,25 @@ class GraphView {
     };
   }
 
-  updateVisibleSelection() {
-    this.layer.querySelectorAll('.graph-row').forEach(row => {
+  updateVisibleSelection(): void {
+    this.layer.querySelectorAll<HTMLElement>('.graph-row').forEach(row => {
       row.classList.toggle('selected', this.selectedHashes.has(row.dataset.hash));
       row.setAttribute('aria-selected', String(this.selectedHashes.has(row.dataset.hash)));
     });
   }
 
-  setSearch(term) {
+  setSearch(term: string): void {
     this.searchTerm = term || '';
     this.applyFilter();
     this.renderViewport(true);
   }
 
-  render() {
+  render(): void {
     this.applyFilter();
     this.renderViewport(true);
   }
 
-  emptyState(icon, text) {
+  emptyState(icon: string, text: string): HTMLElement {
     const element = document.createElement('div');
     element.className = 'empty-state';
     element.innerHTML = `<i class="ph ${icon}"></i>`;
@@ -757,9 +878,16 @@ class GraphView {
     return element;
   }
 
-  fmtDate(value) {
+  fmtDate(value: unknown): string {
     return this.formatLocalizedDate(value, i18next.language);
   }
 }
 
-if (typeof module !== 'undefined') module.exports = GraphView;
+if (typeof window !== 'undefined') {
+  (window as unknown as { GraphView: typeof GraphView }).GraphView = GraphView;
+}
+
+declare const module: { exports: unknown } | undefined;
+if (typeof module !== 'undefined' && (module as { exports?: unknown }).exports) {
+  (module as { exports: unknown }).exports = GraphView;
+}
