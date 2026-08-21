@@ -1,8 +1,25 @@
 // @ts-nocheck
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+function resolvePreloadPath(base: string): string {
+  const candidates = [
+    path.join(__dirname, '..', `${base}.mjs`),
+    path.join(__dirname, '..', `${base}.mts`),
+    path.join(__dirname, '..', `${base}.js`)
+  ];
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate)) return candidate;
+    } catch (_error) {
+      // ignore missing candidates
+    }
+  }
+  return candidates[2];
+}
 
 import { GitService } from './git-service.mts';
 import { RepoManager } from './repo-manager.mts';
@@ -173,7 +190,7 @@ class MainApplication {
       autoHideMenuBar: true,
       icon: iconPath,
       webPreferences: {
-        preload: path.join(__dirname, '..', 'preload.js'),
+        preload: resolvePreloadPath('preload'),
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
@@ -292,7 +309,7 @@ class MainApplication {
       iconPath: () => app.isPackaged
         ? path.join(app.getAppPath(), 'icon.png')
         : path.join(__dirname, '..', '..', 'icon.png'),
-      preloadPath: path.join(__dirname, '..', 'preload-inspector.js'),
+      preloadPath: resolvePreloadPath('preload-inspector'),
       htmlPath: path.join(__dirname, '..', 'renderer', 'inspector-window.html'),
       sendToRenderer: (channel, payload) => this.sendToRenderer(channel, payload)
     });
