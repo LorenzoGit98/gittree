@@ -1,34 +1,37 @@
-const path = require('node:path');
-const { pathToFileURL } = require('node:url');
+// @ts-nocheck
+import * as path from 'node:path';
+import { pathToFileURL, fileURLToPath } from 'node:url';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-const { GitService } = require('./git-service.mts');
-const { RepoManager } = require('./repo-manager.mts');
-const { RepositoryWorkspace } = require('./repository-workspace.mts');
-const { scanRepositories } = require('./repository-scanner.mts');
-const { UpdateService } = require('./update-service.mts');
-const { CredentialVault } = require('./credential-vault.mts');
-const { HostingService } = require('./hosting-service.mts');
-const { loadOAuthConfig } = require('./oauth-config.mts');
-const { buildPullRequestUrl } = require('./provider-links.mts');
-const { getGitVersion } = require('./git-version.mts');
-const { Logger } = require('./logger.mts');
-const { parseDeepLink } = require('./deep-link.mts');
-const { createHandlerRegistry } = require('./ipc/handler-registry.mts');
-const { registerGitHandlers } = require('./ipc/git-handlers.mts');
-const { registerHostingHandlers } = require('./ipc/hosting-handlers.mts');
-const { registerRepositoryHandlers } = require('./ipc/repository-handlers.mts');
-const { registerWindowApplicationHandlers } = require('./ipc/window-application-handlers.mts');
-const { registerAgentHandlers } = require('./ipc/agent-handlers.mts');
-const { registerAiHandlers } = require('./ipc/ai-handlers.mts');
-const { AgentSessionService } = require('./agents/agent-session-service.mts');
-const { resolveAgentExecutable } = require('./agents/agent-adapters.mts');
-const { AiService } = require('./ai/ai-service.mts');
-const { createPty } = require('./agents/pty-factory.mts');
-const { createInspectorWindowController } = require('./inspector-window-controller.mts');
-const { createApplicationRuntime } = require('./application-runtime.mts');
-const { DiagnosticsExporter } = require('./diagnostics-exporter.mts');
-const { isWorkingTreeRepository } = require('./working-tree-repository.mts');
-const { convertWorkspaceProfile } = require('./workspace-profile-conversion.mts');
+import { GitService } from './git-service.mts';
+import { RepoManager } from './repo-manager.mts';
+import { RepositoryWorkspace } from './repository-workspace.mts';
+import { scanRepositories } from './repository-scanner.mts';
+import { UpdateService } from './update-service.mts';
+import { CredentialVault } from './credential-vault.mts';
+import { HostingService } from './hosting-service.mts';
+import { loadOAuthConfig } from './oauth-config.mts';
+import { buildPullRequestUrl } from './provider-links.mts';
+import { getGitVersion } from './git-version.mts';
+import { Logger } from './logger.mts';
+import { parseDeepLink } from './deep-link.mts';
+import { createHandlerRegistry } from './ipc/handler-registry.mts';
+import { registerGitHandlers } from './ipc/git-handlers.mts';
+import { registerHostingHandlers } from './ipc/hosting-handlers.mts';
+import { registerRepositoryHandlers } from './ipc/repository-handlers.mts';
+import { registerWindowApplicationHandlers } from './ipc/window-application-handlers.mts';
+import { registerAgentHandlers } from './ipc/agent-handlers.mts';
+import { registerAiHandlers } from './ipc/ai-handlers.mts';
+import { AgentSessionService } from './agents/agent-session-service.mts';
+import { resolveAgentExecutable } from './agents/agent-adapters.mts';
+import { AiService } from './ai/ai-service.mts';
+import { createPty } from './agents/pty-factory.mts';
+import { createInspectorWindowController } from './inspector-window-controller.mts';
+import { createApplicationRuntime } from './application-runtime.mts';
+import { DiagnosticsExporter } from './diagnostics-exporter.mts';
+import { isWorkingTreeRepository } from './working-tree-repository.mts';
+import { convertWorkspaceProfile } from './workspace-profile-conversion.mts';
 
 const ALLOWED_EXTERNAL_HOSTS = new Set([
   'github.com',
@@ -40,7 +43,7 @@ const ALLOWED_EXTERNAL_HOSTS = new Set([
   'www.bitbucket.org'
 ]);
 
-function isSafeExternalUrl(url) {
+export function isSafeExternalUrl(url: unknown) {
   if (typeof url !== 'string' || url.length > 8192) return false;
   try {
     const parsed = new URL(url);
@@ -50,7 +53,7 @@ function isSafeExternalUrl(url) {
   }
 }
 
-function createMainApplication(options) {
+export function createMainApplication(options) {
   return new MainApplication(options);
 }
 
@@ -555,5 +558,3 @@ class MainApplication {
     await this.runtime.stop();
   }
 }
-
-module.exports = { createMainApplication, isSafeExternalUrl };
