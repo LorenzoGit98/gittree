@@ -345,6 +345,10 @@ export class RepositoryOperations {
     }
     try {
       const result = await this.git.merge([flag, branch]);
+      const state = await this.getOperationState();
+      if (state.type === 'merge' && state.conflicts.length > 0) {
+        throw new Error(`Failed to merge: conflicts in ${state.conflicts.join(', ')}`);
+      }
       return { success: true, branch, strategy, result };
     } catch (error) {
       throw new Error(`Failed to merge: ${(error as Error).message}`, { cause: error });
@@ -381,7 +385,7 @@ export class RepositoryOperations {
       ({ stdout } = await execFileAsync(
         'git',
         ['merge-tree', '--write-tree', '--name-only', 'HEAD', branch],
-        { cwd: this.repoPath, encoding: 'utf8', maxBuffer: 50 * 1024 * 1024 }
+        { cwd: this.repoPath, encoding: 'utf8', maxBuffer: 50 * 1024 * 1024, env: { ...process.env, LC_ALL: 'C', LANG: 'C' } }
       ));
     } catch (error) {
       stdout = String((error as { stdout?: string }).stdout || '');
@@ -392,9 +396,15 @@ export class RepositoryOperations {
     for (let index = 1; index < lines.length; index += 1) {
       const line = lines[index].trim();
       if (!line || /^warning|^error|^Auto-merging/i.test(line)) continue;
-      if (/^CONFLICT\b/i.test(line)) {
-        let match = line.match(/^CONFLICT\b.*\bin\s+(\S+)/i);
-        if (!match) match = line.match(/^CONFLICT\b[^:]*:\s*(\S+)/i);
+      if (/^CONFL/i.test(line)) {
+        let match = line.match(/\bin\s+(\S+)\s*$/i);
+        if (!match) match = line.match(/\bdans\s+(\S+)\s*$/i);
+        if (!match) match = line.match(/:\s*(\S+)\s*$/);
+        if (!match) {
+          const last = line.trim().split(/\s+/).pop()?.replace(/[:.,;"]+$/, '') ?? '';
+          if (last && /[a-z0-9]/i.test(last)) conflictedFiles.push(last);
+          continue;
+        }
         if (match) conflictedFiles.push(match[1]);
       }
     }
