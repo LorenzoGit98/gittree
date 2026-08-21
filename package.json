@@ -27,7 +27,7 @@
     "screenshots:readme": "node scripts/capture-readme-screenshots.js",
     "test:performance": "npm run perf:renderer && npm run perf:workspace",
     "test:coverage": "npm run test:coverage:collect && npm run test:coverage:scopes",
-    "test:coverage:collect": "c8 --all --exclude-after-remap --temp-directory=coverage/tmp --reports-dir=coverage/all --include=src/main/**/*.js --include=src/renderer/**/*.js --include=src/*.js --reporter=text --reporter=lcov node --test test/*.test.js",
+    "test:coverage:collect": "c8 --all --exclude-after-remap --extension=js --extension=cjs --extension=mjs --extension=mts --temp-directory=coverage/tmp --reports-dir=coverage/all --include=src/main/**/*.js --include=src/main/**/*.mts --include=src/renderer/**/*.js --include=src/renderer/**/*.mts --include=src/*.js --include=src/*.mts --include=src/shared/**/*.mts --reporter=text --reporter=lcov node --test test/*.test.js",
     "test:coverage:scopes": "node scripts/check-coverage-scopes.js",
     "test:coverage:git": "node scripts/check-coverage-scopes.js git",
     "test:coverage:hosting": "node scripts/check-coverage-scopes.js hosting",
