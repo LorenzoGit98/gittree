@@ -113,7 +113,7 @@ test('the repository picker opened from the tabs can start a clone', async () =>
 });
 
 test('bulk repository import persists once and selects the first newly added repository', () => {
-  const RepoManager = require('../src/main/repo-manager');
+  const { RepoManager } = require('../src/main/repo-manager.mts');
   const repositories = {
     existing: path.resolve('workspace', 'existing'),
     alpha: path.resolve('workspace', 'alpha'),

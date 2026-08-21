@@ -7,7 +7,13 @@ class GitTreeApp {
     this.workspaceMode = 'history';
     this.updateState = null;
     this._events = {};
+    this.bus = new EventBus();
     this.dialogs = new DialogService();
+    this.toasts = new ToastService({
+      container: document.getElementById('toast'),
+      translate: key => I18n.t(key),
+      encode: value => HtmlEncoder.encode(value)
+    });
   }
 
   pathKey(value) {
@@ -230,9 +236,7 @@ class GitTreeApp {
 
     window.addEventListener('gittree:language-changed', () => this.refreshLocalizedView());
 
-    const toast = document.getElementById('toast');
-    toast.addEventListener('mouseenter', () => this.pauseToast());
-    toast.addEventListener('mouseleave', () => this.resumeToast());
+    this.toasts.mount();
   }
 
   setupWorkspaceModes() {
@@ -829,57 +833,19 @@ class GitTreeApp {
   }
 
   showToast(message, type = '') {
-    const toast = document.getElementById('toast');
-    const kind = ['success', 'warning', 'error'].includes(type) ? type : 'loading';
-    const icons = {
-      loading: 'ph-circle-notch',
-      success: 'ph-check-circle',
-      warning: 'ph-warning',
-      error: 'ph-x-circle'
-    };
-    const durations = { loading: 2500, success: 2800, warning: 4200, error: 5200 };
-    const duration = durations[kind];
-
-    clearTimeout(this._toastTimer);
-    toast.className = `toast toast-${kind} show`;
-    toast.setAttribute('aria-live', kind === 'error' ? 'assertive' : 'polite');
-    toast.innerHTML =
-      `<span class="toast-badge" aria-hidden="true"><i class="ph ${icons[kind]}"></i></span>` +
-      `<span class="toast-message"></span>` +
-      `<button type="button" class="toast-dismiss" aria-label="${this.esc(t('common.close'))}"><i class="ph ph-x" aria-hidden="true"></i></button>` +
-      `<span class="toast-progress" aria-hidden="true"></span>`;
-    toast.querySelector('.toast-message').textContent = message;
-    toast.querySelector('.toast-progress').style.animationDuration = `${duration}ms`;
-    toast.querySelector('.toast-dismiss').onclick = () => this.dismissToast();
-
-    this._toastRemaining = duration;
-    this._toastStarted = Date.now();
-    if (toast.matches(':hover')) {
-      toast.classList.add('paused');
-    } else {
-      this._toastTimer = setTimeout(() => this.dismissToast(), duration);
-    }
+    this.toasts.show(message, type);
   }
 
   dismissToast() {
-    clearTimeout(this._toastTimer);
-    document.getElementById('toast').classList.remove('show');
+    this.toasts.dismiss();
   }
 
   pauseToast() {
-    const toast = document.getElementById('toast');
-    if (!toast.classList.contains('show') || toast.classList.contains('paused')) return;
-    clearTimeout(this._toastTimer);
-    this._toastRemaining = Math.max((this._toastRemaining || 0) - (Date.now() - this._toastStarted), 0);
-    toast.classList.add('paused');
+    this.toasts.pause();
   }
 
   resumeToast() {
-    const toast = document.getElementById('toast');
-    if (!toast.classList.contains('show') || !toast.classList.contains('paused')) return;
-    toast.classList.remove('paused');
-    this._toastStarted = Date.now();
-    this._toastTimer = setTimeout(() => this.dismissToast(), Math.max(this._toastRemaining, 800));
+    this.toasts.resume();
   }
 
   esc(value) {
@@ -887,12 +853,11 @@ class GitTreeApp {
   }
 
   on(event, cb) {
-    if (!this._events[event]) this._events[event] = [];
-    this._events[event].push(cb);
+    return this.bus.on(event, cb);
   }
 
   emit(event, data) {
-    if (this._events[event]) this._events[event].forEach(cb => cb(data));
+    this.bus.emit(event, data);
   }
 }
 
