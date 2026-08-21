@@ -1,10 +1,30 @@
-/* exported GitFlow */
-/* eslint-disable-next-line no-unused-vars -- script-tag global consumed by app.js */
-class GitFlow {
-  constructor(app) {
+type GitFlowApp = {
+  state: { repo?: { path?: string } | null };
+  components: {
+    conflict?: { open: (operationState: unknown) => Promise<void> };
+  } & Record<string, unknown>;
+  showToast: (message: unknown, type?: string) => void;
+  emit: (event: string, data?: unknown) => void;
+};
+
+type GitFlowMode = 'start' | 'finish';
+type GitFlowType = 'feature' | 'release' | 'hotfix';
+
+export class GitFlow {
+  app: GitFlowApp;
+  overlay: HTMLElement;
+  dialog: HTMLElement;
+  mode: GitFlowMode;
+  type: GitFlowType;
+  localBranches: string[];
+  currentBranch: string;
+  finishTarget: string | null;
+  handedOff: boolean;
+
+  constructor(app: GitFlowApp) {
     this.app = app;
-    this.overlay = document.getElementById('modal-overlay');
-    this.dialog = document.getElementById('modal-dialog');
+    this.overlay = document.getElementById('modal-overlay') as HTMLElement;
+    this.dialog = document.getElementById('modal-dialog') as HTMLElement;
     this.mode = 'start';
     this.type = 'feature';
     this.localBranches = [];
@@ -19,7 +39,7 @@ class GitFlow {
     });
   }
 
-  async open() {
+  async open(): Promise<void> {
     const repo = this.app.state.repo;
     if (!repo) {
       this.app.showToast(t('gitflow.openRepositoryFirst'), 'error');
@@ -40,71 +60,74 @@ class GitFlow {
       const [metadata, status] = await Promise.all([
         window.gitTree.getBranchMetadata(repo.path),
         window.gitTree.getStatus(repo.path)
-      ]);
+      ]) as [
+        { branches?: Array<{ kind?: unknown; name?: unknown }> } | undefined,
+        { current?: string } | undefined
+      ];
       this.localBranches = (metadata?.branches || [])
         .filter(branch => branch.kind === 'local')
-        .map(branch => branch.name);
+        .map(branch => branch.name as string);
       this.currentBranch = status?.current || '';
       this.mode = 'start';
       this.type = 'feature';
       this.finishTarget = null;
       this.render();
       this.overlay.classList.remove('is-hidden');
-      this.dialog.querySelector('#gitflow-description')?.focus();
+      this.dialog.querySelector<HTMLElement>('#gitflow-description')?.focus();
     } catch (error) {
       if (this.dialog.classList.contains('gitflow-dialog')) this.close();
-      this.app.showToast(error?.message || t('common.error'), 'error');
+      this.app.showToast((error as Error)?.message || t('common.error'), 'error');
     }
   }
 
-  close() {
+  close(): void {
     this.overlay.classList.add('is-hidden');
     this.overlay.onclick = null;
     this.dialog.className = 'confirm-dialog';
     this.dialog.innerHTML = '';
   }
 
-  gitflowBranches() {
+  gitflowBranches(): string[] {
     return this.localBranches.filter(name => this.branchType(name));
   }
 
-  branchType(name) {
+  branchType(name: string): GitFlowType | null {
     if (name.startsWith('feature/')) return 'feature';
     if (name.startsWith('release/')) return 'release';
     if (name.startsWith('hotfix/')) return 'hotfix';
     return null;
   }
 
-  productionBranch(names) {
+  productionBranch(names: string[]): string {
     if (names.includes('main')) return 'main';
     if (names.includes('master')) return 'master';
     return this.currentBranch || names[0] || '';
   }
 
-  integrationBranch(names) {
+  integrationBranch(names: string[]): string {
     if (names.includes('develop')) return 'develop';
     return this.productionBranch(names);
   }
 
-  baseForType(type) {
+  baseForType(type: GitFlowType): string {
     return type === 'hotfix'
       ? this.productionBranch(this.localBranches)
       : this.integrationBranch(this.localBranches);
   }
 
-  previewName() {
-    const input = this.dialog.querySelector('#gitflow-description');
+  previewName(): string {
+    const input = this.dialog.querySelector('#gitflow-description') as HTMLInputElement | null;
     const slug = BranchNaming.slugify(input?.value || '');
     return slug ? `${this.type}/${slug}` : '';
   }
 
-  versionFromBranch(name) {
+  versionFromBranch(name: string): string {
     let suffix = name.split('/').slice(1).join('-') || 'release';
     if (suffix.startsWith('v')) suffix = suffix.slice(1);
     return suffix;
   }
 
-  render() {
+  render(): void {
     const branches = this.gitflowBranches();
     this.dialog.className = 'confirm-dialog gitflow-dialog';
     this.dialog.innerHTML = `
@@ -136,7 +159,7 @@ class GitFlow {
             </div>
           </div>
           <div class="gitflow-types" role="group">
-            ${['feature', 'release', 'hotfix'].map(type => `
+            ${(['feature', 'release', 'hotfix'] as const).map(type => `
               <button type="button" class="gitflow-type${type === this.type ? ' selected' : ''}"
                 data-gitflow-type="${type}">
                 <i class="ph ${this.typeIcon(type)}" aria-hidden="true"></i>
@@ -192,23 +215,24 @@ class GitFlow {
     this.bind();
   }
 
-  typeIcon(type) {
-    return { feature: 'ph-lightbulb', release: 'ph-package', hotfix: 'ph-first-aid' }[type] || 'ph-git-branch';
+  typeIcon(type: string): string {
+    return ({ feature: 'ph-lightbulb', release: 'ph-package', hotfix: 'ph-first-aid' } as Record<string, string>)[type] || 'ph-git-branch';
   }
 
-  typeBadge(type) {
-    return { feature: 'badge-branch', release: 'badge-tag', hotfix: 'badge-conflict' }[type] || 'badge-branch';
+  typeBadge(type: string | null): string {
+    return ({ feature: 'badge-branch', release: 'badge-tag', hotfix: 'badge-conflict' } as Record<string, string>)[type ?? ''] || 'badge-branch';
   }
 
-  bind() {
-    this.dialog.querySelector('[data-gitflow-close]').onclick = () => this.close();
+  bind(): void {
+    const closeButton = this.dialog.querySelector('[data-gitflow-close]') as HTMLElement | null;
+    if (closeButton) closeButton.onclick = () => this.close();
     this.overlay.onclick = event => {
       if (event.target === this.overlay) this.close();
     };
 
-    this.dialog.querySelectorAll('[data-gitflow-mode]').forEach(button => {
+    this.dialog.querySelectorAll<HTMLElement>('[data-gitflow-mode]').forEach(button => {
       button.onclick = () => {
-        this.mode = button.dataset.gitflowMode;
+        this.mode = button.dataset.gitflowMode as GitFlowMode;
         this.render();
       };
     });
@@ -217,54 +241,54 @@ class GitFlow {
     else this.bindFinish();
   }
 
-  bindStart() {
-    const description = this.dialog.querySelector('#gitflow-description');
-    const preview = this.dialog.querySelector('#gitflow-preview-name');
-    const startButton = this.dialog.querySelector('#gitflow-start');
+  bindStart(): void {
+    const description = this.dialog.querySelector('#gitflow-description') as HTMLInputElement | null;
+    const preview = this.dialog.querySelector('#gitflow-preview-name') as HTMLElement | null;
+    const startButton = this.dialog.querySelector('#gitflow-start') as HTMLButtonElement | null;
 
     const updatePreview = () => {
       const name = this.previewName();
-      preview.textContent = name || '—';
-      startButton.disabled = !name;
+      if (preview) preview.textContent = name || '—';
+      if (startButton) startButton.disabled = !name;
     };
 
-    description.oninput = updatePreview;
-    this.dialog.querySelectorAll('[data-gitflow-type]').forEach(button => {
+    if (description) description.oninput = updatePreview;
+    this.dialog.querySelectorAll<HTMLElement>('[data-gitflow-type]').forEach(button => {
       button.onclick = () => {
-        this.type = button.dataset.gitflowType;
-        this.dialog.querySelectorAll('[data-gitflow-type]').forEach(other => {
+        this.type = button.dataset.gitflowType as GitFlowType;
+        this.dialog.querySelectorAll<HTMLElement>('[data-gitflow-type]').forEach(other => {
           other.classList.toggle('selected', other === button);
         });
         updatePreview();
       };
     });
-    startButton.onclick = () => this.startBranch();
+    if (startButton) startButton.onclick = () => this.startBranch();
     updatePreview();
   }
 
-  bindFinish() {
-    const finishButton = this.dialog.querySelector('#gitflow-finish');
-    this.dialog.querySelectorAll('[data-gitflow-branch]').forEach(button => {
+  bindFinish(): void {
+    const finishButton = this.dialog.querySelector('#gitflow-finish') as HTMLButtonElement | null;
+    this.dialog.querySelectorAll<HTMLElement>('[data-gitflow-branch]').forEach(button => {
       button.onclick = () => {
-        this.finishTarget = button.dataset.gitflowBranch;
-        this.dialog.querySelectorAll('[data-gitflow-branch]').forEach(other => {
+        this.finishTarget = button.dataset.gitflowBranch ?? null;
+        this.dialog.querySelectorAll<HTMLElement>('[data-gitflow-branch]').forEach(other => {
           other.classList.toggle('selected', other === button);
         });
-        finishButton.disabled = false;
+        if (finishButton) finishButton.disabled = false;
       };
     });
-    finishButton.onclick = () => {
+    if (finishButton) finishButton.onclick = () => {
       if (this.finishTarget) this.finishBranch(this.finishTarget);
     };
   }
 
-  setBusy(busy) {
-    this.dialog.querySelectorAll('#gitflow-start, #gitflow-finish').forEach(button => {
+  setBusy(busy: boolean): void {
+    this.dialog.querySelectorAll<HTMLButtonElement>('#gitflow-start, #gitflow-finish').forEach(button => {
       button.disabled = busy;
     });
   }
 
-  async startBranch() {
+  async startBranch(): Promise<void> {
     const repo = this.app.state.repo;
     if (!repo) return;
     const name = this.previewName();
@@ -274,7 +298,7 @@ class GitFlow {
     }
     const base = this.baseForType(this.type);
     this.setBusy(true);
-    const result = await window.gitTree.createBranch(repo.path, name, base);
+    const result = await window.gitTree.createBranch(repo.path, name, base) as { error?: string } | undefined;
     if (result?.error) {
       this.app.showToast(result.error, 'error');
       this.setBusy(false);
@@ -285,11 +309,11 @@ class GitFlow {
     this.app.emit('refresh');
   }
 
-  async checkoutAndMerge(target, source) {
+  async checkoutAndMerge(target: string, source: string): Promise<void> {
     const repo = this.app.state.repo;
-    const checkout = await window.gitTree.checkoutBranch(repo.path, target);
+    const checkout = await window.gitTree.checkoutBranch(repo.path, target) as { error?: string } | undefined;
     if (checkout?.error) throw new Error(checkout.error);
-    const merge = await window.gitTree.merge(repo.path, source, 'noff');
+    const merge = await window.gitTree.merge(repo.path, source, 'noff') as { error?: string; conflictState?: { type?: string } } | undefined;
     if (merge?.error) {
       if (merge.conflictState?.type) {
         this.handedOff = true;
@@ -300,16 +324,16 @@ class GitFlow {
     }
   }
 
-  async tagHead(name, message) {
+  async tagHead(name: string, message: string): Promise<void> {
     const repo = this.app.state.repo;
-    const log = await window.gitTree.getLog(repo.path, 1);
+    const log = await window.gitTree.getLog(repo.path, 1) as { latest?: { hash?: string } } | undefined;
     const hash = log?.latest?.hash;
     if (!hash) throw new Error('Could not resolve HEAD for tagging');
-    const tag = await window.gitTree.createTag(repo.path, name, hash, message);
+    const tag = await window.gitTree.createTag(repo.path, name, hash, message) as { error?: string } | undefined;
     if (tag?.error) throw new Error(tag.error);
   }
 
-  async finishBranch(branchName) {
+  async finishBranch(branchName: string): Promise<void> {
     const repo = this.app.state.repo;
     if (!repo) return;
     const type = this.branchType(branchName);
@@ -332,21 +356,30 @@ class GitFlow {
         await this.tagHead(`v${version}`, branchName);
         if (integration !== production) await this.checkoutAndMerge(integration, branchName);
       }
-      const del = await window.gitTree.deleteBranch(repo.path, branchName, false);
+      const del = await window.gitTree.deleteBranch(repo.path, branchName, false) as { error?: string } | undefined;
       if (del?.error) throw new Error(del.error);
       this.app.showToast(t('gitflow.finished', { branch: branchName }), 'success');
       this.close();
       this.app.emit('refresh');
     } catch (err) {
       if (!this.handedOff) {
-        this.app.showToast(err.message || String(err), 'error');
+        this.app.showToast((err as Error).message || String(err), 'error');
         this.setBusy(false);
       }
       this.app.emit('refresh');
     }
   }
 
-  esc(value) {
+  esc(value: unknown): string {
     return HtmlEncoder.encode(value);
   }
+}
+
+if (typeof window !== 'undefined') {
+  (window as unknown as { GitFlow: typeof GitFlow }).GitFlow = GitFlow;
+}
+
+declare const module: { exports: unknown } | undefined;
+if (typeof module !== 'undefined' && (module as { exports?: unknown }).exports) {
+  (module as { exports: unknown }).exports = GitFlow;
 }

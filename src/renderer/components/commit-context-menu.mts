@@ -1,5 +1,36 @@
-class CommitContextMenu {
-  constructor(app) {
+interface CommitPreview {
+  action: string;
+  allowed: boolean;
+  reason?: string;
+  commits: Array<{ hash: string; subject: string }>;
+  files: string[];
+  target?: string;
+  workingTree?: { clean?: boolean };
+  error?: string;
+}
+
+type CommitMenuApp = {
+  state: { repo?: { path?: string } | null };
+  dialogs: {
+    form: (options: Record<string, unknown>) => Promise<unknown>;
+    confirm: (options: Record<string, unknown>) => Promise<unknown>;
+  };
+  components: {
+    commitCompare?: { open: (hashA: string, hashB: string) => void };
+    conflict?: { open: (operationState: unknown) => Promise<void> };
+  } & Record<string, unknown>;
+  showToast: (message: unknown, type?: string) => void;
+  refresh: (options?: Record<string, unknown>) => Promise<void>;
+};
+
+export class CommitContextMenu {
+  app: CommitMenuApp;
+  hashes: string[];
+  previews: Record<string, CommitPreview>;
+  generation: number;
+  element: HTMLElement;
+
+  constructor(app: CommitMenuApp) {
     this.app = app;
     this.hashes = [];
     this.previews = {};
@@ -10,7 +41,7 @@ class CommitContextMenu {
     document.body.appendChild(this.element);
 
     document.addEventListener('pointerdown', event => {
-      if (!this.element.contains(event.target)) this.close();
+      if (!this.element.contains(event.target as Node)) this.close();
     }, true);
     document.addEventListener('scroll', () => this.close(), true);
     document.addEventListener('keydown', event => this.handleKeyDown(event));
@@ -18,7 +49,7 @@ class CommitContextMenu {
     window.addEventListener('blur', () => this.close());
   }
 
-  open(event, hashes) {
+  open(event: MouseEvent, hashes: string[]): void {
     if (!this.app.state.repo || !hashes.length) return;
     event.preventDefault();
     this.hashes = hashes;
@@ -34,10 +65,10 @@ class CommitContextMenu {
     });
   }
 
-  loadPreviews(generation, repoPath, hashes, position) {
-    const settle = (action, request) => Promise.resolve(request)
+  loadPreviews(generation: number, repoPath: string, hashes: string[], position: { x: number; y: number }): Promise<unknown> {
+    const settle = (action: string, request: unknown) => Promise.resolve(request)
       .then(result => this.normalizePreview(action, result))
-      .catch(error => this.normalizePreview(action, { error: error?.message || String(error) }))
+      .catch((error: Error) => this.normalizePreview(action, { error: error?.message || String(error) }))
       .then(preview => {
         if (generation !== this.generation || this.element.classList.contains('is-hidden')) return;
         this.previews[action] = preview;
@@ -75,25 +106,26 @@ class CommitContextMenu {
     return Promise.all(requests);
   }
 
-  normalizePreview(action, preview) {
-    if (preview && typeof preview.allowed === 'boolean') {
+  normalizePreview(action: string, preview: unknown): CommitPreview {
+    if (preview && typeof (preview as { allowed?: unknown }).allowed === 'boolean') {
+      const source = preview as { allowed: boolean; commits?: unknown[]; files?: unknown[] } & Record<string, unknown>;
       return {
-        ...preview,
+        ...source,
         action,
-        commits: Array.isArray(preview.commits) ? preview.commits : [],
-        files: Array.isArray(preview.files) ? preview.files : []
+        commits: Array.isArray(source.commits) ? source.commits as Array<{ hash: string; subject: string }> : [],
+        files: Array.isArray(source.files) ? source.files as string[] : []
       };
     }
     return {
       action,
       allowed: false,
-      reason: preview?.error || t('common.error'),
+      reason: (preview as { error?: string })?.error || t('common.error'),
       commits: [],
       files: []
     };
   }
 
-  render() {
+  render(): void {
     const rebaseLoading = !Object.hasOwn(this.previews, 'rebase');
     const cherryPickLoading = !Object.hasOwn(this.previews, 'cherry-pick');
     const rebase = this.previews.rebase;
@@ -160,15 +192,15 @@ class CommitContextMenu {
         <span>${this.esc(item.label)}</span>
       </div>
     `).join('');
-    this.element.querySelectorAll('[data-action]:not([aria-disabled="true"])').forEach(item => {
+    this.element.querySelectorAll<HTMLElement>('[data-action]:not([aria-disabled="true"])').forEach(item => {
       item.onclick = event => {
         event.stopPropagation();
-        this.execute(item.dataset.action);
+        this.execute((item as HTMLElement).dataset.action);
       };
     });
   }
 
-  async execute(action) {
+  async execute(action: string): Promise<void> {
     const repo = this.app.state.repo;
     if (action === 'compare-commits') {
       if (!repo || this.hashes.length !== 2) return;
@@ -206,9 +238,9 @@ class CommitContextMenu {
     const repoPath = repo.path;
     this.close();
     if (!await this.previewDialog(preview)) return;
-    const result = action === 'rebase'
+    const result = (action === 'rebase'
       ? await window.gitTree.rebaseOntoCommit(repoPath, hashes[0])
-      : await window.gitTree.cherryPick(repoPath, hashes);
+      : await window.gitTree.cherryPick(repoPath, hashes)) as { error?: string; conflictState?: { type?: string }; head?: string };
     if (result?.error) {
       this.app.showToast(result.error, 'error');
       if (result.conflictState?.type) {
@@ -220,7 +252,7 @@ class CommitContextMenu {
     await this.app.refresh({ selectHash: result.head, silent: true });
   }
 
-  async explainCommitDialog(repo, hash) {
+  async explainCommitDialog(repo: { path?: string }, hash: string): Promise<unknown> {
     const overlay = document.getElementById('modal-overlay');
     const dialog = document.getElementById('modal-dialog');
     const language = await this.aiLanguage().catch(() => 'en');
@@ -235,7 +267,7 @@ class CommitContextMenu {
         </div>`;
       overlay.classList.remove('is-hidden');
       let settled = false;
-      const finish = value => {
+      const finish = (value: null) => {
         if (settled) return;
         settled = true;
         document.removeEventListener('keydown', onKeydown);
@@ -246,14 +278,15 @@ class CommitContextMenu {
         dialog.innerHTML = '';
         resolve(value);
       };
-      const onKeydown = event => {
+      const onKeydown = (event: KeyboardEvent) => {
         if (event.key === 'Escape') finish(null);
       };
       document.addEventListener('keydown', onKeydown);
       window.gitTree.explainCommit(repo.path, {
         hash,
         language
-      }).then(result => {
+      }).then((rawResult: unknown) => {
+        const result = rawResult as { error?: string; summary?: string; body?: string } | undefined;
         if (result?.error) {
           finish(null);
           this.app.showToast(result.error, 'error');
@@ -268,16 +301,16 @@ class CommitContextMenu {
               <button class="btn btn-primary" type="button" data-close>${this.esc(t('common.cancel'))}</button>
             </div>
           </div>`;
-        dialog.querySelector('[data-close]').onclick = () => finish(null);
-      }).catch(error => {
+        dialog.querySelector<HTMLElement>('[data-close]').onclick = () => finish(null);
+      }).catch((error: Error) => {
         finish(null);
         this.app.showToast(error?.message || t('common.error'), 'error');
       });
     });
   }
 
-  async aiLanguage() {
-    const settings = await window.gitTree.getAiSettings().catch(() => null);
+  async aiLanguage(): Promise<string> {
+    const settings = await window.gitTree.getAiSettings().catch(() => null) as { language?: string } | null;
     if (settings?.language === 'en' || settings?.language === 'it') {
       return settings.language;
     }
@@ -285,7 +318,7 @@ class CommitContextMenu {
     return current.startsWith('it') ? 'it' : 'en';
   }
 
-  createTagDialog(repo, hash) {
+  createTagDialog(repo: { path?: string }, hash: string): Promise<unknown> {
     const overlay = document.getElementById('modal-overlay');
     const dialog = document.getElementById('modal-dialog');
     return new Promise(resolve => {
@@ -317,12 +350,12 @@ class CommitContextMenu {
           </div>
         </form>`;
       overlay.classList.remove('is-hidden');
-      const form = dialog.querySelector('form');
-      const error = dialog.querySelector('[data-tag-error]');
-      const create = dialog.querySelector('[data-create]');
-      const cancel = dialog.querySelector('[data-cancel]');
+      const form = dialog.querySelector('form') as HTMLFormElement;
+      const error = dialog.querySelector<HTMLElement>('[data-tag-error]');
+      const create = dialog.querySelector<HTMLButtonElement>('[data-create]');
+      const cancel = dialog.querySelector<HTMLButtonElement>('[data-cancel]');
       let submitting = false;
-      const finish = value => {
+      const finish = (value: unknown) => {
         document.removeEventListener('keydown', onKeydown);
         overlay.removeEventListener('click', onOverlayClick);
         overlay.classList.add('is-hidden');
@@ -333,10 +366,10 @@ class CommitContextMenu {
         dialog.innerHTML = '';
         resolve(value);
       };
-      const onKeydown = event => {
+      const onKeydown = (event: KeyboardEvent) => {
         if (event.key === 'Escape' && !submitting) finish(null);
       };
-      const onOverlayClick = event => {
+      const onOverlayClick = (event: MouseEvent) => {
         if (event.target === overlay && !submitting) finish(null);
       };
       cancel.onclick = () => {
@@ -347,17 +380,17 @@ class CommitContextMenu {
         submitting = true;
         create.disabled = true;
         cancel.disabled = true;
-        form.elements.name.disabled = true;
-        form.elements.message.disabled = true;
+        (form.elements as unknown as Record<string, HTMLInputElement>).name.disabled = true;
+        (form.elements as unknown as Record<string, HTMLTextAreaElement>).message.disabled = true;
         create.querySelector('i').className = 'ph ph-circle-notch';
         error.textContent = '';
         try {
           const result = await window.gitTree.createTag(
             repo.path,
-            form.elements.name.value.trim(),
+            (form.elements as unknown as Record<string, HTMLInputElement>).name.value.trim(),
             hash,
-            form.elements.message.value
-          );
+            (form.elements as unknown as Record<string, HTMLTextAreaElement>).message.value
+          ) as { success?: boolean; error?: string; name?: string };
           if (!result?.success || result?.error) {
             throw new Error(result?.error || t('commitMenu.tagCreateFailed'));
           }
@@ -368,25 +401,25 @@ class CommitContextMenu {
           submitting = false;
           create.disabled = false;
           cancel.disabled = false;
-          form.elements.name.disabled = false;
-          form.elements.message.disabled = false;
+          (form.elements as unknown as Record<string, HTMLInputElement>).name.disabled = false;
+          (form.elements as unknown as Record<string, HTMLTextAreaElement>).message.disabled = false;
           create.querySelector('i').className = 'ph ph-tag';
-          error.textContent = tagError.message || t('commitMenu.tagCreateFailed');
-          form.elements.name.focus();
+          error.textContent = (tagError as Error).message || t('commitMenu.tagCreateFailed');
+          (form.elements as unknown as Record<string, HTMLInputElement>).name.focus();
         }
       };
       document.addEventListener('keydown', onKeydown);
       overlay.addEventListener('click', onOverlayClick);
-      form.elements.name.focus();
+      (form.elements as unknown as Record<string, HTMLInputElement>).name.focus();
     });
   }
 
-  async deleteTagDialog(repo, hash) {
-    const tagsResult = await window.gitTree.getTagsAtCommit(repo.path, hash);
-    const tags = Array.isArray(tagsResult) ? tagsResult : [];
-    if (tagsResult?.error || !tags.length) {
-      this.app.showToast(tagsResult?.error || t('commitMenu.noTagsAtCommit'), 'warning');
-      return;
+  async deleteTagDialog(repo: { path?: string }, hash: string): Promise<unknown> {
+    const tagsResult = await window.gitTree.getTagsAtCommit(repo.path, hash) as unknown;
+    const tags = Array.isArray(tagsResult) ? tagsResult as string[] : [];
+    if ((tagsResult as { error?: string })?.error || !tags.length) {
+      this.app.showToast((tagsResult as { error?: string })?.error || t('commitMenu.noTagsAtCommit'), 'warning');
+      return undefined;
     }
     const overlay = document.getElementById('modal-overlay');
     const dialog = document.getElementById('modal-dialog');
@@ -415,10 +448,10 @@ class CommitContextMenu {
           </button>
         </div>`;
       overlay.classList.remove('is-hidden');
-      const error = dialog.querySelector('[data-tag-error]');
-      const del = dialog.querySelector('[data-delete]');
-      const cancel = dialog.querySelector('[data-cancel]');
-      const checkboxes = [...dialog.querySelectorAll('input[type="checkbox"]')];
+      const error = dialog.querySelector<HTMLElement>('[data-tag-error]');
+      const del = dialog.querySelector<HTMLButtonElement>('[data-delete]');
+      const cancel = dialog.querySelector<HTMLButtonElement>('[data-cancel]');
+      const checkboxes = [...dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
       const sync = () => {
         del.disabled = !checkboxes.some(checkbox => checkbox.checked);
       };
@@ -426,7 +459,7 @@ class CommitContextMenu {
         checkbox.onchange = sync;
       });
       let submitting = false;
-      const finish = value => {
+      const finish = (value: unknown) => {
         document.removeEventListener('keydown', onKeydown);
         overlay.removeEventListener('click', onOverlayClick);
         overlay.classList.add('is-hidden');
@@ -436,10 +469,10 @@ class CommitContextMenu {
         dialog.innerHTML = '';
         resolve(value);
       };
-      const onKeydown = event => {
+      const onKeydown = (event: KeyboardEvent) => {
         if (event.key === 'Escape' && !submitting) finish(null);
       };
-      const onOverlayClick = event => {
+      const onOverlayClick = (event: MouseEvent) => {
         if (event.target === overlay && !submitting) finish(null);
       };
       cancel.onclick = () => {
@@ -455,7 +488,7 @@ class CommitContextMenu {
         error.textContent = '';
         try {
           for (const tag of selected) {
-            const result = await window.gitTree.deleteTag(repo.path, tag);
+            const result = await window.gitTree.deleteTag(repo.path, tag) as { success?: boolean; error?: string };
             if (!result?.success || result?.error) {
               throw new Error(result?.error || t('commitMenu.tagDeleteFailed'));
             }
@@ -471,7 +504,7 @@ class CommitContextMenu {
           del.disabled = false;
           cancel.disabled = false;
           del.querySelector('i').className = 'ph ph-trash';
-          error.textContent = tagError.message || t('commitMenu.tagDeleteFailed');
+          error.textContent = (tagError as Error).message || t('commitMenu.tagDeleteFailed');
         }
       };
       document.addEventListener('keydown', onKeydown);
@@ -480,12 +513,12 @@ class CommitContextMenu {
     });
   }
 
-  async restoreFileDialog(repo, hash) {
-    const treeResult = await window.gitTree.getFileTree(repo.path, hash);
-    const files = Array.isArray(treeResult) ? treeResult : [];
-    if (treeResult?.error || !files.length) {
-      this.app.showToast(treeResult?.error || t('commitMenu.noFilesAtCommit'), 'warning');
-      return;
+  async restoreFileDialog(repo: { path?: string }, hash: string): Promise<unknown> {
+    const treeResult = await window.gitTree.getFileTree(repo.path, hash) as unknown;
+    const files = Array.isArray(treeResult) ? treeResult as string[] : [];
+    if ((treeResult as { error?: string })?.error || !files.length) {
+      this.app.showToast((treeResult as { error?: string })?.error || t('commitMenu.noFilesAtCommit'), 'warning');
+      return undefined;
     }
     const overlay = document.getElementById('modal-overlay');
     const dialog = document.getElementById('modal-dialog');
@@ -511,12 +544,12 @@ class CommitContextMenu {
           </button>
         </div>`;
       overlay.classList.remove('is-hidden');
-      const list = dialog.querySelector('[data-file-list]');
-      const error = dialog.querySelector('[data-file-error]');
-      const restoreButton = dialog.querySelector('[data-restore]');
-      const cancel = dialog.querySelector('[data-cancel]');
-      const search = dialog.querySelector('input[type="search"]');
-      let selectedPath = null;
+      const list = dialog.querySelector<HTMLElement>('[data-file-list]');
+      const error = dialog.querySelector<HTMLElement>('[data-file-error]');
+      const restoreButton = dialog.querySelector<HTMLButtonElement>('[data-restore]');
+      const cancel = dialog.querySelector<HTMLButtonElement>('[data-cancel]');
+      const search = dialog.querySelector<HTMLInputElement>('input[type="search"]');
+      let selectedPath: string | null = null;
       let submitting = false;
 
       const renderList = () => {
@@ -530,9 +563,9 @@ class CommitContextMenu {
             <span>${this.esc(file)}</span>
           </label>
         `).join('') || `<div class="settings-empty">${this.esc(t('commitMenu.noFilesMatch'))}</div>`;
-        list.querySelectorAll('[data-file]').forEach(item => {
+        list.querySelectorAll<HTMLElement>('[data-file]').forEach(item => {
           item.onclick = () => {
-            selectedPath = item.dataset.file;
+            selectedPath = (item as HTMLElement).dataset.file;
             list.querySelectorAll('[data-file]').forEach(other => {
               other.classList.toggle('is-selected', other === item);
             });
@@ -543,7 +576,7 @@ class CommitContextMenu {
       search.oninput = renderList;
       renderList();
 
-      const finish = value => {
+      const finish = (value: unknown) => {
         document.removeEventListener('keydown', onKeydown);
         overlay.removeEventListener('click', onOverlayClick);
         overlay.classList.add('is-hidden');
@@ -553,10 +586,10 @@ class CommitContextMenu {
         dialog.innerHTML = '';
         resolve(value);
       };
-      const onKeydown = event => {
+      const onKeydown = (event: KeyboardEvent) => {
         if (event.key === 'Escape' && !submitting) finish(null);
       };
-      const onOverlayClick = event => {
+      const onOverlayClick = (event: MouseEvent) => {
         if (event.target === overlay && !submitting) finish(null);
       };
       cancel.onclick = () => {
@@ -574,7 +607,7 @@ class CommitContextMenu {
             repo.path,
             hash,
             selectedPath
-          );
+          ) as { success?: boolean; error?: string };
           if (!result?.success || result?.error) {
             throw new Error(result?.error || t('commitMenu.checkoutFileFailed'));
           }
@@ -586,7 +619,7 @@ class CommitContextMenu {
           restoreButton.disabled = false;
           cancel.disabled = false;
           restoreButton.querySelector('i').className = 'ph ph-arrow-counter-clockwise';
-          error.textContent = restoreError.message || t('commitMenu.checkoutFileFailed');
+          error.textContent = (restoreError as Error).message || t('commitMenu.checkoutFileFailed');
         }
       };
       document.addEventListener('keydown', onKeydown);
@@ -595,7 +628,7 @@ class CommitContextMenu {
     });
   }
 
-  previewDialog(preview) {
+  previewDialog(preview: CommitPreview): Promise<boolean> {
     const overlay = document.getElementById('modal-overlay');
     const dialog = document.getElementById('modal-dialog');
     return new Promise(resolve => {
@@ -634,25 +667,25 @@ class CommitContextMenu {
           </div>
         </div>`;
       overlay.classList.remove('is-hidden');
-      const finish = value => {
+      const finish = (value: boolean) => {
         overlay.classList.add('is-hidden');
         dialog.innerHTML = '';
         resolve(value);
       };
-      dialog.querySelector('[data-cancel]').onclick = () => finish(false);
-      dialog.querySelector('[data-confirm]').onclick = () => finish(true);
-      dialog.querySelector(preview.allowed ? '[data-confirm]' : '[data-cancel]')?.focus();
+      dialog.querySelector<HTMLElement>('[data-cancel]').onclick = () => finish(false);
+      dialog.querySelector<HTMLElement>('[data-confirm]').onclick = () => finish(true);
+      dialog.querySelector<HTMLElement>(preview.allowed ? '[data-confirm]' : '[data-cancel]')?.focus();
     });
   }
 
-  close() {
+  close(): void {
     if (this.element.classList.contains('is-hidden')) return;
     this.generation += 1;
     this.element.classList.add('is-hidden');
     this.element.innerHTML = '';
   }
 
-  place(x, y) {
+  place(x: number, y: number): void {
     const margin = 8;
     this.element.style.left = `${x}px`;
     this.element.style.top = `${y}px`;
@@ -667,36 +700,42 @@ class CommitContextMenu {
     )}px`;
   }
 
-  focusFirst() {
-    this.element.querySelector('.branch-menu-item:not([aria-disabled="true"])')?.focus();
+  focusFirst(): void {
+    this.element.querySelector<HTMLElement>('.branch-menu-item:not([aria-disabled="true"])')?.focus();
   }
 
-  handleKeyDown(event) {
+  handleKeyDown(event: KeyboardEvent): void {
     if (this.element.classList.contains('is-hidden')) return;
     if (event.key === 'Escape') {
       event.preventDefault();
       this.close();
       return;
     }
-    const items = [...this.element.querySelectorAll(
+    const items = [...this.element.querySelectorAll<HTMLElement>(
       '.branch-menu-item:not([aria-disabled="true"])'
     )];
     if (!items.length) return;
-    const current = items.indexOf(document.activeElement);
+    const current = items.indexOf(document.activeElement as HTMLElement);
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       const delta = event.key === 'ArrowDown' ? 1 : -1;
       items[(current + delta + items.length) % items.length].focus();
     } else if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      document.activeElement?.click();
+      (document.activeElement as HTMLElement | null)?.click();
     }
   }
 
-  esc(value) {
+  esc(value: unknown): string {
     return HtmlEncoder.encode(value);
   }
 }
 
-if (typeof window !== 'undefined') window.CommitContextMenu = CommitContextMenu;
-if (typeof module !== 'undefined') module.exports = CommitContextMenu;
+if (typeof window !== 'undefined') {
+  (window as unknown as { CommitContextMenu: typeof CommitContextMenu }).CommitContextMenu = CommitContextMenu;
+}
+
+declare const module: { exports: unknown } | undefined;
+if (typeof module !== 'undefined' && (module as { exports?: unknown }).exports) {
+  (module as { exports: unknown }).exports = CommitContextMenu;
+}

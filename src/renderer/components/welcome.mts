@@ -1,31 +1,80 @@
-/* exported WelcomeScreen */
-class WelcomeScreen {
+type WelcomeApp = {
+  showToast: (message: unknown, type?: string) => void;
+  setupClearableSearches?: (scope: ParentNode) => void;
+  components: {
+    repoTabs?: {
+      addRepo: (path: string) => Promise<unknown>;
+      addRepos: (paths: string[]) => Promise<{ added?: string[]; failed?: string[] } | undefined>;
+    };
+  } & Record<string, unknown>;
+};
+
+interface ScannedRepository {
+  name: string;
+  path: string;
+}
+
+export class WelcomeScreen {
+  screen: HTMLElement;
+  recentList: HTMLElement;
+  onboardingContainer: HTMLElement | null;
+  steps: string[];
+  storageKey: string;
+  app: WelcomeApp | null;
+  repositoryPicker: HTMLElement | null;
+  repositoryPickerKeydown: ((event: KeyboardEvent) => void) | null;
+  scanList: HTMLElement | null;
+  scanRenderFrame: number | null;
+  scanId: string | number | null;
+  scanFinished: boolean;
+  unsubscribeScanProgress: (() => void) | null;
+  unsubscribeScanComplete: (() => void) | null;
+  knownRepositoryPaths: Set<string>;
+  scanRepositories: ScannedRepository[];
+  scanSelection: Set<string>;
+  scanQuery: string;
+
   constructor() {
-    this.screen = document.getElementById('welcome-screen');
-    this.recentList = document.getElementById('recent-repos');
+    this.screen = document.getElementById('welcome-screen') as HTMLElement;
+    this.recentList = document.getElementById('recent-repos') as HTMLElement;
     this.onboardingContainer = document.getElementById('welcome-onboarding');
     this.steps = ['open', 'branch', 'commit'];
     this.storageKey = 'gittree.onboarding';
+    this.app = null;
+    this.repositoryPicker = null;
+    this.repositoryPickerKeydown = null;
+    this.scanList = null;
+    this.scanRenderFrame = null;
+    this.scanId = null;
+    this.scanFinished = false;
+    this.unsubscribeScanProgress = null;
+    this.unsubscribeScanComplete = null;
+    this.knownRepositoryPaths = new Set();
+    this.scanRepositories = [];
+    this.scanSelection = new Set();
+    this.scanQuery = '';
   }
 
-  async init(app) {
+  async init(app: WelcomeApp): Promise<void> {
     this.app = app;
-    document.getElementById('btn-open-repo').onclick = () => this.openRepositoryPicker();
-    document.getElementById('btn-clone-repo').onclick = () => this.cloneRepo();
+    const openButton = document.getElementById('btn-open-repo') as HTMLElement | null;
+    if (openButton) openButton.onclick = () => this.openRepositoryPicker();
+    const cloneButton = document.getElementById('btn-clone-repo') as HTMLElement | null;
+    if (cloneButton) cloneButton.onclick = () => this.cloneRepo();
     await this.loadRecent();
     this.renderOnboarding();
   }
 
-  readProgress() {
+  readProgress(): Record<string, boolean> {
     try {
-      const parsed = JSON.parse(localStorage.getItem(this.storageKey));
-      return parsed && typeof parsed === 'object' ? parsed : {};
+      const parsed: unknown = JSON.parse(localStorage.getItem(this.storageKey) ?? 'null');
+      return parsed && typeof parsed === 'object' ? parsed as Record<string, boolean> : {};
     } catch {
       return {};
     }
   }
 
-  markStep(step) {
+  markStep(step: string): void {
     if (!this.steps.includes(step)) return;
     const progress = this.readProgress();
     progress[step] = true;
@@ -33,7 +82,7 @@ class WelcomeScreen {
     this.renderOnboarding();
   }
 
-  renderOnboarding() {
+  renderOnboarding(): void {
     if (!this.onboardingContainer) return;
     const progress = this.readProgress();
     const complete = this.steps.every(step => progress[step]);
@@ -51,18 +100,18 @@ class WelcomeScreen {
       </div>`;
   }
 
-  async openRepo() {
+  async openRepo(): Promise<void> {
     try {
       if (!window.gitTree) return;
       const dir = await window.gitTree.selectDirectory();
       if (!dir) return;
       const isRepo = await window.gitTree.checkIsGitRepo(dir);
       if (!isRepo) { this.app.showToast(t('feedback.notRepo'), 'error'); return; }
-      await this.app.components.repoTabs.addRepo(dir);
-    } catch (e) { this.app.showToast('Error: ' + e.message, 'error'); }
+      await this.app.components.repoTabs.addRepo(dir as string);
+    } catch (e) { this.app.showToast('Error: ' + (e as Error).message, 'error'); }
   }
 
-  openRepositoryPicker() {
+  openRepositoryPicker(): void {
     this.closeRepositoryPicker();
     const overlay = document.createElement('div');
     overlay.className = 'repository-picker-overlay';
@@ -97,32 +146,32 @@ class WelcomeScreen {
       </section>`;
     document.body.appendChild(overlay);
     this.repositoryPicker = overlay;
-    overlay.querySelector('.repository-picker-close').onclick = () => this.closeRepositoryPicker();
+    overlay.querySelector<HTMLElement>('.repository-picker-close').onclick = () => this.closeRepositoryPicker();
     overlay.addEventListener('mousedown', event => {
       if (event.target === overlay) this.closeRepositoryPicker();
     });
-    overlay.querySelector('[data-mode="single"]').onclick = async () => {
+    overlay.querySelector<HTMLElement>('[data-mode="single"]').onclick = async () => {
       this.closeRepositoryPicker();
       await this.openRepo();
     };
-    overlay.querySelector('[data-mode="clone"]').onclick = async () => {
+    overlay.querySelector<HTMLElement>('[data-mode="clone"]').onclick = async () => {
       this.closeRepositoryPicker();
       await this.cloneRepo();
     };
-    overlay.querySelector('[data-mode="scan"]').onclick = async () => {
-      const rootPath = await window.gitTree.selectDirectory();
+    overlay.querySelector<HTMLElement>('[data-mode="scan"]').onclick = async () => {
+      const rootPath = await window.gitTree.selectDirectory() as string | null;
       if (rootPath) await this.startRepositoryScan(rootPath);
     };
     this.repositoryPickerKeydown = event => {
       if (event.key === 'Escape') this.closeRepositoryPicker();
     };
     document.addEventListener('keydown', this.repositoryPickerKeydown);
-    overlay.querySelector('[data-mode="single"]').focus();
+    overlay.querySelector<HTMLElement>('[data-mode="single"]').focus();
   }
 
-  async startRepositoryScan(rootPath) {
+  async startRepositoryScan(rootPath: string): Promise<void> {
     if (!this.repositoryPicker) return;
-    const repositories = await window.gitTree.getRepos();
+    const repositories = await window.gitTree.getRepos() as Array<{ path?: string }> | undefined;
     this.knownRepositoryPaths = new Set(
       (repositories || []).map(repo => this.pathKey(repo.path))
     );
@@ -169,10 +218,10 @@ class WelcomeScreen {
       </footer>`;
 
     const picker = this.repositoryPicker;
-    picker.querySelector('.repository-picker-root').textContent = rootPath;
-    picker.querySelector('.repository-picker-close').onclick = () => this.closeRepositoryPicker();
-    picker.querySelector('[data-action="cancel"]').onclick = () => this.closeRepositoryPicker();
-    picker.querySelector('[data-action="all"]').onclick = () => {
+    picker.querySelector<HTMLElement>('.repository-picker-root').textContent = rootPath;
+    picker.querySelector<HTMLElement>('.repository-picker-close').onclick = () => this.closeRepositoryPicker();
+    picker.querySelector<HTMLElement>('[data-action="cancel"]').onclick = () => this.closeRepositoryPicker();
+    picker.querySelector<HTMLElement>('[data-action="all"]').onclick = () => {
       this.visibleScanRepositories().forEach(repo => {
         if (!this.knownRepositoryPaths.has(this.pathKey(repo.path))) {
           this.scanSelection.add(repo.path);
@@ -180,13 +229,13 @@ class WelcomeScreen {
       });
       this.renderRepositoryScan();
     };
-    picker.querySelector('[data-action="none"]').onclick = () => {
+    picker.querySelector<HTMLElement>('[data-action="none"]').onclick = () => {
       this.visibleScanRepositories().forEach(repo => this.scanSelection.delete(repo.path));
       this.renderRepositoryScan();
     };
-    picker.querySelector('[data-action="import"]').onclick = () => this.importScannedRepositories();
-    picker.querySelector('input[type="search"]').oninput = event => {
-      this.scanQuery = event.target.value.trim().toLocaleLowerCase();
+    picker.querySelector<HTMLElement>('[data-action="import"]').onclick = () => this.importScannedRepositories();
+    picker.querySelector<HTMLInputElement>('input[type="search"]').oninput = event => {
+      this.scanQuery = (event.target as HTMLInputElement).value.trim().toLocaleLowerCase();
       this.scanList.scrollTop = 0;
       this.renderRepositoryScan();
     };
@@ -200,23 +249,33 @@ class WelcomeScreen {
       });
     }, { passive: true });
 
-    this.unsubscribeScanProgress = window.gitTree.onRepositoryScanProgress(update => {
+    this.unsubscribeScanProgress = window.gitTree.onRepositoryScanProgress((update: {
+      scanId?: string | number;
+      repository?: ScannedRepository;
+      scannedDirectories?: number;
+    }) => {
       if (update.scanId !== this.scanId) return;
       if (update.repository) this.appendScannedRepository(update.repository);
       this.updateScanStatus(update.scannedDirectories);
     });
-    this.unsubscribeScanComplete = window.gitTree.onRepositoryScanComplete(result => {
+    this.unsubscribeScanComplete = window.gitTree.onRepositoryScanComplete((result: {
+      scanId?: string | number;
+      repositories?: ScannedRepository[];
+      scannedDirectories?: number;
+      error?: unknown;
+      canceled?: boolean;
+    }) => {
       if (result.scanId !== this.scanId) return;
       this.scanFinished = true;
       for (const repository of result.repositories || []) this.appendScannedRepository(repository);
       this.updateScanStatus(result.scannedDirectories, result);
       this.renderRepositoryScan();
     });
-    const started = await window.gitTree.startRepositoryScan(rootPath);
+    const started = await window.gitTree.startRepositoryScan(rootPath) as { scanId: string | number };
     this.scanId = started.scanId;
   }
 
-  appendScannedRepository(repository) {
+  appendScannedRepository(repository: ScannedRepository): void {
     if (this.scanRepositories.some(item => this.pathKey(item.path) === this.pathKey(repository.path))) return;
     this.scanRepositories.push(repository);
     if (!this.knownRepositoryPaths.has(this.pathKey(repository.path))) {
@@ -225,7 +284,7 @@ class WelcomeScreen {
     this.renderRepositoryScan();
   }
 
-  visibleScanRepositories() {
+  visibleScanRepositories(): ScannedRepository[] {
     if (!this.scanQuery) return this.scanRepositories;
     return this.scanRepositories.filter(repo => (
       repo.name.toLocaleLowerCase().includes(this.scanQuery) ||
@@ -233,7 +292,7 @@ class WelcomeScreen {
     ));
   }
 
-  renderRepositoryScan() {
+  renderRepositoryScan(): void {
     if (!this.repositoryPicker || !this.scanList) return;
     const items = this.visibleScanRepositories();
     const rowHeight = 54;
@@ -241,8 +300,8 @@ class WelcomeScreen {
     const viewportRows = Math.ceil(this.scanList.clientHeight / rowHeight);
     const start = Math.max(0, Math.floor(this.scanList.scrollTop / rowHeight) - overscan);
     const end = Math.min(items.length, start + viewportRows + overscan * 2);
-    const spacer = this.scanList.querySelector('.repository-scan-spacer');
-    const rows = this.scanList.querySelector('.repository-scan-rows');
+    const spacer = this.scanList.querySelector<HTMLElement>('.repository-scan-spacer');
+    const rows = this.scanList.querySelector<HTMLElement>('.repository-scan-rows');
     spacer.style.height = `${items.length * rowHeight}px`;
     rows.style.transform = `translateY(${start * rowHeight}px)`;
     rows.innerHTML = '';
@@ -282,14 +341,14 @@ class WelcomeScreen {
     this.updateScanSummary();
   }
 
-  updateScanStatus(scannedDirectories, result) {
+  updateScanStatus(scannedDirectories: number | undefined, result?: { error?: unknown; canceled?: boolean }): void {
     if (!this.repositoryPicker) return;
     const status = this.repositoryPicker.querySelector('[data-status]');
     const spinner = this.repositoryPicker.querySelector('.repository-scan-spinner');
     if (result) {
       spinner.classList.add('is-hidden');
       status.textContent = result.error
-        ? result.error
+        ? String(result.error)
         : result.canceled
           ? t('discovery.canceled')
           : t('discovery.complete', {
@@ -301,15 +360,15 @@ class WelcomeScreen {
     }
   }
 
-  updateScanSummary() {
+  updateScanSummary(): void {
     if (!this.repositoryPicker) return;
     const count = this.scanSelection.size;
     this.repositoryPicker.querySelector('[data-summary]').textContent = t('discovery.selected', { count });
-    this.repositoryPicker.querySelector('[data-action="import"]').disabled = count === 0;
+    (this.repositoryPicker.querySelector('[data-action="import"]') as HTMLButtonElement).disabled = count === 0;
   }
 
-  async importScannedRepositories() {
-    const button = this.repositoryPicker?.querySelector('[data-action="import"]');
+  async importScannedRepositories(): Promise<void> {
+    const button = this.repositoryPicker?.querySelector('[data-action="import"]') as HTMLButtonElement | null;
     if (!button || button.disabled) return;
     button.disabled = true;
     const result = await this.app.components.repoTabs.addRepos([...this.scanSelection]);
@@ -322,7 +381,7 @@ class WelcomeScreen {
     }
   }
 
-  closeRepositoryPicker() {
+  closeRepositoryPicker(): void {
     if (this.scanId && !this.scanFinished) window.gitTree.cancelRepositoryScan(this.scanId);
     if (this.unsubscribeScanProgress) this.unsubscribeScanProgress();
     if (this.unsubscribeScanComplete) this.unsubscribeScanComplete();
@@ -338,27 +397,27 @@ class WelcomeScreen {
     this.unsubscribeScanComplete = null;
   }
 
-  pathKey(value) {
+  pathKey(value: string): string {
     return window.gitTree?.platform === 'win32' ? value.toLocaleLowerCase() : value;
   }
 
-  async cloneRepo() {
+  async cloneRepo(): Promise<void> {
     const cloneUrl = await this.cloneDialog();
     if (!cloneUrl) return;
     const parentDirectory = await window.gitTree.selectDirectory();
     if (!parentDirectory) return;
     this.app.showToast(t('feedback.cloning'), 'info');
     try {
-      const result = await window.gitTree.cloneRepository(cloneUrl, parentDirectory);
+      const result = await window.gitTree.cloneRepository(cloneUrl, parentDirectory) as { error?: string; path?: string } | undefined;
       if (result?.error) { this.app.showToast(result.error, 'error'); return; }
       this.app.showToast(t('feedback.cloneComplete'), 'success');
       await this.app.components.repoTabs.addRepo(result.path);
     } catch (e) {
-      this.app.showToast('Error: ' + e.message, 'error');
+      this.app.showToast('Error: ' + (e as Error).message, 'error');
     }
   }
 
-  cloneDialog() {
+  cloneDialog(): Promise<string | null> {
     return new Promise(resolve => {
       const overlay = document.createElement('div');
       overlay.className = 'repository-picker-overlay';
@@ -386,42 +445,42 @@ class WelcomeScreen {
             </div>
           </footer>
         </section>`;
-      const finish = value => {
+      const finish = (value: string | null) => {
         overlay.remove();
         document.removeEventListener('keydown', keydown);
         resolve(value);
       };
-      const keydown = event => {
+      const keydown = (event: KeyboardEvent) => {
         if (event.key === 'Escape') finish(null);
         if (event.key === 'Enter') submit();
       };
       const submit = () => {
-        const input = overlay.querySelector('.clone-url-input');
+        const input = overlay.querySelector('.clone-url-input') as HTMLInputElement;
         const value = input.value.trim();
         if (!value) return;
         finish(value);
       };
       document.body.appendChild(overlay);
-      overlay.querySelector('.repository-picker-close').onclick = () => finish(null);
+      overlay.querySelector<HTMLElement>('.repository-picker-close').onclick = () => finish(null);
       overlay.addEventListener('mousedown', event => {
         if (event.target === overlay) finish(null);
       });
-      overlay.querySelector('[data-action="cancel"]').onclick = () => finish(null);
-      overlay.querySelector('[data-action="next"]').onclick = submit;
+      overlay.querySelector<HTMLElement>('[data-action="cancel"]').onclick = () => finish(null);
+      overlay.querySelector<HTMLElement>('[data-action="next"]').onclick = submit;
       document.addEventListener('keydown', keydown);
-      overlay.querySelector('.clone-url-input').focus();
+      overlay.querySelector<HTMLElement>('.clone-url-input').focus();
     });
   }
 
-  async loadRecent() {
+  async loadRecent(): Promise<void> {
     try {
-      const repos = await window.gitTree.getRepos();
+      const repos = await window.gitTree.getRepos() as Array<{ name?: string; path?: string }> | undefined;
       if (!repos || !repos.length) { this.recentList.innerHTML = ''; return; }
       this.recentList.innerHTML = `<div class="welcome-recent-title">${t('welcome.recent')}</div>`;
       repos.slice(0, 5).forEach((repo, index) => {
         const el = document.createElement('div');
         el.className = 'welcome-recent-item';
-        el.style.setProperty('--item-index', index);
+        el.style.setProperty('--item-index', String(index));
         el.innerHTML = `<div class="recent-name">${this.esc(repo.name)}</div><div class="recent-path">${this.esc(repo.path)}</div>`;
         el.addEventListener('click', () => {
           this.app.components.repoTabs.addRepo(repo.path);
@@ -431,17 +490,24 @@ class WelcomeScreen {
     } catch (e) { console.error('loadRecent:', e); }
   }
 
-  show() {
+  show(): void {
     this.screen.classList.remove('is-hidden');
     document.getElementById('workspace').classList.add('is-hidden');
   }
 
-  hide() {
+  hide(): void {
     this.screen.classList.add('is-hidden');
     document.getElementById('workspace').classList.remove('is-hidden');
   }
 
-  esc(value) { return HtmlEncoder.encode(value); }
+  esc(value: unknown): string { return HtmlEncoder.encode(value); }
 }
 
-if (typeof module !== 'undefined') module.exports = WelcomeScreen;
+if (typeof window !== 'undefined') {
+  (window as unknown as { WelcomeScreen: typeof WelcomeScreen }).WelcomeScreen = WelcomeScreen;
+}
+
+declare const module: { exports: unknown } | undefined;
+if (typeof module !== 'undefined' && (module as { exports?: unknown }).exports) {
+  (module as { exports: unknown }).exports = WelcomeScreen;
+}

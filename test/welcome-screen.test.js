@@ -9,7 +9,7 @@ function loadWelcomeScreen(gitTree, documentOverride) {
     'src',
     'renderer',
     'components',
-    'welcome.js'
+    'welcome.mts'
   );
   const elements = new Map();
   global.window = { gitTree };
@@ -28,7 +28,8 @@ function loadWelcomeScreen(gitTree, documentOverride) {
     }
   };
   global.t = key => key;
-  return require(filename);
+  const mod = require(filename);
+  return mod.WelcomeScreen || mod.default || mod;
 }
 
 function createPickerDocument() {

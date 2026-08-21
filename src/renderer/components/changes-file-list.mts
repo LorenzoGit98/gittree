@@ -1,5 +1,32 @@
-class ChangesFileList {
-  constructor(container, options = {}) {
+type RequestFrame = (callback: () => void) => number;
+
+export interface ChangesFileListOptions {
+  rowHeight?: number;
+  overscan?: number;
+  document?: Document;
+  requestFrame?: RequestFrame;
+  observerFactory?: ((callback: () => void) => { observe: (target: Element) => void; disconnect: () => void }) | null;
+}
+
+export class ChangesFileList {
+  container: HTMLElement;
+  rowHeight: number;
+  overscan: number;
+  document: Document;
+  requestFrame: RequestFrame;
+  observerFactory: ChangesFileListOptions['observerFactory'];
+  items: unknown[];
+  renderRow: ((item: unknown, index: number) => HTMLElement | null) | null;
+  emptyText: string;
+  spacer: HTMLElement | null;
+  observer: { observe: (target: Element) => void; disconnect: () => void } | null;
+  frame: number;
+  mounted: boolean;
+  paintFrame: () => void;
+  onScroll: () => void;
+  onResize: () => void;
+
+  constructor(container: HTMLElement, options: ChangesFileListOptions = {}) {
     this.container = container;
     this.rowHeight = options.rowHeight || 38;
     this.overscan = options.overscan ?? 8;
@@ -27,7 +54,7 @@ class ChangesFileList {
     };
   }
 
-  mount() {
+  mount(): void {
     if (this.mounted) return;
     this.mounted = true;
     this.container.addEventListener('scroll', this.onScroll, { passive: true });
@@ -40,7 +67,7 @@ class ChangesFileList {
     }
   }
 
-  destroy() {
+  destroy(): void {
     if (this.observer) {
       this.observer.disconnect();
       this.observer = null;
@@ -49,7 +76,7 @@ class ChangesFileList {
     this.mounted = false;
   }
 
-  update(items, renderRow, emptyText = '') {
+  update(items: unknown[], renderRow: (item: unknown, index: number) => HTMLElement | null, emptyText = ''): void {
     this.items = items || [];
     this.renderRow = renderRow;
     this.emptyText = emptyText;
@@ -73,7 +100,7 @@ class ChangesFileList {
     this.paint();
   }
 
-  paint() {
+  paint(): void {
     if (!this.spacer || !this.renderRow || !this.items.length) return;
     const visible = Math.ceil(this.container.clientHeight / this.rowHeight);
     const start = Math.max(
@@ -95,4 +122,11 @@ class ChangesFileList {
   }
 }
 
-if (typeof module !== 'undefined') module.exports = ChangesFileList;
+if (typeof window !== 'undefined') {
+  (window as unknown as { ChangesFileList: typeof ChangesFileList }).ChangesFileList = ChangesFileList;
+}
+
+declare const module: { exports: unknown } | undefined;
+if (typeof module !== 'undefined' && (module as { exports?: unknown }).exports) {
+  (module as { exports: unknown }).exports = ChangesFileList;
+}

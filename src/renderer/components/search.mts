@@ -1,12 +1,49 @@
-/* exported GlobalSearch */
-/* eslint-disable-next-line no-unused-vars -- script-tag global consumed by app.js */
-class GlobalSearch {
-  constructor(app) {
+type SearchComponents = {
+  repoTabs?: { repos?: Array<{ name?: string; path?: string }>; selectRepo?: (index: number) => void };
+  branchList?: {
+    checkoutRemote?: (local: unknown, remote: string) => void;
+    checkout?: (name: unknown) => void;
+    promptCreateBranch?: () => void;
+  };
+} & Record<string, unknown>;
+
+type SearchApp = {
+  state: { repo?: { path?: string } | null };
+  components: SearchComponents;
+  isPrimaryModifier: (event: KeyboardEvent) => boolean;
+  showToast: (message: unknown, type?: string) => void;
+  emit: (event: string, data?: unknown) => void;
+  doFetch: () => void;
+  doPull: () => void;
+  doPush: () => void;
+};
+
+interface SearchItem {
+  type: string;
+  label: string;
+  subtitle: string;
+  detail: string;
+  data: Record<string, unknown>;
+}
+
+export class GlobalSearch {
+  app: SearchApp;
+  overlay: HTMLElement;
+  input: HTMLInputElement;
+  results: HTMLElement;
+  filters: HTMLElement;
+  aiButton: HTMLElement | null;
+  allData: SearchItem[];
+  selectedIdx: number;
+  visible: boolean;
+  aiSearching: boolean;
+
+  constructor(app: SearchApp) {
     this.app = app;
-    this.overlay = document.getElementById('search-overlay');
-    this.input = document.getElementById('search-input');
-    this.results = document.getElementById('search-results');
-    this.filters = document.getElementById('search-filters');
+    this.overlay = document.getElementById('search-overlay') as HTMLElement;
+    this.input = document.getElementById('search-input') as HTMLInputElement;
+    this.results = document.getElementById('search-results') as HTMLElement;
+    this.filters = document.getElementById('search-filters') as HTMLElement;
     this.aiButton = document.getElementById('search-ai-ask');
     this.allData = [];
     this.selectedIdx = -1;
@@ -14,7 +51,7 @@ class GlobalSearch {
     this.aiSearching = false;
   }
 
-  init() {
+  init(): void {
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape' && this.visible) { this.hide(); return; }
       if (
@@ -43,7 +80,7 @@ class GlobalSearch {
     });
   }
 
-  async show() {
+  async show(): Promise<void> {
     this.visible = true;
     this.overlay.classList.remove('is-hidden');
     this.input.value = '';
@@ -52,7 +89,7 @@ class GlobalSearch {
     this.results.innerHTML = '';
     this.filters.innerHTML = '';
     if (this.aiButton) {
-      this.aiButton.disabled = !this.app.state.repo;
+      (this.aiButton as HTMLButtonElement).disabled = !this.app.state.repo;
     }
 
     if (this.app.state.repo) {
@@ -61,7 +98,11 @@ class GlobalSearch {
           window.gitTree.getBranches(this.app.state.repo.path),
           window.gitTree.getLog(this.app.state.repo.path, 50),
           window.gitTree.getStatus(this.app.state.repo.path)
-        ]);
+        ]) as [
+          { branches?: Record<string, unknown>; current?: string } | undefined,
+          { all?: Array<{ message: string; hash: string; author_name: string; date: string }> } | undefined,
+          { files?: Array<{ path: string; working_dir?: string; index?: string }> } | undefined
+        ];
         if (branches?.branches) {
           for (const name of Object.keys(branches.branches)) {
             this.allData.push({
@@ -106,16 +147,16 @@ class GlobalSearch {
     setTimeout(() => this.input.focus(), 50);
   }
 
-  hide() {
+  hide(): void {
     this.visible = false;
     this.overlay.classList.add('is-hidden');
   }
 
-  toggle() {
-    this.visible ? this.hide() : this.show();
+  toggle(): void {
+    if (this.visible) this.hide(); else this.show();
   }
 
-  search() {
+  search(): void {
     const q = this.input.value.trim().toLowerCase();
     this.selectedIdx = -1;
     if (!q) { this.renderResults([]); return; }
@@ -141,7 +182,7 @@ class GlobalSearch {
     this.renderResults(filtered);
   }
 
-  async askAi() {
+  async askAi(): Promise<void> {
     const repo = this.app.state.repo;
     if (!repo || this.aiSearching) return;
     const query = this.input.value.trim();
@@ -155,7 +196,7 @@ class GlobalSearch {
       const result = await window.gitTree.searchHistory(repo.path, {
         query,
         language: await this.aiLanguage()
-      });
+      }) as { error?: string; matches?: Array<{ subject?: string; hash?: string; reason?: string }> } | undefined;
       if (result?.error) {
         this.app.showToast(result.error, 'error');
         return;
@@ -179,11 +220,11 @@ class GlobalSearch {
     }
   }
 
-  setAiSearching(searching) {
-    const button = this.aiButton;
+  setAiSearching(searching: boolean): void {
+    const button = this.aiButton as HTMLButtonElement | null;
     if (!button) return;
-    const icon = button.querySelector('i');
-    const label = button.querySelector('span');
+    const icon = button.querySelector('i') as HTMLElement;
+    const label = button.querySelector('span') as HTMLElement;
     button.disabled = searching;
     if (searching) {
       icon.className = 'ph ph-circle-notch';
@@ -195,8 +236,8 @@ class GlobalSearch {
     button.disabled = !this.app.state.repo;
   }
 
-  async aiLanguage() {
-    const settings = await window.gitTree.getAiSettings().catch(() => null);
+  async aiLanguage(): Promise<string> {
+    const settings = await window.gitTree.getAiSettings().catch(() => null) as { language?: string } | null;
     if (settings?.language === 'en' || settings?.language === 'it') {
       return settings.language;
     }
@@ -204,14 +245,14 @@ class GlobalSearch {
     return current.startsWith('it') ? 'it' : 'en';
   }
 
-  renderResults(items) {
+  renderResults(items: SearchItem[]): void {
     this.results.innerHTML = '';
     if (!items.length && this.input.value.trim()) {
       this.results.innerHTML = `<div class="search-empty">${t('search.empty')}</div>`;
       return;
     }
 
-    const grouped = {};
+    const grouped: Record<string, SearchItem[]> = {};
     items.forEach(i => { if (!grouped[i.type]) grouped[i.type] = []; grouped[i.type].push(i); });
 
     for (const [type, group] of Object.entries(grouped)) {
@@ -237,8 +278,8 @@ class GlobalSearch {
     }
   }
 
-  iconForType(type) {
-    const icons = {
+  iconForType(type: string): string {
+    const icons: Record<string, string> = {
       branch: 'ph ph-git-branch',
       commit: 'ph ph-git-commit',
       file: 'ph ph-file-code',
@@ -249,8 +290,8 @@ class GlobalSearch {
     return icons[type] || 'ph ph-circle';
   }
 
-  groupLabel(type) {
-    const labels = {
+  groupLabel(type: string): string {
+    const labels: Record<string, string> = {
       branch: t('search.branches'),
       commit: t('search.commits'),
       file: t('search.files'),
@@ -261,34 +302,34 @@ class GlobalSearch {
     return labels[type] || type;
   }
 
-  highlight(text, query) {
+  highlight(text: string, query: string): string {
     if (!query) return this.esc(text);
     const safeQuery = this.esc(query).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const re = new RegExp(`(${safeQuery})`, 'gi');
     return this.esc(text).replace(re, '<span class="highlight">$1</span>');
   }
 
-  esc(value) { return HtmlEncoder.encode(value); }
+  esc(value: unknown): string { return HtmlEncoder.encode(value); }
 
-  handleKey(e) {
-    const items = this.results.querySelectorAll('.search-result-item');
+  handleKey(e: KeyboardEvent): void {
+    const items = this.results.querySelectorAll<HTMLElement>('.search-result-item');
     if (e.key === 'ArrowDown') { e.preventDefault(); this.selectedIdx = Math.min(this.selectedIdx + 1, items.length - 1); this.updateSelection(items); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); this.selectedIdx = Math.max(this.selectedIdx - 1, 0); this.updateSelection(items); }
     else if (e.key === 'Enter' && this.selectedIdx >= 0) { e.preventDefault(); items[this.selectedIdx]?.click(); this.hide(); }
   }
 
-  updateSelection(items) {
+  updateSelection(items: NodeListOf<HTMLElement>): void {
     items.forEach((el, i) => el.classList.toggle('selected', i === this.selectedIdx));
     const sel = items[this.selectedIdx];
     if (sel) sel.scrollIntoView({ block: 'nearest' });
   }
 
-  select(item) {
+  select(item: SearchItem): void {
     this.hide();
     if (item.type === 'branch') {
-      if (item.data.name.startsWith('remotes/')) {
-        const local = item.data.name.replace('remotes/', '').split('/').pop();
-        this.app.components.branchList.checkoutRemote(local, item.data.name.replace('remotes/', ''));
+      if ((item.data.name as string).startsWith('remotes/')) {
+        const local = (item.data.name as string).replace('remotes/', '').split('/').pop();
+        this.app.components.branchList.checkoutRemote(local, (item.data.name as string).replace('remotes/', ''));
       } else {
         this.app.components.branchList.checkout(item.data.name);
       }
@@ -305,8 +346,17 @@ class GlobalSearch {
     }
   }
 
-  fmtDate(d) {
+  fmtDate(d: unknown): string {
     if (!d) return '';
-    return new Date(d).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+    return new Date(d as string).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
   }
+}
+
+if (typeof window !== 'undefined') {
+  (window as unknown as { GlobalSearch: typeof GlobalSearch }).GlobalSearch = GlobalSearch;
+}
+
+declare const module: { exports: unknown } | undefined;
+if (typeof module !== 'undefined' && (module as { exports?: unknown }).exports) {
+  (module as { exports: unknown }).exports = GlobalSearch;
 }

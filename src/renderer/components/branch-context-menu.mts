@@ -1,25 +1,96 @@
-/* exported BranchContextMenu */
-/* eslint-disable-next-line no-unused-vars -- script-tag global consumed by app.js */
-class BranchContextMenu {
-  constructor(app) {
+interface BranchRef {
+  name: string;
+  kind: string;
+  current?: boolean;
+  upstream?: string;
+}
+
+interface BranchMetadataShape {
+  branches?: Array<{ name?: string; kind?: string; current?: boolean; upstream?: string }>;
+  remotes?: Array<{ name: string; provider?: { provider?: string } }>;
+  current?: string;
+  defaultBranch?: string;
+}
+
+interface StatusShape {
+  isClean?: boolean;
+  modified?: string[];
+  not_added?: string[];
+  created?: string[];
+  deleted?: string[];
+}
+
+interface OperationStateShape {
+  type?: string;
+}
+
+type ContextMenuApp = {
+  state: { repo?: { path?: string } | null; currentBranch?: string | null };
+  dialogs: {
+    form: (options: Record<string, unknown>) => Promise<unknown>;
+    confirm: (options: Record<string, unknown>) => Promise<unknown>;
+  };
+  components: {
+    branchList?: { batchDelete: () => void; batchCompare: () => void };
+    merge?: { open: (branch: string, target: string) => void };
+    compare?: { compare: (branch: string, target: string) => Promise<void> };
+    conflict?: { open: (operationState: unknown) => Promise<void> };
+    settings?: { open: (section: string) => Promise<void> };
+    reflog?: { open: () => Promise<void> };
+    pullRequests?: { setProvider: (provider: string) => Promise<void>; openCreateDialog: (options: Record<string, unknown>) => Promise<void> };
+    repoTabs?: { addRepo: (path: string) => Promise<unknown> };
+  } & Record<string, unknown>;
+  showToast: (message: unknown, type?: string) => void;
+  emit: (event: string, data?: unknown) => void;
+  isCurrentRepo: (repoPath?: string) => boolean;
+  afterBranchCheckout: (result: unknown, repoPath: string) => Promise<void>;
+  setWorkspaceMode: (mode: string) => void;
+};
+
+interface MenuItem {
+  icon: string;
+  label: string;
+  action?: string | null;
+  disabled?: boolean;
+  reason?: string;
+  danger?: boolean;
+  children?: MenuItem[];
+  separator?: boolean;
+}
+
+export class BranchContextMenu {
+  app: ContextMenuApp;
+  branch: BranchRef | null;
+  metadata: BranchMetadataShape | null;
+  status: StatusShape | null;
+  operationState: OperationStateShape | null;
+  selectedBranches: BranchRef[];
+  element: HTMLElement;
+  onDocumentPointer: (event: PointerEvent) => void;
+  onDocumentClick: (event: MouseEvent) => void;
+  onScroll: (event: Event) => void;
+  onKeyDown: (event: KeyboardEvent) => void;
+
+  constructor(app: ContextMenuApp) {
     this.app = app;
     this.branch = null;
     this.metadata = null;
     this.status = null;
     this.operationState = null;
+    this.selectedBranches = [];
     this.element = document.createElement('div');
     this.element.className = 'branch-context-menu is-hidden';
     this.element.setAttribute('role', 'menu');
     document.body.appendChild(this.element);
 
     this.onDocumentPointer = event => {
-      if (!this.element.contains(event.target)) this.close();
+      if (!this.element.contains(event.target as Node)) this.close();
     };
     this.onDocumentClick = event => {
-      if (!this.element.contains(event.target)) this.close();
+      if (!this.element.contains(event.target as Node)) this.close();
     };
     this.onScroll = event => {
-      if (!this.element.contains(event.target)) this.close();
+      if (!this.element.contains(event.target as Node)) this.close();
     };
     this.onKeyDown = event => this.handleKeyDown(event);
     document.addEventListener('pointerdown', this.onDocumentPointer, true);
@@ -30,7 +101,14 @@ class BranchContextMenu {
     window.addEventListener('blur', () => this.close());
   }
 
-  open(event, branch, metadata, status, operationState, selectedBranches = []) {
+  open(
+    event: MouseEvent,
+    branch: BranchRef,
+    metadata: BranchMetadataShape | null,
+    status: StatusShape | null,
+    operationState: OperationStateShape | null,
+    selectedBranches: BranchRef[] = []
+  ): void {
     event.preventDefault();
     this.branch = branch;
     this.metadata = metadata || { branches: [], remotes: [] };
@@ -43,15 +121,15 @@ class BranchContextMenu {
     requestAnimationFrame(() => this.focusFirst());
   }
 
-  close() {
+  close(): void {
     if (this.element.classList.contains('is-hidden')) return;
     this.element.classList.add('is-hidden');
     this.element.innerHTML = '';
     this.branch = null;
   }
 
-  render() {
-    const b = this.branch;
+  render(): void {
+    const b = this.branch as BranchRef;
     const current = this.metadata.current || this.app.state.currentBranch;
     const pending = Boolean(this.operationState?.type);
     const dirty = this.status && this.status.isClean === false;
@@ -93,7 +171,7 @@ class BranchContextMenu {
       this.element.querySelectorAll('[data-action]:not([aria-disabled="true"])').forEach(item => {
         item.addEventListener('click', event => {
           event.stopPropagation();
-          const action = item.dataset.action;
+          const action = (item as HTMLElement).dataset.action;
           if (action) this.execute(action);
         });
       });
@@ -165,21 +243,21 @@ class BranchContextMenu {
     this.element.querySelectorAll('[data-action]:not([aria-disabled="true"])').forEach(item => {
       item.addEventListener('click', event => {
         event.stopPropagation();
-        const action = item.dataset.action;
+        const action = (item as HTMLElement).dataset.action;
         if (action) this.execute(action);
       });
     });
   }
 
-  item(icon, label, action, disabled = false, reason = '', danger = false) {
+  item(icon: string, label: string, action: string | null, disabled = false, reason = '', danger = false): MenuItem {
     return { icon, label, action, disabled, reason, danger };
   }
 
-  submenu(icon, label, children, disabled = false, reason = '') {
+  submenu(icon: string, label: string, children: MenuItem[], disabled = false, reason = ''): MenuItem {
     return { icon, label, children, disabled, reason };
   }
 
-  renderItem(item) {
+  renderItem(item: Partial<MenuItem> & { separator?: boolean }): string {
     if (item.separator) return '<div class="branch-menu-separator" role="separator"></div>';
     const disabled = item.disabled ? ' aria-disabled="true"' : '';
     const action = item.action ? ` data-action="${this.esc(item.action)}"` : '';
@@ -197,27 +275,27 @@ class BranchContextMenu {
     </div>`;
   }
 
-  async execute(action) {
+  async execute(action: string): Promise<void> {
     const repo = this.app.state.repo;
     const b = this.branch;
     if (!repo || !b) return;
     this.close();
 
-    if (action === 'batch-delete') {
-      this.app.components.branchList.batchDelete();
-      return;
-    }
-    if (action === 'batch-compare') {
-      this.app.components.branchList.batchCompare();
-      return;
-    }
-
-    let result;
+    let result: { error?: string; conflictState?: { type?: string }; path?: string } | undefined | null;
     try {
+      if (action === 'batch-delete') {
+        this.app.components.branchList.batchDelete();
+        return;
+      }
+      if (action === 'batch-compare') {
+        this.app.components.branchList.batchCompare();
+        return;
+      }
+
       if (action === 'checkout') {
-        result = b.kind === 'remote'
+        result = (b.kind === 'remote'
           ? await window.gitTree.checkoutTrackingBranch(repo.path, b.name)
-          : await window.gitTree.checkoutBranch(repo.path, b.name);
+          : await window.gitTree.checkoutBranch(repo.path, b.name)) as typeof result;
       } else if (action === 'merge') {
         this.app.components.merge.open(
           b.name,
@@ -225,29 +303,29 @@ class BranchContextMenu {
         );
         return;
       } else if (action === 'rebase') {
-        result = await window.gitTree.rebaseBranch(repo.path, b.name);
+        result = await window.gitTree.rebaseBranch(repo.path, b.name) as typeof result;
       } else if (action === 'fetch') {
         const parts = b.kind === 'remote' ? this.splitRemote(b.name) : this.splitRemote(b.upstream);
-        result = await window.gitTree.fetchBranch(repo.path, parts.remote, parts.branch);
+        result = await window.gitTree.fetchBranch(repo.path, parts.remote, parts.branch) as typeof result;
       } else if (action === 'pull') {
         const parts = this.splitRemote(b.kind === 'remote' ? b.name : b.upstream);
-        result = await window.gitTree.pull(repo.path, parts.remote, parts.branch);
+        result = await window.gitTree.pull(repo.path, parts.remote, parts.branch) as typeof result;
       } else if (action === 'push-tracked') {
         const parts = this.splitRemote(b.upstream);
-        result = await window.gitTree.push(repo.path, parts.remote, b.name);
+        result = await window.gitTree.push(repo.path, parts.remote, b.name) as typeof result;
       } else if (action.startsWith('push:')) {
-        result = await window.gitTree.push(repo.path, action.slice(5), b.name, !b.upstream);
+        result = await window.gitTree.push(repo.path, action.slice(5), b.name, !b.upstream) as typeof result;
       } else if (action.startsWith('track:')) {
-        result = await window.gitTree.trackBranch(repo.path, b.name, action.slice(6));
+        result = await window.gitTree.trackBranch(repo.path, b.name, action.slice(6)) as typeof result;
       } else if (action === 'stash') {
-        result = await window.gitTree.stash(repo.path, `GitTree: before branch operation on ${b.name}`);
+        result = await window.gitTree.stash(repo.path, `GitTree: before branch operation on ${b.name}`) as typeof result;
       } else if (action === 'diff') {
         await this.app.components.compare.compare(b.name, this.metadata.current);
         return;
       } else if (action === 'rename') {
         const nextName = await this.promptText(t('branchMenu.renameTitle'), b.name);
         if (!nextName || nextName === b.name) return;
-        result = await window.gitTree.renameBranch(repo.path, b.name, nextName);
+        result = await window.gitTree.renameBranch(repo.path, b.name, nextName) as typeof result;
       } else if (action === 'delete') {
         result = await this.deleteBranch(repo.path, b);
         if (!result) return;
@@ -275,7 +353,7 @@ class BranchContextMenu {
         if (!defaultRemote) return;
         const remote = await this.promptRemote(defaultRemote);
         if (!remote) return;
-        result = await window.gitTree.pushTags(repo.path, remote);
+        result = await window.gitTree.pushTags(repo.path, remote) as typeof result;
         if (result?.error) { this.app.showToast(result.error, 'error'); return; }
         this.app.showToast(t('branchMenu.tagsPushed', { remote }), 'success');
         return;
@@ -293,11 +371,11 @@ class BranchContextMenu {
       this.app.showToast(t('branchMenu.operationComplete'), 'success');
       this.app.emit('refresh');
     } catch (error) {
-      this.app.showToast(error.message, 'error');
+      this.app.showToast((error as Error).message, 'error');
     }
   }
 
-  async deleteBranch(repoPath, branch) {
+  async deleteBranch(repoPath: string, branch: BranchRef): Promise<{ error?: string } | null> {
     const confirmed = await this.confirm(
       t('branchMenu.deleteTitle'),
       t('branchMenu.deleteConfirm', { branch: branch.name }),
@@ -306,9 +384,9 @@ class BranchContextMenu {
     if (!confirmed) return null;
     if (branch.kind === 'remote') {
       const parts = this.splitRemote(branch.name);
-      return window.gitTree.deleteRemoteBranch(repoPath, parts.remote, parts.branch);
+      return window.gitTree.deleteRemoteBranch(repoPath, parts.remote, parts.branch) as Promise<{ error?: string }>;
     }
-    const safe = await window.gitTree.deleteBranch(repoPath, branch.name, false);
+    const safe = await window.gitTree.deleteBranch(repoPath, branch.name, false) as { error?: string };
     if (!safe?.error) return safe;
     const force = await this.confirm(
       t('branchMenu.forceDeleteTitle'),
@@ -319,14 +397,14 @@ class BranchContextMenu {
     return force ? window.gitTree.deleteBranch(repoPath, branch.name, true) : null;
   }
 
-  async openPullRequest(repoPath, branch) {
+  async openPullRequest(repoPath: string, branch: BranchRef): Promise<void> {
     const supported = (this.metadata.remotes || []).filter(remote => remote.provider?.provider);
     if (!supported.length) return;
     const upstream = branch.upstream ? this.splitRemote(branch.upstream) : null;
     const defaultRemote = supported.find(remote => remote.name === upstream?.remote) || supported[0];
     const provider = defaultRemote.provider?.provider;
     const canApi = ['github', 'gitlab', 'azure'].includes(provider)
-      && (await window.gitTree.getProviderStatus(provider))?.connected;
+      && ((await window.gitTree.getProviderStatus(provider)) as { connected?: boolean })?.connected;
     if (canApi && this.app.components.pullRequests) {
       const view = this.app.components.pullRequests;
       const source = branch.kind === 'remote'
@@ -337,11 +415,11 @@ class BranchContextMenu {
       await view.openCreateDialog({ source, force: true });
       return;
     }
-    const values = await this.pullRequestDialog(defaultRemote.name, this.metadata.defaultBranch);
+    const values = await this.pullRequestDialog(defaultRemote.name, this.metadata.defaultBranch) as { remote: string; target: string } | null;
     if (!values) return;
     let source = branch.kind === 'remote' ? this.splitRemote(branch.name).branch : branch.name;
     if (branch.kind === 'local' && (!branch.upstream || upstream.remote !== values.remote)) {
-      const pushed = await window.gitTree.push(repoPath, values.remote, branch.name, true);
+      const pushed = await window.gitTree.push(repoPath, values.remote, branch.name, true) as { error?: string };
       if (pushed?.error) {
         this.app.showToast(pushed.error, 'error');
         return;
@@ -349,11 +427,11 @@ class BranchContextMenu {
     }
     const result = await window.gitTree.openPullRequest(
       repoPath, values.remote, source, values.target
-    );
+    ) as { error?: string };
     if (result?.error) this.app.showToast(result.error, 'error');
   }
 
-  pullRequestDialog(remote, target) {
+  pullRequestDialog(remote: string, target: string): Promise<unknown> {
     return this.formDialog(t('branchMenu.prTitle'), `
       <label>${this.esc(t('branchMenu.remoteLabel'))}
         <select name="remote">${(this.metadata.remotes || []).filter(item => item.provider?.provider)
@@ -363,15 +441,18 @@ class BranchContextMenu {
       <label>${this.esc(t('branchMenu.targetLabel'))}
         <input name="target" value="${this.esc(target || '')}" required>
       </label>
-    `, form => ({ remote: form.elements.remote.value, target: form.elements.target.value.trim() }));
+    `, form => ({
+      remote: (form.elements as unknown as Record<string, HTMLSelectElement>).remote.value,
+      target: (form.elements as unknown as Record<string, HTMLInputElement>).target.value.trim()
+    }));
   }
 
-  promptText(title, value = '') {
+  promptText(title: string, value = ''): Promise<unknown> {
     return this.formDialog(title, `<label>${this.esc(t('branchMenu.branchNameLabel'))}<input name="value" value="${this.esc(value)}" required autofocus></label>`,
-      form => form.elements.value.value.trim());
+      form => (form.elements as unknown as Record<string, HTMLInputElement>).value.value.trim());
   }
 
-  promptRemote(defaultRemote) {
+  promptRemote(defaultRemote: string): Promise<unknown> {
     const remotes = this.metadata.remotes || [];
     return this.formDialog(t('branchMenu.pushTags'), `
       <label>${this.esc(t('branchMenu.remoteLabel'))}
@@ -379,10 +460,10 @@ class BranchContextMenu {
           .map(item => `<option value="${this.esc(item.name)}"${item.name === defaultRemote ? ' selected' : ''}>${this.esc(item.name)}</option>`)
           .join('')}</select>
       </label>
-    `, form => form.elements.remote.value);
+    `, form => (form.elements as unknown as Record<string, HTMLSelectElement>).remote.value);
   }
 
-  async createWorktreeForBranch(repo, branch) {
+  async createWorktreeForBranch(repo: { path?: string }, branch: BranchRef): Promise<void> {
     const directory = await window.gitTree.selectDirectory();
     if (!directory) return;
     const values = await this.formDialog(t('branchMenu.worktreeBranch'), `
@@ -395,12 +476,12 @@ class BranchContextMenu {
       <label>${this.esc(t('agents.baseRef'))}<input name="baseRef" value="${this.esc(branch.name)}" maxlength="512" required></label>
       <label>${this.esc(t('agents.branch'))}<input name="branch" value="${this.esc(`${branch.name}-worktree`)}" maxlength="255" required></label>
     `, form => ({
-      createBranch: form.elements.mode.value === 'new',
-      baseRef: form.elements.baseRef.value.trim(),
-      branch: form.elements.branch.value.trim()
-    }));
+      createBranch: (form.elements as unknown as Record<string, HTMLSelectElement>).mode.value === 'new',
+      baseRef: (form.elements as unknown as Record<string, HTMLInputElement>).baseRef.value.trim(),
+      branch: (form.elements as unknown as Record<string, HTMLInputElement>).branch.value.trim()
+    })) as { createBranch: boolean; baseRef: string; branch: string } | null;
     if (!values) return;
-    const result = await window.gitTree.createManagedWorktree(repo.path, directory, values);
+    const result = await window.gitTree.createManagedWorktree(repo.path, directory, values) as { error?: string; path?: string };
     if (result?.error) {
       this.app.showToast(result.error, 'error');
       return;
@@ -409,7 +490,7 @@ class BranchContextMenu {
     await this.app.components.repoTabs.addRepo(result.path);
   }
 
-  formDialog(title, fields, extract) {
+  formDialog(title: string, fields: string, extract: (form: HTMLFormElement) => unknown): Promise<unknown> {
     return this.app.dialogs.form({
       title,
       fields,
@@ -419,7 +500,7 @@ class BranchContextMenu {
     });
   }
 
-  confirm(title, message, actionLabel, danger = false) {
+  confirm(title: string, message: string, actionLabel: string, danger = false): Promise<unknown> {
     return this.app.dialogs.confirm({
       title,
       message,
@@ -429,7 +510,7 @@ class BranchContextMenu {
     });
   }
 
-  place(x, y) {
+  place(x: number, y: number): void {
     this.element.classList.toggle('open-left', x > window.innerWidth - 620);
     this.element.classList.toggle('open-up', y > window.innerHeight - 440);
     this.element.style.left = `${x}px`;
@@ -442,47 +523,56 @@ class BranchContextMenu {
     this.element.style.top = `${top}px`;
   }
 
-  focusFirst() {
-    this.element.querySelector('.branch-menu-item:not([aria-disabled="true"])')?.focus();
+  focusFirst(): void {
+    this.element.querySelector<HTMLElement>('.branch-menu-item:not([aria-disabled="true"])')?.focus();
   }
 
-  handleKeyDown(event) {
+  handleKeyDown(event: KeyboardEvent): void {
     if (this.element.classList.contains('is-hidden')) return;
     if (event.key === 'Escape') {
       event.preventDefault();
       this.close();
       return;
     }
-    const active = document.activeElement;
-    const items = [...(active?.parentElement || this.element).children]
-      .filter(item => item.classList?.contains('branch-menu-item') && item.getAttribute('aria-disabled') !== 'true');
+    const active = document.activeElement as HTMLElement | null;
+    const items = [...((active?.parentElement || this.element) as HTMLElement).children]
+      .filter(item => (item as HTMLElement).classList?.contains('branch-menu-item') && item.getAttribute('aria-disabled') !== 'true') as HTMLElement[];
     const index = items.indexOf(active);
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       const delta = event.key === 'ArrowDown' ? 1 : -1;
       items[(index + delta + items.length) % items.length]?.focus();
     } else if (event.key === 'ArrowRight') {
-      const child = active?.querySelector('.branch-context-submenu .branch-menu-item:not([aria-disabled="true"])');
+      const child = active?.querySelector<HTMLElement>('.branch-context-submenu .branch-menu-item:not([aria-disabled="true"])');
       if (child) { event.preventDefault(); child.focus(); }
     } else if (event.key === 'ArrowLeft' && active?.closest('.branch-context-submenu')) {
       event.preventDefault();
-      active.closest('.has-submenu')?.focus();
+      active.closest<HTMLElement>('.has-submenu')?.focus();
     } else if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       active?.click();
     }
   }
 
-  splitRemote(value = '') {
+  splitRemote(value = ''): { remote: string; branch: string } {
     const index = value.indexOf('/');
     return { remote: value.slice(0, index), branch: value.slice(index + 1) };
   }
 
-  hasSupportedProvider() {
+  hasSupportedProvider(): boolean {
     return (this.metadata.remotes || []).some(remote => remote.provider?.provider);
   }
 
-  esc(value) {
+  esc(value: unknown): string {
     return HtmlEncoder.encode(value);
   }
+}
+
+if (typeof window !== 'undefined') {
+  (window as unknown as { BranchContextMenu: typeof BranchContextMenu }).BranchContextMenu = BranchContextMenu;
+}
+
+declare const module: { exports: unknown } | undefined;
+if (typeof module !== 'undefined' && (module as { exports?: unknown }).exports) {
+  (module as { exports: unknown }).exports = BranchContextMenu;
 }
