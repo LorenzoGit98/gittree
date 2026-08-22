@@ -103,7 +103,7 @@ export async function requestAnthropic({
     }
     const data = await response.json();
     const text = (data?.content || [])
-      .map(block => block?.text || '')
+      .map((block: { text?: unknown }) => String(block?.text || ''))
       .join('')
       .trim();
     if (!text) throw new Error('The AI provider returned an empty response');

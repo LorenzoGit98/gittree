@@ -7,7 +7,7 @@ export interface SearchMatch {
   reason: string;
 }
 
-interface CommitCandidate {
+export interface CommitCandidate {
   hash?: string;
   subject?: string;
 }
@@ -75,7 +75,7 @@ export function parseAiOutput(
   };
 }
 
-export function buildCommitPrompt({ diff, hint, language }): string {
+export function buildCommitPrompt({ diff, hint, language }: { diff: string; hint?: string; language?: string }): string {
   const targetLanguage = language === 'it' ? 'Italian' : 'English';
   const hintLine = hint ? `\nAdditional hint from the user: ${hint}\n` : '';
   return [
@@ -95,7 +95,7 @@ export function buildCommitPrompt({ diff, hint, language }): string {
   ].filter(Boolean).join('\n');
 }
 
-export function buildExplainPrompt({ diff, language }): string {
+export function buildExplainPrompt({ diff, language }: { diff: string; language?: string }): string {
   const targetLanguage = language === 'it' ? 'Italian' : 'English';
   return [
     'You are the changes-explainer assistant of a Git desktop client.',
@@ -111,7 +111,7 @@ export function buildExplainPrompt({ diff, language }): string {
   ].filter(Boolean).join('\n');
 }
 
-export function buildConflictPrompt({ file, base, current, incoming, language }): string {
+export function buildConflictPrompt({ file, base, current, incoming, language }: { file: string; base?: string; current?: string; incoming?: string; language?: string }): string {
   const targetLanguage = language === 'it' ? 'Italian' : 'English';
   return [
     'You are the merge-conflict advisor of a Git desktop client.',
@@ -133,7 +133,7 @@ export function buildConflictPrompt({ file, base, current, incoming, language })
   ].filter(Boolean).join('\n');
 }
 
-export function buildCommitExplainPrompt({ message, author, date, diff, language }): string {
+export function buildCommitExplainPrompt({ message, author, date, diff, language }: { message: string; author?: string; date?: string; diff: string; language?: string }): string {
   const targetLanguage = language === 'it' ? 'Italian' : 'English';
   return [
     'You are the history-explainer assistant of a Git desktop client.',
@@ -151,7 +151,7 @@ export function buildCommitExplainPrompt({ message, author, date, diff, language
   ].filter(Boolean).join('\n');
 }
 
-export function buildHistorySearchPrompt({ query, commits, language }): string {
+export function buildHistorySearchPrompt({ query, commits, language }: { query: string; commits: CommitCandidate[]; language?: string }): string {
   const targetLanguage = language === 'it' ? 'Italian' : 'English';
   const commitLines = (commits || [])
     .slice(0, 300)
@@ -170,7 +170,7 @@ export function buildHistorySearchPrompt({ query, commits, language }): string {
   ].filter(Boolean).join('\n');
 }
 
-export function buildBlamePrompt({ file, hash, rows, language }): string {
+export function buildBlamePrompt({ file, hash, rows, language }: { file: string; hash: string; rows: Array<{ hash?: unknown; author?: unknown; summary?: unknown }>; language?: string }): string {
   const targetLanguage = language === 'it' ? 'Italian' : 'English';
   const rowLines = (rows || [])
     .slice(0, 200)
@@ -191,7 +191,7 @@ export function buildBlamePrompt({ file, hash, rows, language }): string {
   ].filter(Boolean).join('\n');
 }
 
-export function buildPrPrompt({ diff, commits, hint, language }): string {
+export function buildPrPrompt({ diff, commits, hint, language }: { diff: string; commits: CommitCandidate[]; hint?: string; language?: string }): string {
   const targetLanguage = language === 'it' ? 'Italian' : 'English';
   const commitLines = (commits || [])
     .slice(0, 30)

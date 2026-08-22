@@ -2,21 +2,6 @@ import { execFile } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as nodePath from 'node:path';
 
-export const ADAPTERS = Object.freeze({
-  codex: Object.freeze({
-    id: 'codex', label: 'Codex', command: 'codex',
-    createArgs: prompt => [prompt], resumeArgs: () => ['resume', '--last']
-  }),
-  claude: Object.freeze({
-    id: 'claude', label: 'Claude Code', command: 'claude',
-    createArgs: prompt => [prompt], resumeArgs: () => ['--continue']
-  }),
-  opencode: Object.freeze({
-    id: 'opencode', label: 'OpenCode', command: 'opencode',
-    createArgs: prompt => ['--prompt', prompt], resumeArgs: () => ['--continue']
-  })
-});
-
 export interface AgentAdapter {
   id: string;
   label: string;
@@ -24,6 +9,21 @@ export interface AgentAdapter {
   createArgs: (prompt: string) => string[];
   resumeArgs: () => string[];
 }
+
+export const ADAPTERS: Readonly<Record<string, Readonly<AgentAdapter>>> = Object.freeze({
+  codex: Object.freeze({
+    id: 'codex', label: 'Codex', command: 'codex',
+    createArgs: (prompt: string): string[] => [prompt], resumeArgs: (): string[] => ['resume', '--last']
+  }),
+  claude: Object.freeze({
+    id: 'claude', label: 'Claude Code', command: 'claude',
+    createArgs: (prompt: string): string[] => [prompt], resumeArgs: (): string[] => ['--continue']
+  }),
+  opencode: Object.freeze({
+    id: 'opencode', label: 'OpenCode', command: 'opencode',
+    createArgs: (prompt: string): string[] => ['--prompt', prompt], resumeArgs: (): string[] => ['--continue']
+  })
+});
 
 export function getAdapter(id: string): AgentAdapter {
   const adapter = ADAPTERS[id];

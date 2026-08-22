@@ -143,9 +143,15 @@ export class RepositoryOperations {
   }
 
   sortCommitsParentFirst(commits: CommitActionMetadata[]): CommitActionMetadata[] {
-    const byHash = new Map(commits.map(commit => [commit.hash, commit]));
-    const indegree = new Map(commits.map(commit => [commit.hash, 0]));
-    const children = new Map<string, string[]>(commits.map(commit => [commit.hash, []]));
+    const byHash = new Map<string, CommitActionMetadata>(
+      commits.map((commit): [string, CommitActionMetadata] => [commit.hash, commit])
+    );
+    const indegree = new Map<string, number>(
+      commits.map((commit): [string, number] => [commit.hash, 0])
+    );
+    const children = new Map<string, string[]>(
+      commits.map((commit): [string, string[]] => [commit.hash, []])
+    );
     for (const commit of commits) {
       for (const parent of commit.parents) {
         if (!byHash.has(parent)) continue;

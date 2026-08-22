@@ -4,7 +4,18 @@ import * as nodePath from 'node:path';
 const ACTIVE_STATUSES = new Set(['queued', 'preparing', 'running', 'stopping']);
 const MAX_EVENTS = 200;
 
-export function defaults() {
+export interface AgentStoreState {
+  version: number;
+  settings: {
+    agentsEnabled: boolean;
+    worktreeRoot: string;
+    maxConcurrent: number;
+    enabledAdapters: string[];
+  };
+  tasks: Array<Record<string, unknown>>;
+}
+
+export function defaults(): AgentStoreState {
   return {
     version: 1,
     settings: {
@@ -59,11 +70,11 @@ export class AgentSessionStore {
             ? Math.min(32, Math.max(1, stored.settings.maxConcurrent))
             : initial.settings.maxConcurrent,
           enabledAdapters: Array.isArray(stored.settings?.enabledAdapters)
-            ? stored.settings.enabledAdapters.filter(id => ['codex', 'claude', 'opencode'].includes(id))
+            ? (stored.settings.enabledAdapters as unknown[]).filter((id): id is string => ['codex', 'claude', 'opencode'].includes(String(id)))
             : initial.settings.enabledAdapters
         },
         tasks: Array.isArray(stored.tasks)
-          ? stored.tasks.map(task => sanitizeTask(task, { restore: true }))
+          ? stored.tasks.map((task: Record<string, unknown>) => sanitizeTask(task, { restore: true }))
           : []
       };
     } catch {
@@ -71,7 +82,7 @@ export class AgentSessionStore {
     }
   }
 
-  save(state) {
+  save(state: AgentStoreState) {
     const payload = {
       version: 1,
       settings: { ...defaults().settings, ...(state.settings || {}) },

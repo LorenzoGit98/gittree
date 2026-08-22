@@ -97,10 +97,16 @@ export class SettingsView {
       const remotes = repo ? await this.readRemotes(repo.path) : [];
       const agentSettings = (scope === 'about'
         ? null
-        : await window.gitTree.getAgentSettings?.().catch(() => null)) as AgentSettingsPayload | null;
+        : await window.gitTree.getAgentSettings?.().then(
+            (value): AgentSettingsPayload | null => (value ?? null) as AgentSettingsPayload | null,
+            (): null => null
+          ));
       const aiSettings = (scope === 'about'
         ? null
-        : await window.gitTree.getAiSettings?.().catch(() => null)) as AiSettingsPayload | null;
+        : await window.gitTree.getAiSettings?.().then(
+            (value): AiSettingsPayload | null => (value ?? null) as AiSettingsPayload | null,
+            (): null => null
+          ));
     const schedules: Record<string, unknown> = this.readObject(this.autoFetchStorageKey);
     let profiles: SettingsProfile[] = this.readArray<SettingsProfile>(this.profilesStorageKey);
     const assignments = this.readObject(this.assignmentsStorageKey);
@@ -569,7 +575,7 @@ export class SettingsView {
       tone?.preview.forEach((color, index) => {
         if (chips[index]) (chips[index] as HTMLElement).style.background = color;
       });
-      const active = Theme.getTone(toneTheme) === toneId;
+      const active = (toneTheme === 'light' || toneTheme === 'dark') && Theme.getTone(toneTheme) === toneId;
       button.classList.toggle('is-active', active);
       button.setAttribute('aria-pressed', String(active));
     });
@@ -775,7 +781,7 @@ export class SettingsView {
         if (event.key === 'Escape') finish(null);
       };
       document.body.appendChild(overlay);
-      overlay.addEventListener('mousedown', event => {
+      overlay.addEventListener('mousedown', (event: MouseEvent) => {
         if (event.target === overlay) finish(null);
       });
       overlay.querySelector<HTMLElement>('[data-action="cancel"]').onclick = () => finish(null);
@@ -1159,7 +1165,7 @@ export class SettingsView {
   async hydrateOpencodeStatus(): Promise<void> {
     const status = this.dialog.querySelector('#ai-opencode-status');
     if (!status) return;
-    const adapters = await window.gitTree.detectAgentAdapters?.().catch(() => []) as Array<{ id?: string; available?: boolean; version?: string }> | undefined;
+    const adapters = await window.gitTree.detectAgentAdapters?.().catch((): AgentAdapterInfo[] => []);
     const opencode = (Array.isArray(adapters) ? adapters : [])
       .find(adapter => adapter?.id === 'opencode');
     if ((this.dialog.querySelector('#settings-ai-provider') as HTMLSelectElement | null)?.value !== 'opencode') return;
@@ -1181,8 +1187,8 @@ export class SettingsView {
     </label>`;
   }
 
-  async hydrateAgentAdapters(agentSettings: unknown, generation: number): Promise<void> {
-    const adapters = await window.gitTree.detectAgentAdapters?.().catch(() => []) as AgentAdapterInfo[] | undefined;
+  async hydrateAgentAdapters(agentSettings: AgentSettingsPayload | null, generation: number): Promise<void> {
+    const adapters = await window.gitTree.detectAgentAdapters?.().catch((): AgentAdapterInfo[] => []);
     if (generation !== this.renderGeneration) return;
     const container = this.dialog.querySelector('.agent-adapter-settings');
     if (!container) return;

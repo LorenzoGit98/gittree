@@ -45,8 +45,8 @@ export class GitHubProviderAdapter {
       headSha: item.head?.sha || '',
       state: item.merged_at || item.merged ? 'merged' : item.state,
       draft: Boolean(item.draft),
-      reviewStatus: (item.requested_reviewers || []).some(
-        reviewer => reviewer.login === user?.login
+      reviewStatus: (item.requested_reviewers as ProviderPayload[] || []).some(
+        (reviewer: ProviderPayload) => reviewer.login === user?.login
       ) ? 'requested' : 'none',
       ciStatus: 'unknown'
     };
@@ -67,14 +67,14 @@ export class GitHubProviderAdapter {
       `/repos/${encodeURIComponent(repo.ownerPath)}/${encodeURIComponent(repo.repository)}/pulls?state=${state}&per_page=50&page=${page}`
     );
     if (!Array.isArray(result.data)) throw new Error('Failed to load pull requests');
-    let items = result.data.map(item => this.normalizeSummary(item, account.user));
+    let items = (result.data as ProviderPayload[]).map((item: ProviderPayload) => this.normalizeSummary(item, account.user));
     if (filter === 'authored') {
-      items = items.filter(item => item.author?.login === account.user?.login);
+      items = items.filter((item: PullRequestSummary) => item.author?.login === account.user?.login);
     } else if (filter === 'review-requested') {
-      items = items.filter(item => item.reviewStatus === 'requested');
+      items = items.filter((item: PullRequestSummary) => item.reviewStatus === 'requested');
     }
     if (search) {
-      items = items.filter(item => (
+      items = items.filter((item: PullRequestSummary) => (
         String(item.title || '').toLowerCase().includes(search)
         || String(item.source || '').toLowerCase().includes(search)
         || String(item.number) === search
@@ -112,7 +112,7 @@ export class GitHubProviderAdapter {
     const [reviews, checks, files, threadResult] = await Promise.all([
       this.api(repo, `${prefix}/pulls/${id}/reviews?per_page=100`),
       this.api(repo, `${prefix}/commits/${headSha}/check-runs?per_page=100`).catch(() => ({
-        data: { check_runs: [] }
+        data: { check_runs: [] as ProviderPayload[] }
       })),
       this.api(repo, `${prefix}/pulls/${id}/files?per_page=100`),
       this.graphql(
@@ -142,10 +142,10 @@ export class GitHubProviderAdapter {
           }
         }`,
         { owner: repo.ownerPath, name: repo.repository, number: id }
-      ).catch(() => ({ data: null }))
+      ).catch(() => ({ data: null as unknown as ProviderPayload }))
     ]);
-    const latestReviews = new Map();
-    reviews.data.forEach(review => {
+    const latestReviews = new Map<string, ProviderPayload>();
+    (reviews.data as ProviderPayload[]).forEach((review: ProviderPayload) => {
       latestReviews.set(review.user?.login || '', {
         login: review.user?.login || '',
         state: review.state,
@@ -156,19 +156,19 @@ export class GitHubProviderAdapter {
       summary: this.normalizeSummary(pull.data, viewer),
       permissions: { review: true, resolveThreads: true, checkout: true },
       reviewers: [...latestReviews.values()],
-      checks: (checks.data.check_runs || []).map(check => ({
+      checks: (((checks.data as ProviderPayload).check_runs as ProviderPayload[] | undefined) || []).map((check: ProviderPayload) => ({
         id: check.id,
         name: check.name,
         status: check.status,
         conclusion: check.conclusion,
         url: check.html_url
       })),
-      files: (files.data || []).map(file => this.normalizeFile(file)),
+      files: ((files.data as ProviderPayload[] | undefined) || []).map((file: ProviderPayload) => this.normalizeFile(file)),
       threads: (
-        threadResult.data?.repository?.pullRequest?.reviewThreads?.nodes || []
-      ).map(thread => {
-        const comments = thread.comments?.nodes || [];
-        const first = comments[0] || {};
+        ((threadResult.data as ProviderPayload)?.repository?.pullRequest?.reviewThreads?.nodes as ProviderPayload[] | undefined) || []
+      ).map((thread: ProviderPayload) => {
+        const comments = ((thread.comments as ProviderPayload | undefined)?.nodes as ProviderPayload[] | undefined) || [];
+        const first = (comments[0] as ProviderPayload | undefined) || {} as ProviderPayload;
         return {
           id: thread.id,
           commentId: first.databaseId || null,
@@ -176,12 +176,12 @@ export class GitHubProviderAdapter {
           line: first.line || first.originalLine || null,
           side: first.diffSide || 'RIGHT',
           resolved: Boolean(thread.isResolved),
-          author: first.author?.login || '',
+          author: (first.author as ProviderPayload | undefined)?.login || '',
           body: first.body || '',
           createdAt: first.createdAt,
-          notes: comments.map(comment => ({
+          notes: comments.map((comment: ProviderPayload) => ({
             id: comment.databaseId,
-            author: comment.author?.login || '',
+            author: (comment.author as ProviderPayload | undefined)?.login || '',
             body: comment.body || '',
             createdAt: comment.createdAt
           }))
@@ -204,7 +204,7 @@ export class GitHubProviderAdapter {
       `/repos/${encodeURIComponent(repo.ownerPath)}/${encodeURIComponent(repo.repository)}/pulls/${id}/files?per_page=50&page=${page}`
     );
     return {
-      files: result.data.map(file => this.normalizeFile(file)),
+      files: (result.data as ProviderPayload[]).map((file: ProviderPayload) => this.normalizeFile(file)),
       page,
       hasMore: /rel="next"/.test(result.headers.get('link') || '')
     };
@@ -287,20 +287,20 @@ export class GitHubProviderAdapter {
       }
     });
     const number = created.data.number;
-    const warnings = [];
+    const warnings: string[] = [];
     for (const [values, endpoint, key] of [
       [options.reviewers, `pulls/${number}/requested_reviewers`, 'reviewers'],
       [options.assignees, `issues/${number}/assignees`, 'assignees'],
       [options.labels, `issues/${number}/labels`, 'labels']
     ] as Array<[string[] | undefined, string, string]>) {
-      if (!values.length) continue;
+      if (!values?.length) continue;
       try {
         await this.api(repo, `${prefix}/${endpoint}`, {
           method: 'POST',
           body: { [key]: values }
         });
-      } catch (error) {
-        warnings.push(error.message);
+      } catch (error: unknown) {
+        warnings.push((error as Error).message);
       }
     }
     return {

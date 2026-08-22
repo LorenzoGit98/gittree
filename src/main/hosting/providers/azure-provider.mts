@@ -61,8 +61,8 @@ export class AzureProviderAdapter {
             ? 'abandoned'
             : item.status,
       draft: Boolean(item.isDraft),
-      reviewStatus: (item.reviewers || []).some(
-        reviewer => reviewer.vote === 0 && this.identityMatches(user, reviewer)
+      reviewStatus: (item.reviewers as Array<{vote?: unknown}> || []).some(
+        (reviewer: {vote?: unknown}) => reviewer.vote === 0 && this.identityMatches(user, reviewer)
       ) ? 'requested' : 'none',
       ciStatus: item.mergeStatus === 'succeeded'
         ? 'success'
@@ -89,14 +89,14 @@ export class AzureProviderAdapter {
     if (!result.data || !Array.isArray(result.data.value)) {
       throw new Error('Failed to load pull requests');
     }
-    let items = result.data.value.map(item => this.normalizeSummary(item, account.user));
+    let items = (result.data.value as ProviderPayload[]).map((item: ProviderPayload) => this.normalizeSummary(item, account.user));
     if (filter === 'authored') {
-      items = items.filter(item => this.identityMatches(account.user, item.author));
+      items = items.filter((item: PullRequestSummary) => this.identityMatches(account.user, item.author as unknown as ProviderPayload));
     } else if (filter === 'review-requested') {
-      items = items.filter(item => item.reviewStatus === 'requested');
+      items = items.filter((item: PullRequestSummary) => item.reviewStatus === 'requested');
     }
     if (search) {
-      items = items.filter(item => (
+      items = items.filter((item: PullRequestSummary) => (
         String(item.title || '').toLowerCase().includes(search)
         || String(item.source || '').toLowerCase().includes(search)
         || String(item.number) === search
@@ -147,7 +147,7 @@ export class AzureProviderAdapter {
       );
       return {
         files: (changes.data.changeEntries || [])
-          .map(entry => this.normalizeFile(entry))
+          .map((entry: ProviderPayload) => this.normalizeFile(entry))
           .filter(Boolean),
         headSha
       };
@@ -164,7 +164,7 @@ export class AzureProviderAdapter {
     const result = await this.api(repo, `/pullrequests/${id}`);
     const pullRequest = result.data;
     const [threadsResult, fileResult] = await Promise.all([
-      this.api(repo, `/pullrequests/${id}/threads`).catch(() => ({ data: { value: [] } })),
+      this.api(repo, `/pullrequests/${id}/threads`).catch(() => ({ data: { value: [] as ProviderPayload[] } })),
       this.listPullRequestFiles(repo, id)
     ]);
     const summary = this.normalizeSummary(pullRequest, viewer);
@@ -175,7 +175,7 @@ export class AzureProviderAdapter {
     return {
       summary: { ...summary, headSha },
       permissions: { review: true, resolveThreads: true, checkout: false },
-      reviewers: (pullRequest.reviewers || []).map(reviewer => ({
+      reviewers: (pullRequest.reviewers as ProviderPayload[] || []).map((reviewer: ProviderPayload) => ({
         login: reviewer.uniqueName || reviewer.displayName || '',
         state: reviewer.vote === 10
           ? 'APPROVED'
@@ -188,8 +188,9 @@ export class AzureProviderAdapter {
       })),
       checks: [],
       files: fileResult.files,
-      threads: (threadsResult.data.value || []).map(thread => ({
+      threads: (threadsResult.data.value as ProviderPayload[] || []).map((thread: ProviderPayload) => ({
         id: String(thread.id),
+        commentId: (thread.comments?.[0] as ProviderPayload | undefined)?.id ?? null,
         resolved: thread.status === 'closed' || thread.status === 'fixed',
         path: thread.threadContext?.filePath || '',
         line: thread.threadContext?.rightFileEnd?.line || null,
@@ -197,7 +198,7 @@ export class AzureProviderAdapter {
         author: thread.comments?.[0]?.author?.uniqueName || '',
         body: thread.comments?.[0]?.content || '',
         createdAt: thread.comments?.[0]?.publishedDate,
-        notes: (thread.comments || []).map(comment => ({
+        notes: (thread.comments as ProviderPayload[] || []).map((comment: ProviderPayload) => ({
           id: comment.id,
           author: comment.author?.uniqueName || '',
           body: comment.content || '',
@@ -245,7 +246,7 @@ export class AzureProviderAdapter {
     }
   ): Promise<{ success: true }> {
     const completed = new Set(draft.completedOperations);
-    const perform = async (operation, action) => {
+    const perform = async (operation: string, action: () => Promise<unknown>): Promise<void> => {
       if (completed.has(operation)) return;
       await action();
       completed.add(operation);
@@ -290,13 +291,13 @@ export class AzureProviderAdapter {
         }
       }));
     }
-    const votes = { APPROVE: ['approve', 10], REQUEST_CHANGES: ['request-changes', -10] };
-    const vote = votes[draft.event];
+    const votes = { APPROVE: ['approve', 10] as [string, number], REQUEST_CHANGES: ['request-changes', -10] as [string, number] };
+    const vote = (votes as unknown as Record<string, [string, number]>)[draft.event];
     if (vote) {
       await perform(vote[0], async () => {
         const reviewersResult = await this.api(repo, `/pullrequests/${id}/reviewers`);
-        const reviewer = (reviewersResult.data.value || []).find(
-          item => this.identityMatches(viewer, item)
+        const reviewer = (reviewersResult.data.value as ProviderPayload[] || []).find(
+          (item: ProviderPayload) => this.identityMatches(viewer, item)
         );
         if (reviewer) {
           await this.api(repo, `/pullrequests/${id}/reviewers/${reviewer.id}`, {
@@ -316,22 +317,22 @@ export class AzureProviderAdapter {
     const reviewers = [];
     for (const name of names) {
       const matches = await this.identitySearch(repo.organization, name);
-      const exact = matches.find(item => this.identityMatches(
+      const exact = matches.find((item: Record<string, unknown>) => this.identityMatches(
         { login: name, name, id: name },
         {
           id: item.id,
-          uniqueName: item.properties?.Account?.$value || item.properties?.Mail?.$value,
+          uniqueName: (item as { properties?: { Account?: { $value?: unknown }, Mail?: { $value?: unknown } } }).properties?.Account?.$value || (item as { properties?: { Account?: { $value?: unknown }, Mail?: { $value?: unknown } } }).properties?.Mail?.$value,
           displayName: item.providerDisplayName || item.customDisplayName,
-          login: item.properties?.Account?.$value
+          login: (item as { properties?: { Account?: { $value?: unknown }, Mail?: { $value?: unknown } } }).properties?.Account?.$value
         }
-      )) || matches.find(item => {
+      )) || matches.find((item: Record<string, unknown>) => {
         const haystack = [
           item.providerDisplayName,
           item.customDisplayName,
           item.uniqueName,
-          item.properties?.Account?.$value,
-          item.properties?.Mail?.$value
-        ].filter(Boolean).map(value => String(value).toLowerCase());
+          (item as { properties?: { Account?: { $value?: unknown }, Mail?: { $value?: unknown } } }).properties?.Account?.$value,
+          (item as { properties?: { Account?: { $value?: unknown }, Mail?: { $value?: unknown } } }).properties?.Mail?.$value
+        ].filter(Boolean).map((value: unknown) => String(value).toLowerCase());
         return haystack.includes(name.toLowerCase());
       }) || matches[0];
       if (!exact?.id) throw new Error(`Azure reviewer not found: ${name}`);

@@ -42,6 +42,11 @@ interface LoginSession {
   controller: AbortController;
   deviceCode?: string;
   interval?: number;
+  expiresAt?: number;
+  userCode?: string;
+  verificationUri?: string;
+  clientId?: string;
+  provider?: string;
   [key: string]: unknown;
 }
 
@@ -110,12 +115,12 @@ export class HostingService {
     this.loginSessions = new Map();
     this.providerAdapters = options.providerAdapters || {
       github: new GitHubProviderAdapter({
-        api: (...args) => this.api(...args),
-        graphql: (...args) => this.githubGraphql(...args)
+        api: (repository, endpoint, options) => this.api(repository as HostedRepositoryRef, endpoint, options),
+        graphql: ((query: string, variables: Record<string, unknown>, token?: string) => this.githubGraphql(query, variables)) as ProviderAdapterSurface extends { graphql?: infer G } ? G : never
       }),
-      gitlab: new GitLabProviderAdapter({ api: (...args) => this.api(...args) }),
+      gitlab: new GitLabProviderAdapter({ api: (repository, endpoint, options) => this.api(repository as HostedRepositoryRef, endpoint, options) }),
       azure: new AzureProviderAdapter({
-        api: (...args) => this.api(...args),
+        api: (repository, endpoint, options) => this.api(repository as HostedRepositoryRef, endpoint, options),
         identityMatches: (...args) => this.azureIdentityMatches(...args),
         identitySearch: (...args) => this.azureIdentitySearch(...args)
       })
@@ -142,15 +147,15 @@ export class HostingService {
     }
   }
 
-  validateProvider(provider) {
+  validateProvider(provider: string) {
     if (!['github', 'gitlab', 'azure'].includes(provider)) {
       throw new Error(`Unsupported hosting provider: ${provider}`);
     }
     return provider;
   }
 
-  providerAdapter(provider: unknown): ProviderAdapterSurface {
-    const adapter = this.providerAdapters[this.validateProvider(provider)];
+  providerAdapter(provider: string): ProviderAdapterSurface {
+    const adapter = this.providerAdapters[this.validateProvider(String(provider))];
     if (!adapter) throw new Error(`Unsupported hosting provider: ${provider}`);
     return adapter;
   }
@@ -163,8 +168,8 @@ export class HostingService {
     organization?: unknown;
     project?: unknown;
   }): ValidatedRepository {
-    const provider = this.validateProvider(repository?.provider);
-    const expectedHost = provider === 'github' ? 'github.com'
+    const provider = this.validateProvider(String(repository?.provider));
+    const expectedHost: string = provider === 'github' ? 'github.com'
       : provider === 'gitlab' ? 'gitlab.com'
       : 'dev.azure.com';
     if (repository.host !== expectedHost) {
@@ -181,7 +186,7 @@ export class HostingService {
     ) {
       throw new Error('Invalid hosting repository');
     }
-    const value: ValidatedRepository = { provider, host: expectedHost, ownerPath, repository: name };
+    const value: ValidatedRepository = { provider: provider as HostingProviderId, host: expectedHost, ownerPath, repository: name };
     if (provider === 'azure') {
       const [organization, project] = ownerPath.split('/');
       value.organization = String(repository.organization || organization || '');
@@ -190,7 +195,7 @@ export class HostingService {
     return value;
   }
 
-  validatePullRequestId(id) {
+  validatePullRequestId(id: unknown): number {
     const value = Number(id);
     if (!Number.isSafeInteger(value) || value <= 0) {
       throw new Error('Invalid pull request ID');
@@ -198,16 +203,19 @@ export class HostingService {
     return value;
   }
 
-  repositoryKey(repository) {
+  repositoryKey(repository: { provider?: unknown; host?: unknown; ownerPath?: unknown; repository?: unknown; organization?: unknown; project?: unknown }): string {
     const value = this.validateRepository(repository);
     return `${value.provider}:${value.ownerPath}/${value.repository}`;
   }
 
-  draftKey(repository, id) {
+  draftKey(
+    repository: { provider?: unknown; host?: unknown; ownerPath?: unknown; repository?: unknown; organization?: unknown; project?: unknown },
+    id: string | number
+  ): string {
     return `${this.repositoryKey(repository)}:${this.validatePullRequestId(id)}`;
   }
 
-  async providerStatus(provider) {
+  async providerStatus(provider: string): Promise<unknown> {
     this.validateProvider(provider);
     const account = await this.vault.getAccount(provider);
     const security = this.vault.getSecurityState();
@@ -221,7 +229,7 @@ export class HostingService {
     };
   }
 
-  async setPat(provider, token, organization) {
+  async setPat(provider: string, token: string, organization?: string): Promise<unknown> {
     this.validateProvider(provider);
     if (!token || typeof token !== 'string' || token.length < 20 || token.length > 200) {
       throw new Error('Invalid Personal Access Token');
@@ -230,7 +238,7 @@ export class HostingService {
     const account = {
       accessToken: token,
       refreshToken: '',
-      expiresAt: null,
+      expiresAt: 0,
       user
     };
     await this.vault.setAccount(provider, account);
@@ -242,12 +250,12 @@ export class HostingService {
     return { success: true, provider, user, phase: 'connected' };
   }
 
-  async login(provider) {
+  async login(provider: string): Promise<unknown> {
     this.validateProvider(provider);
     if (provider === 'azure') {
       throw new Error('Azure DevOps uses a Personal Access Token. Use setPat to configure it.');
     }
-    const clientId = this.oauthConfig[provider];
+    const clientId = String(this.oauthConfig[provider] ?? '');
     if (!clientId) throw new Error(`${provider} OAuth is not configured in this build`);
     await this.cancelLogin(provider);
     const controller = new AbortController();
@@ -288,7 +296,7 @@ export class HostingService {
       }
       await this.openExternal(verificationUri);
     }
-    this.pollDeviceToken(provider, clientId, session).catch(error => {
+    this.pollDeviceToken(provider, clientId, session).catch((error: Error) => {
       if (error.name !== 'AbortError') {
         this.onAuthState({ provider, phase: 'error', error: error.message });
       }
@@ -303,10 +311,10 @@ export class HostingService {
     };
   }
 
-  async pollDeviceToken(provider, clientId, session) {
+  async pollDeviceToken(provider: string, clientId: string, session: LoginSession): Promise<unknown> {
     while (Date.now() < session.expiresAt && !session.controller.signal.aborted) {
       await this.sleep(session.interval * 1000);
-      let token;
+      let token: Record<string, unknown>;
       if (provider === 'github') {
         token = await this.requestForm(
           'https://github.com/login/oauth/access_token',
@@ -328,20 +336,22 @@ export class HostingService {
           session.controller.signal
         );
       }
-      if (token.error === 'authorization_pending') continue;
-      if (token.error === 'slow_down') {
+      const err = String(token.error ?? '');
+      if (err === 'authorization_pending') continue;
+      if (err === 'slow_down') {
         session.interval += 5;
         continue;
       }
-      if (token.error) throw new Error(token.error_description || token.error);
-      if (!token.access_token) throw new Error('Provider did not return an access token');
-      const account = {
-        accessToken: String(token.access_token || ''),
-        refreshToken: token.refresh_token || '',
+      if (token.error) throw new Error(String(token.error_description || token.error));
+      const accessTokenValue = String(token.access_token ?? '');
+      if (!accessTokenValue) throw new Error('Provider did not return an access token');
+      const account: HostingAccountRecord = {
+        accessToken: accessTokenValue,
+        refreshToken: token.refresh_token ? String(token.refresh_token) : undefined,
         expiresAt: token.expires_in
           ? Date.now() + Number(token.expires_in) * 1000
           : null,
-        user: await this.fetchCurrentUser(provider, String(token.access_token || ''))
+        user: await this.fetchCurrentUser(provider, accessTokenValue)
       };
       await this.vault.setAccount(provider, account);
       this.loginSessions.delete(provider);
@@ -358,7 +368,7 @@ export class HostingService {
     }
   }
 
-  async cancelLogin(provider) {
+  async cancelLogin(provider: string): Promise<{ success: true }> {
     this.validateProvider(provider);
     const session = this.loginSessions.get(provider);
     if (session) session.controller.abort();
@@ -371,7 +381,7 @@ export class HostingService {
     this.loginSessions.clear();
   }
 
-  async logout(provider) {
+  async logout(provider: string): Promise<{ success: true; provider: string }> {
     await this.cancelLogin(provider);
     await this.vault.removeAccount(provider);
     await this.vault.removeProviderDrafts(provider);
@@ -397,14 +407,14 @@ export class HostingService {
     return this.readResponse(response);
   }
 
-  withAzureApiVersion(endpoint) {
+  withAzureApiVersion(endpoint: string): string {
     const value = String(endpoint || '');
     return value.includes('api-version=')
       ? value
       : `${value}${value.includes('?') ? '&' : '?'}api-version=7.1-preview`;
   }
 
-  azureIdentityMatches(user, identity) {
+  azureIdentityMatches(user: Record<string, unknown>, identity: Record<string, unknown>): boolean {
     if (!user || !identity) return false;
     const candidates = [user.login, user.name, user.id]
       .filter(Boolean)
@@ -416,10 +426,10 @@ export class HostingService {
   }
 
   async fetchCurrentUser(
-    provider: unknown,
-    token: unknown,
-    organization?: unknown
-  ) {
+    provider: string,
+    token: string,
+    organization?: string
+  ): Promise<{ id: unknown; login: string; name: string; avatarUrl: string }> {
     let url;
     if (provider === 'azure') {
       url = organization
@@ -442,29 +452,31 @@ export class HostingService {
           'User-Agent': 'GitTree'
         };
     const response = await this.fetchWithTimeout(url, { headers });
-    const user = await this.readResponse(response);
+    type ProviderUser = Record<string, unknown>;
+    const user = await this.readResponse<ProviderUser>(response);
+    const str = (value: unknown): string => String(value ?? '');
     if (provider === 'azure') {
-      const identity = user.authenticatedUser || user;
+      const identity = (user.authenticatedUser ?? user) as Record<string, unknown>;
       return {
         id: identity.id,
-        login: identity.providerDisplayName || identity.customDisplayName
-          || user.emailAddress || user.displayName || '',
-        name: identity.customDisplayName || identity.providerDisplayName
-          || user.displayName || '',
-        avatarUrl: user.avatarUrl || ''
+        login: str(identity.providerDisplayName) || str(identity.customDisplayName)
+          || str(user.emailAddress) || str(user.displayName),
+        name: str(identity.customDisplayName) || str(identity.providerDisplayName)
+          || str(user.displayName),
+        avatarUrl: str(user.avatarUrl)
       };
     }
     return provider === 'github'
-      ? { id: user.id, login: user.login, name: user.name, avatarUrl: user.avatar_url }
+      ? { id: user.id, login: str(user.login), name: str(user.name), avatarUrl: str(user.avatar_url) }
       : {
           id: user.id,
-          login: user.username,
-          name: user.name,
-          avatarUrl: user.avatar_url
+          login: str(user.username),
+          name: str(user.name),
+          avatarUrl: str(user.avatar_url)
         };
   }
 
-  async readResponse(response) {
+  async readResponse<T = Record<string, unknown>>(response: Response): Promise<T> {
     const MAX_RESPONSE_BYTES = 20 * 1024 * 1024;
     const declaredLength = Number(response.headers.get('content-length') || 0);
     if (declaredLength > MAX_RESPONSE_BYTES) {
@@ -522,7 +534,7 @@ export class HostingService {
     return { data, headers: response.headers };
   }
 
-  async getAccessAccount(provider) {
+  async getAccessAccount(provider: string): Promise<HostingAccountRecord | null> {
     const account = await this.vault.getAccount(provider);
     if (!account?.accessToken) return account;
     if (
@@ -533,7 +545,7 @@ export class HostingService {
     ) {
       return account;
     }
-    const clientId = this.oauthConfig[provider];
+    const clientId = String(this.oauthConfig[provider] ?? '');
     if (!clientId) throw new Error(`${provider} OAuth is not configured in this build`);
     const token = await this.requestForm(
       provider === 'github'
@@ -579,7 +591,7 @@ export class HostingService {
     });
   }
 
-  async pullRequestDetail(repository, id) {
+  async pullRequestDetail(repository: Record<string, unknown>, id: string): Promise<PullRequestDetail> {
     const repo = this.validateRepository(repository);
     const pullRequestId = this.validatePullRequestId(id);
     const viewer = (await this.vault.getAccount(repo.provider))?.user;
@@ -588,14 +600,14 @@ export class HostingService {
     });
   }
 
-  async pullRequestDiff(repository, id, page = 1) {
+  async pullRequestDiff(repository: Record<string, unknown>, id: string, page = 1): Promise<unknown> {
     const repo = this.validateRepository(repository);
     const pullRequestId = this.validatePullRequestId(id);
     const safePage = Math.max(1, Math.min(10000, Number(page) || 1));
     return this.providerAdapter(repo.provider).pullRequestDiff(repo, pullRequestId, safePage);
   }
 
-  validateThreadId(value) {
+  validateThreadId(value: unknown): string {
     const id = String(value || '');
     if (!id || id.length > 200 || !/^[A-Za-z0-9_:/+=-]+$/.test(id)) {
       throw new Error('Invalid review thread ID');
@@ -603,7 +615,7 @@ export class HostingService {
     return id;
   }
 
-  async githubGraphql(query, variables) {
+  async githubGraphql(query: string, variables: Record<string, unknown>): Promise<Record<string, unknown>> {
     const account = await this.getAccessAccount('github');
     if (!account?.accessToken) throw new Error('Connect github first');
     const response = await this.fetchWithTimeout('https://api.github.com/graphql', {
@@ -616,12 +628,18 @@ export class HostingService {
       },
       body: JSON.stringify({ query, variables })
     });
-    const result = await this.readResponse(response);
+    type GraphQlResponse = { errors?: Array<{ message: string }> } & Record<string, unknown>;
+    const result = await this.readResponse<GraphQlResponse>(response);
     if (result.errors?.length) throw new Error(result.errors[0].message);
     return result;
   }
 
-  async resolveThread(repository, id, thread, resolved) {
+  async resolveThread(
+    repository: Record<string, unknown>,
+    id: string,
+    thread: Record<string, unknown>,
+    resolved: boolean
+  ): Promise<unknown> {
     const repo = this.validateRepository(repository);
     const pullRequestId = this.validatePullRequestId(id);
     const threadId = this.validateThreadId(thread?.id);
@@ -633,12 +651,13 @@ export class HostingService {
     );
   }
 
-  validateReviewDraft(draft) {
+  validateReviewDraft(draft: Record<string, unknown>): Record<string, unknown> {
     if (!draft || typeof draft !== 'object') throw new Error('Invalid review draft');
     if (typeof draft.headSha !== 'string' || !/^[a-f0-9]{7,64}$/i.test(draft.headSha)) {
       throw new Error('Invalid review head SHA');
     }
-    if (!['COMMENT', 'APPROVE', 'REQUEST_CHANGES'].includes(draft.event)) {
+    const event = String(draft.event ?? '');
+    if (!['COMMENT', 'APPROVE', 'REQUEST_CHANGES'].includes(event)) {
       throw new Error('Invalid review event');
     }
     const body = typeof draft.body === 'string' ? draft.body : '';
@@ -690,7 +709,7 @@ export class HostingService {
     return {
       headSha: draft.headSha,
       body,
-      event: draft.event,
+      event,
       inlineComments: comments,
       replies,
       completedOperations: Array.isArray(draft.completedOperations)
@@ -699,13 +718,21 @@ export class HostingService {
     };
   }
 
-  async saveReviewDraft(repository: unknown, id: unknown, draft: unknown) {
+  async saveReviewDraft(
+    repository: Parameters<HostingService['validateRepository']>[0],
+    id: string | number,
+    draft: Record<string, unknown>
+  ): Promise<{ success: true }> {
     const safeDraft = this.validateReviewDraft(draft);
     await this.vault.saveReviewDraft(this.draftKey(repository, id), safeDraft);
     return { success: true };
   }
 
-  async getReviewDraft(repository: unknown, id: unknown, headSha: unknown) {
+  async getReviewDraft(
+    repository: Parameters<HostingService['validateRepository']>[0],
+    id: string | number,
+    headSha: unknown
+  ): Promise<Record<string, unknown> | null> {
     if (typeof headSha !== 'string' || !/^[a-f0-9]{7,64}$/i.test(headSha)) {
       return null;
     }
@@ -713,7 +740,11 @@ export class HostingService {
     return draft ? { ...draft, stale: draft.headSha !== headSha } : null;
   }
 
-  async submitReview(repository: unknown, id: unknown, draft: unknown) {
+  async submitReview(
+    repository: Parameters<HostingService['validateRepository']>[0],
+    id: string | number,
+    draft: Record<string, unknown>
+  ): Promise<unknown> {
     const repo = this.validateRepository(repository);
     const pullRequestId = this.validatePullRequestId(id);
     const safeDraft = this.validateReviewDraft(draft);
@@ -723,13 +754,13 @@ export class HostingService {
     if (storedDraft?.headSha === safeDraft.headSha) {
       safeDraft.completedOperations = [
         ...new Set([
-          ...safeDraft.completedOperations,
+          ...(safeDraft.completedOperations as string[]),
           ...((storedDraft.completedOperations as string[]) || [])
         ])
       ];
     }
-    const completed = new Set(safeDraft.completedOperations);
-    const markCompleted = async operation => {
+    const completed = new Set(safeDraft.completedOperations as string[]);
+    const markCompleted = async (operation: string): Promise<void> => {
       completed.add(operation);
       await this.vault.saveReviewDraft(this.draftKey(repo, id), {
         ...safeDraft,
@@ -744,14 +775,14 @@ export class HostingService {
       {
         viewer,
         markCompleted,
-        validateThreadId: value => this.validateThreadId(value)
+        validateThreadId: (value: unknown) => this.validateThreadId(value)
       }
     );
     await this.vault.removeReviewDraft(this.draftKey(repo, pullRequestId));
     return result;
   }
 
-  validateBranchName(value, label) {
+  validateBranchName(value: unknown, label: string): string {
     const name = String(value || '').trim().replace(/^refs\/heads\//, '');
     if (
       !name ||
@@ -766,7 +797,7 @@ export class HostingService {
     return name;
   }
 
-  parseNameList(value, label, limit = 20) {
+  parseNameList(value: unknown, label: string, limit = 20): string[] {
     const list = Array.isArray(value)
       ? value
       : String(value || '').split(/[,;\n]/);
@@ -780,7 +811,7 @@ export class HostingService {
     return names;
   }
 
-  parseWorkItemIds(value) {
+  parseWorkItemIds(value: unknown): number[] {
     const list = Array.isArray(value)
       ? value
       : String(value || '').split(/[,;\s]+/);
@@ -819,7 +850,7 @@ export class HostingService {
     };
   }
 
-  async azureIdentitySearch(organization, query) {
+  async azureIdentitySearch(organization: string, query: string): Promise<Array<{ mail?: string }>> {
     const account = await this.getAccessAccount('azure');
     if (!account?.accessToken) throw new Error('Connect azure first');
     const url =
@@ -833,11 +864,11 @@ export class HostingService {
         'User-Agent': 'GitTree'
       }
     });
-    const data = await this.readResponse(response);
-    return data.value || [];
+    const data = await this.readResponse<{ value?: Array<{ mail?: string }> }>(response);
+    return data.value ?? [];
   }
 
-  async createPullRequest(repository, input = {}) {
+  async createPullRequest(repository: Record<string, unknown>, input: Record<string, unknown> = {}): Promise<unknown> {
     const repo = this.validateRepository(repository);
     const options = this.validateCreatePullRequestInput(input);
     const account = await this.vault.getAccount(repo.provider);

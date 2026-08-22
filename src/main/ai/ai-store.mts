@@ -67,7 +67,7 @@ export class AiSettingsStore {
     }
   }
 
-  save(state) {
+  save(state: ReturnType<typeof defaults>): void {
     const payload = {
       version: 1,
       settings: sanitizeSettings(state.settings)

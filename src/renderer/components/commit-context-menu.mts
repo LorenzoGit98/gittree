@@ -184,7 +184,7 @@ export class CommitContextMenu {
     this.element.querySelectorAll<HTMLElement>('[data-action]:not([aria-disabled="true"])').forEach(item => {
       item.onclick = event => {
         event.stopPropagation();
-        this.execute((item as HTMLElement).dataset.action);
+        this.execute((item as HTMLElement).dataset.action ?? '');
       };
     });
   }
@@ -242,8 +242,8 @@ export class CommitContextMenu {
   }
 
   async explainCommitDialog(repo: { path?: string }, hash: string): Promise<unknown> {
-    const overlay = document.getElementById('modal-overlay');
-    const dialog = document.getElementById('modal-dialog');
+    const overlay = document.getElementById('modal-overlay')!;
+    const dialog = document.getElementById('modal-dialog')!;
     const language = await this.aiLanguage().catch(() => 'en');
     return new Promise(resolve => {
       dialog.className = 'confirm-dialog ai-explain-dialog';
@@ -284,13 +284,13 @@ export class CommitContextMenu {
         dialog.innerHTML = `
           <div class="ai-explain-result">
             <span class="eyebrow">${this.esc(hash.slice(0, 8))}</span>
-            <h3>${this.esc(result.summary || '')}</h3>
-            <div class="ai-explain-body">${this.esc(result.body || '')}</div>
+            <h3>${this.esc(result?.summary ?? '')}</h3>
+            <div class="ai-explain-body">${this.esc(result?.body ?? '')}</div>
             <div class="confirm-actions">
               <button class="btn btn-primary" type="button" data-close>${this.esc(t('common.cancel'))}</button>
             </div>
           </div>`;
-        dialog.querySelector<HTMLElement>('[data-close]').onclick = () => finish(null);
+        dialog.querySelector<HTMLElement>('[data-close]')!.onclick = () => finish(null);
       }).catch((error: Error) => {
         finish(null);
         this.app.showToast(error?.message || t('common.error'), 'error');
@@ -299,7 +299,10 @@ export class CommitContextMenu {
   }
 
   async aiLanguage(): Promise<string> {
-    const settings = await window.gitTree.getAiSettings().catch(() => null) as { language?: string } | null;
+    const settings = await window.gitTree.getAiSettings().then(
+      (value): { language?: string } | null => (value ?? null) as { language?: string } | null,
+      (): null => null
+    );
     if (settings?.language === 'en' || settings?.language === 'it') {
       return settings.language;
     }
@@ -308,8 +311,8 @@ export class CommitContextMenu {
   }
 
   createTagDialog(repo: { path?: string }, hash: string): Promise<unknown> {
-    const overlay = document.getElementById('modal-overlay');
-    const dialog = document.getElementById('modal-dialog');
+    const overlay = document.getElementById('modal-overlay')!;
+    const dialog = document.getElementById('modal-dialog')!;
     return new Promise(resolve => {
       dialog.className = 'confirm-dialog tag-create-dialog';
       dialog.setAttribute('role', 'dialog');
@@ -339,10 +342,10 @@ export class CommitContextMenu {
           </div>
         </form>`;
       overlay.classList.remove('is-hidden');
-      const form = dialog.querySelector('form') as HTMLFormElement;
-      const error = dialog.querySelector<HTMLElement>('[data-tag-error]');
-      const create = dialog.querySelector<HTMLButtonElement>('[data-create]');
-      const cancel = dialog.querySelector<HTMLButtonElement>('[data-cancel]');
+      const form = dialog.querySelector('form')! as HTMLFormElement;
+      const error = dialog.querySelector<HTMLElement>('[data-tag-error]')!;
+      const create = dialog.querySelector<HTMLButtonElement>('[data-create]')!;
+      const cancel = dialog.querySelector<HTMLButtonElement>('[data-cancel]')!;
       let submitting = false;
       const finish = (value: unknown) => {
         document.removeEventListener('keydown', onKeydown);
@@ -371,7 +374,7 @@ export class CommitContextMenu {
         cancel.disabled = true;
         (form.elements as unknown as Record<string, HTMLInputElement>).name.disabled = true;
         (form.elements as unknown as Record<string, HTMLTextAreaElement>).message.disabled = true;
-        create.querySelector('i').className = 'ph ph-circle-notch';
+        create.querySelector('i')!.className = 'ph ph-circle-notch';
         error.textContent = '';
         try {
           const result = await window.gitTree.createTag(
@@ -392,7 +395,7 @@ export class CommitContextMenu {
           cancel.disabled = false;
           (form.elements as unknown as Record<string, HTMLInputElement>).name.disabled = false;
           (form.elements as unknown as Record<string, HTMLTextAreaElement>).message.disabled = false;
-          create.querySelector('i').className = 'ph ph-tag';
+          create.querySelector('i')!.className = 'ph ph-tag';
           error.textContent = (tagError as Error).message || t('commitMenu.tagCreateFailed');
           (form.elements as unknown as Record<string, HTMLInputElement>).name.focus();
         }
@@ -410,8 +413,8 @@ export class CommitContextMenu {
       this.app.showToast((tagsResult as { error?: string })?.error || t('commitMenu.noTagsAtCommit'), 'warning');
       return undefined;
     }
-    const overlay = document.getElementById('modal-overlay');
-    const dialog = document.getElementById('modal-dialog');
+    const overlay = document.getElementById('modal-overlay')!;
+    const dialog = document.getElementById('modal-dialog')!;
     return new Promise(resolve => {
       dialog.className = 'confirm-dialog tag-delete-dialog';
       dialog.setAttribute('role', 'dialog');
@@ -437,9 +440,9 @@ export class CommitContextMenu {
           </button>
         </div>`;
       overlay.classList.remove('is-hidden');
-      const error = dialog.querySelector<HTMLElement>('[data-tag-error]');
-      const del = dialog.querySelector<HTMLButtonElement>('[data-delete]');
-      const cancel = dialog.querySelector<HTMLButtonElement>('[data-cancel]');
+      const error = dialog.querySelector<HTMLElement>('[data-tag-error]')!;
+      const del = dialog.querySelector<HTMLButtonElement>('[data-delete]')!;
+      const cancel = dialog.querySelector<HTMLButtonElement>('[data-cancel]')!;
       const checkboxes = [...dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
       const sync = () => {
         del.disabled = !checkboxes.some(checkbox => checkbox.checked);
@@ -473,7 +476,7 @@ export class CommitContextMenu {
         submitting = true;
         del.disabled = true;
         cancel.disabled = true;
-        del.querySelector('i').className = 'ph ph-circle-notch';
+        del.querySelector('i')!.className = 'ph ph-circle-notch';
         error.textContent = '';
         try {
           for (const tag of selected) {
@@ -492,7 +495,7 @@ export class CommitContextMenu {
           submitting = false;
           del.disabled = false;
           cancel.disabled = false;
-          del.querySelector('i').className = 'ph ph-trash';
+          del.querySelector('i')!.className = 'ph ph-trash';
           error.textContent = (tagError as Error).message || t('commitMenu.tagDeleteFailed');
         }
       };
@@ -509,8 +512,8 @@ export class CommitContextMenu {
       this.app.showToast((treeResult as { error?: string })?.error || t('commitMenu.noFilesAtCommit'), 'warning');
       return undefined;
     }
-    const overlay = document.getElementById('modal-overlay');
-    const dialog = document.getElementById('modal-dialog');
+    const overlay = document.getElementById('modal-overlay')!;
+    const dialog = document.getElementById('modal-dialog')!;
     return new Promise(resolve => {
       dialog.className = 'confirm-dialog checkout-file-dialog';
       dialog.setAttribute('role', 'dialog');
@@ -533,11 +536,11 @@ export class CommitContextMenu {
           </button>
         </div>`;
       overlay.classList.remove('is-hidden');
-      const list = dialog.querySelector<HTMLElement>('[data-file-list]');
-      const error = dialog.querySelector<HTMLElement>('[data-file-error]');
-      const restoreButton = dialog.querySelector<HTMLButtonElement>('[data-restore]');
-      const cancel = dialog.querySelector<HTMLButtonElement>('[data-cancel]');
-      const search = dialog.querySelector<HTMLInputElement>('input[type="search"]');
+      const list = dialog.querySelector<HTMLElement>('[data-file-list]')!;
+      const error = dialog.querySelector<HTMLElement>('[data-file-error]')!;
+      const restoreButton = dialog.querySelector<HTMLButtonElement>('[data-restore]')!;
+      const cancel = dialog.querySelector<HTMLButtonElement>('[data-cancel]')!;
+      const search = dialog.querySelector<HTMLInputElement>('input[type="search"]')!;
       let selectedPath: string | null = null;
       let submitting = false;
 
@@ -554,7 +557,7 @@ export class CommitContextMenu {
         `).join('') || `<div class="settings-empty">${this.esc(t('commitMenu.noFilesMatch'))}</div>`;
         list.querySelectorAll<HTMLElement>('[data-file]').forEach(item => {
           item.onclick = () => {
-            selectedPath = (item as HTMLElement).dataset.file;
+            selectedPath = (item as HTMLElement).dataset.file ?? null;
             list.querySelectorAll('[data-file]').forEach(other => {
               other.classList.toggle('is-selected', other === item);
             });
@@ -589,7 +592,7 @@ export class CommitContextMenu {
         submitting = true;
         restoreButton.disabled = true;
         cancel.disabled = true;
-        restoreButton.querySelector('i').className = 'ph ph-circle-notch';
+        restoreButton.querySelector('i')!.className = 'ph ph-circle-notch';
         error.textContent = '';
         try {
           const result = await window.gitTree.restoreFileFromCommit(
@@ -607,7 +610,7 @@ export class CommitContextMenu {
           submitting = false;
           restoreButton.disabled = false;
           cancel.disabled = false;
-          restoreButton.querySelector('i').className = 'ph ph-arrow-counter-clockwise';
+          restoreButton.querySelector('i')!.className = 'ph ph-arrow-counter-clockwise';
           error.textContent = (restoreError as Error).message || t('commitMenu.checkoutFileFailed');
         }
       };
@@ -618,8 +621,8 @@ export class CommitContextMenu {
   }
 
   previewDialog(preview: CommitPreview): Promise<boolean> {
-    const overlay = document.getElementById('modal-overlay');
-    const dialog = document.getElementById('modal-dialog');
+    const overlay = document.getElementById('modal-overlay')!;
+    const dialog = document.getElementById('modal-dialog')!;
     return new Promise(resolve => {
       const commits = preview.commits || [];
       const files = preview.files || [];
@@ -631,7 +634,7 @@ export class CommitContextMenu {
           ))}</h3>
           <div class="commit-preview-status ${preview.allowed ? 'allowed' : 'blocked'}">
             <i class="ph ${preview.allowed ? 'ph-check-circle' : 'ph-warning-circle'}"></i>
-            <span>${this.esc(preview.allowed ? t('commitMenu.ready') : preview.reason)}</span>
+            <span>${this.esc(preview.allowed ? t('commitMenu.ready') : (preview.reason ?? ''))}</span>
           </div>
           <dl class="commit-preview-facts">
             <div><dt>${this.esc(t('commitMenu.target'))}</dt><dd><code>${this.esc((preview.target || '').slice(0, 12))}</code></dd></div>
@@ -661,8 +664,8 @@ export class CommitContextMenu {
         dialog.innerHTML = '';
         resolve(value);
       };
-      dialog.querySelector<HTMLElement>('[data-cancel]').onclick = () => finish(false);
-      dialog.querySelector<HTMLElement>('[data-confirm]').onclick = () => finish(true);
+      dialog.querySelector<HTMLElement>('[data-cancel]')!.onclick = () => finish(false);
+      dialog.querySelector<HTMLElement>('[data-confirm]')!.onclick = () => finish(true);
       dialog.querySelector<HTMLElement>(preview.allowed ? '[data-confirm]' : '[data-cancel]')?.focus();
     });
   }

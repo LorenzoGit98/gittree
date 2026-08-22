@@ -1636,8 +1636,13 @@ const I18n = {
     this.syncControls();
   },
 
+  /**
+   * @param {string} key
+   * @param {Record<string, unknown>} [options]
+   * @returns {string}
+   */
   t(key, options) {
-    return i18next.t(key, options);
+    return i18next.t(String(key), options);
   },
 
   async toggleLanguage() {
@@ -1673,5 +1678,5 @@ const I18n = {
   }
 };
 
-window.I18n = I18n;
+/** @type {(key: string, options?: Record<string, unknown>) => string} */
 window.t = (key, options) => I18n.t(key, options);

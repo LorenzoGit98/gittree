@@ -50,7 +50,7 @@ export function registerAgentHandlers({
   ));
 
   registerManagedRepoHandler('agent:tasks', repoPath => (
-    agentSessionService.listTasks(repoPath)
+    agentSessionService.listTasks(String(repoPath))
   ));
   registerManagedRepoHandler('agent:task-create', (repoPath: string, options: Record<string, unknown> = {}) => {
     const safeOptions: Record<string, unknown> = { ...options };
@@ -74,17 +74,17 @@ export function registerAgentHandlers({
     return repositoryWorkspace.addTrustedRepository(resolved);
   });
 
-  registerHandler('agent:task-stop', taskId => agentSessionService.stopTask(taskId));
-  registerHandler('agent:task-resume', taskId => agentSessionService.resumeTask(taskId));
-  registerHandler('agent:task-archive', taskId => agentSessionService.archiveTask(taskId));
+  registerHandler('agent:task-stop', taskId => agentSessionService.stopTask(String(taskId)));
+  registerHandler('agent:task-resume', taskId => agentSessionService.resumeTask(String(taskId)));
+  registerHandler('agent:task-archive', taskId => agentSessionService.archiveTask(String(taskId)));
   registerHandler('agent:terminal-write', (taskId, data) => (
-    agentSessionService.writeTerminal(taskId, data)
+    agentSessionService.writeTerminal(String(taskId), String(data))
   ));
   registerHandler('agent:terminal-resize', (taskId, cols, rows) => (
-    agentSessionService.resizeTerminal(taskId, cols, rows)
+    agentSessionService.resizeTerminal(String(taskId), Number(cols), Number(rows))
   ));
   registerHandler('agent:attention-ack', taskId => (
-    agentSessionService.acknowledgeAttention(taskId)
+    agentSessionService.acknowledgeAttention(String(taskId))
   ));
 }
 

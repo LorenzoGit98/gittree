@@ -9,7 +9,7 @@ interface GitHandlerDependencies {
   sendToRenderer?: (channel: string, payload: unknown) => void;
 }
 
-async function runWithConflictState(git: GitService, operation: () => Promise<unknown>) {
+async function runWithConflictState(git: GitService, operation: () => Promise<any>) {
   try {
     return await operation();
   } catch (error) {
@@ -90,38 +90,45 @@ export function registerGitHandlers({
     ['git:operation-skip', 'skipOperation']
   ];
 
-  for (const [channel, method] of forwards) {
-    registerManagedRepoHandler(channel, (repoPath, ...args) => (
-      getGitService(repoPath)[method](...args)
-    ));
+  type GitMethod = keyof GitService;
+
+  for (const [channel, method] of forwards as Array<[string, GitMethod]>) {
+    registerManagedRepoHandler(channel, (repoPath: string, ...args: unknown[]) => {
+      const service = getGitService(repoPath) as unknown as Record<string, (...a: unknown[]) => unknown>;
+      return service[method](...args);
+    });
   }
 
-  registerManagedRepoHandler('git:worktree-create', async (repoPath, directory, branch) => {
+  registerManagedRepoHandler('git:worktree-create', async (repoPath: string, directory: string, branch?: string) => {
     const result = await getGitService(repoPath).createWorktree(
-      consumeAuthorizedDirectory(directory),
+      String(consumeAuthorizedDirectory(directory)),
       branch
     );
-    authorizeCreatedRepository(result.path);
+    authorizeCreatedRepository(String(result.path));
     return result;
   });
 
-  registerManagedRepoHandler('git:worktree-create-managed', async (repoPath, directory, options) => {
+  registerManagedRepoHandler('git:worktree-create-managed', async (repoPath: string, directory: string, options?: Record<string, unknown>) => {
     const result = await getGitService(repoPath).createManagedWorktree({
       ...((options ?? {}) as Record<string, unknown>),
-      directory: consumeAuthorizedDirectory(directory)
+      directory: String(consumeAuthorizedDirectory(directory))
     });
-    authorizeCreatedRepository(result.path);
+    authorizeCreatedRepository(String(result.path));
     return result;
   });
 
-  registerManagedRepoHandler('git:worktree-remove', async (repoPath, directory) => {
+  registerManagedRepoHandler('git:worktree-remove', async (repoPath: string, directory: string) => {
     assertWorktreeRemovable(directory);
     return getGitService(repoPath).removeWorktree(directory);
   });
 
-  const registerLogged = (channel, method, message) => {
-    registerManagedRepoHandler(channel, async (repoPath, ...args) => {
-      const result = await getGitService(repoPath)[method](...args);
+  const registerLogged = (
+    channel: string,
+    method: GitMethod,
+    message: (result: unknown, ...args: unknown[]) => string
+  ) => {
+    registerManagedRepoHandler(channel, async (repoPath: string, ...args: unknown[]) => {
+      const result = await (getGitService(repoPath)[method] as (...a: unknown[]) => Promise<unknown>)(...args);
       sendToRenderer('operation:log', message(result, ...args));
       return result;
     });
@@ -131,7 +138,7 @@ export function registerGitHandlers({
     `Checked out ${branch}`
   ));
   registerLogged('git:checkout-tracking', 'checkoutTrackingBranch', result => (
-    `Checked out ${result.branch}`
+    `Checked out ${(result as { branch?: string }).branch ?? ''}`
   ));
   registerLogged('git:branch-rename', 'renameBranch', (_result, branch, newName) => (
     `Renamed ${branch} to ${newName}`
@@ -143,10 +150,10 @@ export function registerGitHandlers({
   registerLogged('git:pull', 'pull', (_result, remote) => `Pulled from ${remote}`);
   registerLogged('git:fetch', 'fetch', (_result, remote) => `Fetched from ${remote}`);
   registerLogged('git:commit', 'commitChanges', result => (
-    `Created commit ${result.hash.slice(0, 8)}`
+    `Created commit ${String((result as { hash?: string }).hash).slice(0, 8)}`
   ));
-  registerLogged('git:create-tag', 'createTag', result => `Created tag ${result.name}`);
-  registerLogged('git:delete-tag', 'deleteTag', result => `Deleted tag ${result.name}`);
+  registerLogged('git:create-tag', 'createTag', result => `Created tag ${(result as { name?: string }).name}`);
+  registerLogged('git:delete-tag', 'deleteTag', result => `Deleted tag ${(result as { name?: string }).name}`);
   registerLogged('git:tags-push', 'pushTags', (_result, remote) => (
     `Pushed tags to ${remote}`
   ));
@@ -168,11 +175,15 @@ export function registerGitHandlers({
     return result;
   });
 
-  const registerConflictOperation = (channel, method, logMessage) => {
-    registerManagedRepoHandler(channel, async (repoPath, ...args) => {
+  const registerConflictOperation = (
+    channel: string,
+    method: GitMethod,
+    logMessage: (result: any, ...args: unknown[]) => string
+  ) => {
+    registerManagedRepoHandler(channel, async (repoPath: string, ...args: unknown[]) => {
       const git = getGitService(repoPath);
       return runWithConflictState(git, async () => {
-        const result = await git[method](...args);
+        const result = await (git[method] as (...a: unknown[]) => Promise<unknown>)(...args);
         sendToRenderer('operation:log', logMessage(result, ...args));
         return result;
       });
@@ -186,9 +197,9 @@ export function registerGitHandlers({
     `Merged ${branch}`
   ));
   registerConflictOperation('git:rebase-onto-commit', 'rebaseOntoCommit', (_result, hash) => (
-    `Rebased onto ${hash.slice(0, 8)}`
+    `Rebased onto ${String(hash).slice(0, 8)}`
   ));
   registerConflictOperation('git:cherry-pick', 'cherryPickCommits', result => (
-    `Cherry-picked ${result.commits.length} commit(s)`
+    `Cherry-picked ${(result as { commits?: unknown[] }).commits?.length ?? 0} commit(s)`
   ));
 }

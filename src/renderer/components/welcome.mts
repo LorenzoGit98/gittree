@@ -139,7 +139,7 @@ export class WelcomeScreen {
     document.body.appendChild(overlay);
     this.repositoryPicker = overlay;
     overlay.querySelector<HTMLElement>('.repository-picker-close').onclick = () => this.closeRepositoryPicker();
-    overlay.addEventListener('mousedown', event => {
+    overlay.addEventListener('mousedown', (event: MouseEvent) => {
       if (event.target === overlay) this.closeRepositoryPicker();
     });
     overlay.querySelector<HTMLElement>('[data-mode="single"]').onclick = async () => {
@@ -454,7 +454,7 @@ export class WelcomeScreen {
       };
       document.body.appendChild(overlay);
       overlay.querySelector<HTMLElement>('.repository-picker-close').onclick = () => finish(null);
-      overlay.addEventListener('mousedown', event => {
+      overlay.addEventListener('mousedown', (event: MouseEvent) => {
         if (event.target === overlay) finish(null);
       });
       overlay.querySelector<HTMLElement>('[data-action="cancel"]').onclick = () => finish(null);

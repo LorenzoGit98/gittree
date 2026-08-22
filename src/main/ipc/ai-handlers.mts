@@ -6,7 +6,7 @@ export function registerAiHandlers({ registerHandler, registerManagedRepoHandler
   aiService: AiService;
 }) {
   registerHandler('ai:settings-get', () => aiService.getSettings());
-  registerHandler('ai:settings-set', input => aiService.setSettings(input));
+  registerHandler('ai:settings-set', (input: unknown) => aiService.setSettings(input as Record<string, unknown>));
   registerHandler('ai:key-set', key => aiService.setKey(key));
   registerHandler('ai:key-clear', () => aiService.clearKey());
   registerHandler('ai:test-connection', () => aiService.testConnection());

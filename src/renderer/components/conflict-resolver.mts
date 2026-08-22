@@ -113,7 +113,9 @@ export class ConflictResolver {
     if (!this.state?.type) return;
     const conflicts = this.state.conflicts || [];
     this.allFiles = [...conflicts];
-    this.blockCounts = new Map(conflicts.map(file => [file, null]));
+    this.blockCounts = new Map<string, number | null>(
+      conflicts.map((file: string): [string, number | null] => [file, null])
+    );
     this.binaryMap = new Map();
     this.currentPath = conflicts[0] || null;
     this.current = null;
@@ -430,7 +432,10 @@ export class ConflictResolver {
   }
 
   async aiLanguage(): Promise<string> {
-    const settings = await window.gitTree.getAiSettings().catch(() => null) as { language?: string } | null;
+    const settings = await window.gitTree.getAiSettings().then(
+      (value): { language?: string } | null => (value ?? null) as { language?: string } | null,
+      (): null => null
+    );
     if (settings?.language === 'en' || settings?.language === 'it') {
       return settings.language;
     }

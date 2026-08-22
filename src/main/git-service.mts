@@ -3,6 +3,7 @@ import * as nodePath from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { SimpleGit } from 'simple-git';
+import type { TaskOptions as GitTaskOptions } from 'simple-git';
 import { RepositorySession } from './git/repository-session.mts';
 import { RepositoryHistory } from './git/repository-history.mts';
 import { RepositoryWorkingTree } from './git/repository-working-tree.mts';
@@ -11,6 +12,8 @@ import { RepositoryWorktrees } from './git/repository-worktrees.mts';
 import { bindMethodsToQueue } from './git/queue-bound-methods.mts';
 import { parseRemoteUrl } from './provider-links.mts';
 import type { RepositoryQueue } from './git/repository-queue.mts';
+import type { CommitActionMetadata } from './git/repository-operations.mts';
+import type { CreateWorktreeOptions } from './git/repository-worktrees.mts';
 
 const execFileAsync = promisify(execFile);
 
@@ -69,15 +72,15 @@ export class GitService {
     });
   }
 
-  runExclusive(fn) {
-    return this.session.runExclusive(fn);
+  runExclusive<T>(fn: () => Promise<T>): Promise<T> {
+    return this.session.runExclusive(fn) as Promise<T>;
   }
 
-  async getLog(maxCount = 100, branch = null) {
+  async getLog(maxCount: unknown = 100, branch: string | null = null) {
     return this.history.getLog(maxCount, branch);
   }
 
-  async getGraphPage(offset = 0, limit = 500) {
+  async getGraphPage(offset: unknown = 0, limit: unknown = 500) {
     return this.history.getGraphPage(offset, limit);
   }
 
@@ -85,39 +88,39 @@ export class GitService {
     return this.history.getGraphRefs();
   }
 
-  async getDiff(commitHash = null, file = null) {
+  async getDiff(commitHash: string | null = null, file: string | null = null) {
     return this.history.getDiff(commitHash, file);
   }
 
-  async getCommitDiff(hash, file = null) {
+  async getCommitDiff(hash: string, file: string | null = null) {
     return this.history.getCommitDiff(hash, file);
   }
 
-  async hasParent(commitHash) {
+  async hasParent(commitHash: string) {
     return this.history.hasParent(commitHash);
   }
 
-  async getBranchComparison(baseBranch, compareBranch, maxCount = 100) {
+  async getBranchComparison(baseBranch: string, compareBranch: string, maxCount: unknown = 100) {
     return this.history.getBranchComparison(baseBranch, compareBranch, maxCount);
   }
 
-  async compareCommits(hashA, hashB) {
+  async compareCommits(hashA: string, hashB: string) {
     return this.history.compareCommits(hashA, hashB);
   }
 
-  parseNameStatus(raw) {
+  parseNameStatus(raw: string) {
     return this.history.parseNameStatus(raw);
   }
 
-  async getCommitFileDiff(hashA, hashB, filePath) {
+  async getCommitFileDiff(hashA: string, hashB: string, filePath: string) {
     return this.history.getCommitFileDiff(hashA, hashB, filePath);
   }
 
-  async getCommitDetail(hash) {
+  async getCommitDetail(hash: string) {
     return this.history.getCommitDetail(hash);
   }
 
-  async getBlame(filePath, hash = 'HEAD') {
+  async getBlame(filePath: string, hash = 'HEAD') {
     return this.history.getBlame(filePath, hash);
   }
 
@@ -214,7 +217,7 @@ export class GitService {
     }
   }
 
-  async checkoutBranch(branch) {
+  async checkoutBranch(branch: string) {
     await this.assertNoPendingOperation();
     await this.assertLocalBranch(branch);
     try {
@@ -225,7 +228,7 @@ export class GitService {
     }
   }
 
-  async renameBranch(branch, newName) {
+  async renameBranch(branch: string, newName: string) {
     await this.assertNoPendingOperation();
     await this.assertLocalBranch(branch);
     try {
@@ -241,7 +244,7 @@ export class GitService {
     }
   }
 
-  async checkoutTrackingBranch(remoteRef) {
+  async checkoutTrackingBranch(remoteRef: string) {
     await this.assertNoPendingOperation();
     const separator = remoteRef.indexOf('/');
     if (separator <= 0 || separator >= remoteRef.length - 1) {
@@ -277,7 +280,7 @@ export class GitService {
     }
   }
 
-  async trackBranch(localBranch, remoteRef) {
+  async trackBranch(localBranch: string, remoteRef: string) {
     await this.assertNoPendingOperation();
     await this.assertLocalBranch(localBranch);
     await this.assertRemoteBranch(remoteRef);
@@ -289,7 +292,7 @@ export class GitService {
     }
   }
 
-  async fetchBranch(remote, branch) {
+  async fetchBranch(remote: string, branch: string) {
     await this.assertNoPendingOperation();
     await this.assertRemote(remote);
     await this.assertValidBranchName(branch);
@@ -301,7 +304,7 @@ export class GitService {
     }
   }
 
-  async deleteRemoteBranch(remote, branch) {
+  async deleteRemoteBranch(remote: string, branch: string) {
     await this.assertNoPendingOperation();
     await this.assertRemote(remote);
     await this.assertValidBranchName(branch);
@@ -313,59 +316,62 @@ export class GitService {
     }
   }
 
-  async rebaseOnto(branch) {
+  async rebaseOnto(branch: string) {
     return this.operations.rebaseOnto(branch);
   }
 
-  validateCommitHashes(hashes) {
+  validateCommitHashes(hashes: string[]) {
     return this.operations.validateCommitHashes(hashes);
   }
 
-  async getCommitActionMetadata(hashes) {
+  async getCommitActionMetadata(hashes: string[]) {
     return this.operations.getCommitActionMetadata(hashes);
   }
 
-  sortCommitsParentFirst(commits) {
+  sortCommitsParentFirst(commits: CommitActionMetadata[]) {
     return this.operations.sortCommitsParentFirst(commits);
   }
 
-  async isAncestor(ancestor, descendant) {
+  async isAncestor(ancestor: string, descendant: string) {
     return this.operations.isAncestor(ancestor, descendant);
   }
 
-  async getCommitFiles(commits) {
+  async getCommitFiles(commits: CommitActionMetadata[]) {
     return this.operations.getCommitFiles(commits);
   }
 
-  async previewCommitAction(action, hashes) {
+  async previewCommitAction(action: 'rebase' | 'cherry-pick', hashes: unknown) {
     return this.operations.previewCommitAction(action, hashes);
   }
 
-  async rebaseOntoCommit(hash) {
+  async rebaseOntoCommit(hash: string) {
     return this.operations.rebaseOntoCommit(hash);
   }
 
-  async cherryPickCommits(hashes) {
+  async cherryPickCommits(hashes: string[]) {
     return this.operations.cherryPickCommits(hashes);
   }
 
-  async checkoutPullRequestSource(options) {
+  async checkoutPullRequestSource(options: {
+    provider?: unknown; remote?: unknown; source?: unknown;
+    localBranch?: unknown; number?: unknown; headSha?: unknown; confirmed?: unknown;
+  }) {
     await this.assertNoPendingOperation();
-    const provider = options?.provider;
+    const provider = String(options.provider ?? '');
     if (!['github', 'gitlab'].includes(provider)) {
       throw new Error('Unsupported pull request provider');
     }
-    const remote = options?.remote;
+    const remote = String(options.remote ?? '');
     await this.assertRemote(remote);
-    const source = options?.source;
+    const source = String(options.source ?? '');
     await this.assertValidBranchName(source);
-    const localBranch = options?.localBranch || source;
+    const localBranch = options.localBranch ? String(options.localBranch) : source;
     await this.assertValidBranchName(localBranch);
     const number = Number(options?.number);
     if (!Number.isSafeInteger(number) || number <= 0) {
       throw new Error('Invalid pull request ID');
     }
-    const headSha = options?.headSha || '';
+    const headSha = options.headSha ? String(options.headSha) : '';
     if (headSha && !/^[a-f0-9]{7,64}$/i.test(headSha)) {
       throw new Error('Invalid pull request head SHA');
     }
@@ -400,7 +406,7 @@ export class GitService {
           ? `Local branch already exists: ${localBranch}`
           : '')
     };
-    if (!options.confirmed || !allowed) return preview;
+    if (options.confirmed !== true || !allowed) return preview;
     if (tracksRemote) {
       const result = await this.checkoutTrackingBranch(remoteRef);
       return { ...preview, success: true, branch: result.branch };
@@ -417,7 +423,7 @@ export class GitService {
     return { ...preview, success: true, branch: localBranch };
   }
 
-  async assertRemote(remote) {
+  async assertRemote(remote: string) {
     const remotes = await this.git.getRemotes();
     const exists = remotes.some(item => (
       typeof item === 'string' ? item === remote : item.name === remote
@@ -425,7 +431,7 @@ export class GitService {
     if (!exists) throw new Error(`Remote not found: ${remote}`);
   }
 
-  async assertLocalBranch(branch) {
+  async assertLocalBranch(branch: string) {
     if (typeof branch !== 'string' || !branch || branch.startsWith('-')) {
       throw new Error(`Invalid local branch name: ${branch}`);
     }
@@ -436,7 +442,7 @@ export class GitService {
     }
   }
 
-  async assertRemoteBranch(remoteRef) {
+  async assertRemoteBranch(remoteRef: string) {
     if (typeof remoteRef !== 'string' || !remoteRef || remoteRef.startsWith('-')) {
       throw new Error(`Invalid remote branch: ${remoteRef}`);
     }
@@ -447,7 +453,7 @@ export class GitService {
     }
   }
 
-  async assertValidBranchName(branch) {
+  async assertValidBranchName(branch: string) {
     if (typeof branch !== 'string' || !branch || branch.startsWith('-')) {
       throw new Error(`Invalid branch name: ${branch}`);
     }
@@ -458,7 +464,7 @@ export class GitService {
     }
   }
 
-  assertSafeRef(ref) {
+  assertSafeRef(ref: string) {
     if (
       typeof ref !== 'string' ||
       !ref.trim() ||
@@ -470,7 +476,7 @@ export class GitService {
     }
   }
 
-  async assertCommitish(ref) {
+  async assertCommitish(ref: string) {
     if (typeof ref !== 'string' || !ref || ref.startsWith('-')) {
       throw new Error(`Invalid Git ref: ${ref}`);
     }
@@ -485,7 +491,7 @@ export class GitService {
     return this.operations.assertNoPendingOperation();
   }
 
-  async createBranch(name, startPoint = null) {
+  async createBranch(name: string, startPoint?: string | null) {
     await this.assertNoPendingOperation();
     await this.assertValidBranchName(name);
     if (startPoint) await this.assertCommitish(startPoint);
@@ -498,19 +504,19 @@ export class GitService {
     }
   }
 
-  async merge(branch, strategy = 'ff') {
+  async merge(branch: string, strategy?: string) {
     return this.operations.merge(branch, strategy);
   }
 
-  async mergeBlockingFiles(branch, status) {
+  async mergeBlockingFiles(branch: string, status: Awaited<ReturnType<SimpleGit['status']>>) {
     return this.operations.mergeBlockingFiles(branch, status);
   }
 
-  async previewMerge(branch) {
+  async previewMerge(branch: string) {
     return this.operations.previewMerge(branch);
   }
 
-  parseConflictBlocks(content) {
+  parseConflictBlocks(content: string) {
     return this.operations.parseConflictBlocks(content);
   }
 
@@ -518,11 +524,11 @@ export class GitService {
     return this.operations.getOperationState();
   }
 
-  async readConflict(filePath) {
+  async readConflict(filePath: string) {
     return this.operations.readConflict(filePath);
   }
 
-  async resolveConflict(filePath, resolution) {
+  async resolveConflict(filePath: string, resolution: { strategy: string; snapshotId?: unknown; content?: string }) {
     return this.operations.resolveConflict(filePath, resolution);
   }
 
@@ -538,7 +544,7 @@ export class GitService {
     return this.operations.skipOperation();
   }
 
-  async resolveGitPath(name) {
+  async resolveGitPath(name: string) {
     return this.operations.resolveGitPath(name);
   }
 
@@ -574,11 +580,11 @@ export class GitService {
     return relative.split(nodePath.sep).join('/');
   }
 
-  async readStageBlob(stage, relativePath) {
+  async readStageBlob(stage: number, relativePath: string) {
     return this.operations.readStageBlob(stage, relativePath);
   }
 
-  async deleteBranch(branch, force = false) {
+  async deleteBranch(branch: string, force?: boolean) {
     await this.assertNoPendingOperation();
     await this.assertLocalBranch(branch);
     const current = (await this.git.branchLocal()).current;
@@ -592,7 +598,7 @@ export class GitService {
     }
   }
 
-  async deleteBranches(branches, force = false) {
+  async deleteBranches(branches: string[], force?: boolean) {
     await this.assertNoPendingOperation();
     const current = (await this.git.branchLocal()).current;
     const results = [];
@@ -612,7 +618,7 @@ export class GitService {
     return { results };
   }
 
-  async push(remote = 'origin', branch = null, setUpstream = false) {
+  async push(remote: string = 'origin', branch: string | null = null, setUpstream?: boolean) {
     await this.assertNoPendingOperation();
     await this.assertRemote(remote);
     if (branch) await this.assertLocalBranch(branch);
@@ -628,12 +634,16 @@ export class GitService {
     }
   }
 
-  async pull(remote = 'origin', branch = null, options = {}) {
+  async pull(remote: string = 'origin', branch: string | null = null, options: Record<string, unknown> = {}) {
     await this.assertNoPendingOperation();
     await this.assertRemote(remote);
     if (branch) await this.assertValidBranchName(branch);
     try {
-      const result = await this.git.pull(remote, branch, options);
+      const result = await this.git.pull(
+        remote,
+        branch,
+        options as GitTaskOptions
+      );
       return { success: true, remote, branch, result };
     } catch (err) {
       throw new Error(`Failed to pull: ${err.message}`, { cause: err });
@@ -658,28 +668,28 @@ export class GitService {
     return this.workingTree.getWorkingTree();
   }
 
-  async assertWorkingTreeSnapshot(snapshotId) {
+  async assertWorkingTreeSnapshot(snapshotId: string) {
     return this.workingTree.assertWorkingTreeSnapshot(snapshotId);
   }
 
-  validatePathList(paths) {
+  validatePathList(paths: string[]) {
     return this.workingTree.validatePathList(paths);
   }
 
-  async stagePaths(snapshotId, paths) {
+  async stagePaths(snapshotId: string, paths: string[]) {
     return this.workingTree.stagePaths(snapshotId, paths);
   }
 
-  async unstagePaths(snapshotId, paths) {
+  async unstagePaths(snapshotId: string, paths: string[]) {
     return this.workingTree.unstagePaths(snapshotId, paths);
   }
 
-  async discardPaths(snapshotId, paths) {
+  async discardPaths(snapshotId: string, paths: string[]) {
     return this.workingTree.discardPaths(snapshotId, paths);
   }
 
-  async getWorkingDiff(filePath, staged = false) {
-    return this.workingTree.getWorkingDiff(filePath, staged);
+  async getWorkingDiff(filePath: string, staged?: boolean) {
+    return this.workingTree.getWorkingDiff(filePath, Boolean(staged));
   }
 
   async getStagedDiff(maxBytes = 24576) {
@@ -694,35 +704,35 @@ export class GitService {
     return raw.length > cap ? `${raw.slice(0, cap)}\n... diff truncated ...` : raw;
   }
 
-  async getParsedWorkingDiff(filePath, staged = false) {
-    return this.workingTree.getParsedWorkingDiff(filePath, staged);
+  async getParsedWorkingDiff(filePath: string, staged?: boolean) {
+    return this.workingTree.getParsedWorkingDiff(filePath, Boolean(staged));
   }
 
-  parseWorkingDiff(relativePath, staged, patch) {
-    return this.workingTree.parseWorkingDiff(relativePath, staged, patch);
+  parseWorkingDiff(relativePath: string, staged: unknown, patch: string) {
+    return this.workingTree.parseWorkingDiff(relativePath, Boolean(staged), patch);
   }
 
-  validateHunkIds(hunkIds) {
+  validateHunkIds(hunkIds: unknown) {
     return this.workingTree.validateHunkIds(hunkIds);
   }
 
-  async stageHunks(snapshotId, filePath, hunkIds) {
+  async stageHunks(snapshotId: string, filePath: string, hunkIds: unknown) {
     return this.workingTree.stageHunks(snapshotId, filePath, hunkIds);
   }
 
-  async unstageHunks(snapshotId, filePath, hunkIds) {
+  async unstageHunks(snapshotId: string, filePath: string, hunkIds: unknown) {
     return this.workingTree.unstageHunks(snapshotId, filePath, hunkIds);
   }
 
-  async applyWorkingHunks(snapshotId, filePath, hunkIds, reverse) {
+  async applyWorkingHunks(snapshotId: string, filePath: string, hunkIds: unknown, reverse?: boolean) {
     return this.workingTree.applyWorkingHunks(snapshotId, filePath, hunkIds, reverse);
   }
 
-  runGitWithInput(args, input) {
+  runGitWithInput(args: string[], input: string) {
     return this.workingTree.runGitWithInput(args, input);
   }
 
-  async getConfigValue(key, scope = null) {
+  async getConfigValue(key: string, scope?: string | null) {
     const args = ['config'];
     if (scope) args.push(`--${scope}`);
     args.push('--get', key);
@@ -762,7 +772,7 @@ export class GitService {
     };
   }
 
-  validateIdentityValue(value, label, maxLength) {
+  validateIdentityValue(value: unknown, label: string, maxLength: number): string {
     if (
       typeof value !== 'string' ||
       !value.trim() ||
@@ -774,7 +784,7 @@ export class GitService {
     return value.trim();
   }
 
-  validateEmail(email) {
+  validateEmail(email: string) {
     const safeEmail = this.validateIdentityValue(email, 'email', 254);
     if (!/^[^\s<>@]+@[^\s<>@]+$/.test(safeEmail)) {
       throw new Error('Invalid Git email');
@@ -782,10 +792,10 @@ export class GitService {
     return safeEmail;
   }
 
-  async setIdentity(options) {
+  async setIdentity(options: { name?: unknown; email?: unknown; scope?: unknown; authorOverride?: { name?: unknown; email?: unknown } }) {
     const name = this.validateIdentityValue(options?.name, 'name', 200);
-    const email = this.validateEmail(options?.email);
-    const scope = options?.scope || 'local';
+    const email = this.validateEmail(String(options?.email ?? ''));
+    const scope = String(options?.scope || 'local');
     if (!['local', 'global'].includes(scope)) {
       throw new Error('Invalid Git identity scope');
     }
@@ -833,12 +843,9 @@ export class GitService {
       args.push('--no-gpg-sign');
     }
     if (options.authorOverride) {
-      const authorName = this.validateIdentityValue(
-        options.authorOverride.name,
-        'author name',
-        200
-      );
-      const authorEmail = this.validateEmail(options.authorOverride.email);
+      const override = options.authorOverride as { name?: unknown; email?: unknown } | undefined;
+      const authorName = this.validateIdentityValue(override?.name, 'author name', 200);
+      const authorEmail = this.validateEmail(String(override?.email ?? ''));
       args.push(`--author=${authorName} <${authorEmail}>`);
     }
 
@@ -864,7 +871,7 @@ export class GitService {
     }
   }
 
-  async stash(message = null) {
+  async stash(message: string | null = null) {
     try {
       const args = ['push', '-u'];
       if (message) args.push('-m', message);
@@ -905,7 +912,7 @@ export class GitService {
     }
   }
 
-  safeStashIndex(index) {
+  safeStashIndex(index: unknown): number | null {
     const numeric = Number(index);
     if (!Number.isFinite(numeric) || !Number.isInteger(numeric) || numeric < 0) {
       throw new Error('Invalid stash index');
@@ -949,24 +956,29 @@ export class GitService {
     return this.worktrees.list();
   }
 
-  async createWorktree(directory, branch) {
+  async createWorktree(directory: string, branch?: string | null) {
     const result = await this.worktrees.create({ directory, branch, baseRef: 'HEAD' });
     return { success: true, path: result.path, branch: result.branch };
   }
 
-  async createManagedWorktree(options) {
-    return this.worktrees.create(options || {});
+  async createManagedWorktree(options: Partial<CreateWorktreeOptions> & Record<string, unknown>) {
+    return this.worktrees.create({
+      directory: String(options.directory ?? ''),
+      branch: String(options.branch ?? ''),
+      baseRef: options.baseRef ? String(options.baseRef) : 'HEAD',
+      createBranch: options.createBranch !== false
+    });
   }
 
-  async removeWorktree(directory) {
+  async removeWorktree(directory: string) {
     return this.worktrees.remove(directory);
   }
 
-  async lockWorktree(directory, reason = '') {
+  async lockWorktree(directory: string, reason = '') {
     return this.worktrees.lock(directory, reason);
   }
 
-  async unlockWorktree(directory) {
+  async unlockWorktree(directory: string) {
     return this.worktrees.unlock(directory);
   }
 
@@ -1024,7 +1036,7 @@ export class GitService {
     }
   }
 
-  async assertValidRemoteName(name) {
+  async assertValidRemoteName(name: string) {
     if (
       typeof name !== 'string' ||
       !name.trim() ||
@@ -1041,7 +1053,7 @@ export class GitService {
     }
   }
 
-  validateRemoteUrl(url) {
+  validateRemoteUrl(url: string) {
     if (
       typeof url !== 'string' ||
       !url.trim() ||
@@ -1054,7 +1066,7 @@ export class GitService {
     return url.trim();
   }
 
-  async addRemote(name, url) {
+  async addRemote(name: string, url: string) {
     await this.assertValidRemoteName(name);
     const safeUrl = this.validateRemoteUrl(url);
     try {
@@ -1065,7 +1077,7 @@ export class GitService {
     }
   }
 
-  async renameRemote(name, newName) {
+  async renameRemote(name: string, newName: string) {
     await this.assertRemote(name);
     await this.assertValidRemoteName(newName);
     try {
@@ -1076,7 +1088,7 @@ export class GitService {
     }
   }
 
-  async setRemoteUrl(name, url) {
+  async setRemoteUrl(name: string, url: string) {
     await this.assertRemote(name);
     const safeUrl = this.validateRemoteUrl(url);
     try {
@@ -1087,7 +1099,7 @@ export class GitService {
     }
   }
 
-  async removeRemote(name) {
+  async removeRemote(name: string) {
     await this.assertRemote(name);
     try {
       await this.git.raw(['remote', 'remove', name]);
@@ -1107,7 +1119,7 @@ export class GitService {
     }
   }
 
-  async restoreFileFromCommit(commitHash, filePath) {
+  async restoreFileFromCommit(commitHash: string, filePath: string) {
     await this.assertNoPendingOperation();
     await this.assertCommitish(commitHash);
     const relativePath = this.validateRepositoryPath(filePath);
@@ -1128,7 +1140,7 @@ export class GitService {
     }
   }
 
-  validateTagName(name) {
+  validateTagName(name: string) {
     if (
       typeof name !== 'string' ||
       !name.trim() ||
@@ -1146,7 +1158,7 @@ export class GitService {
     return name.trim();
   }
 
-  async assertTagExists(name) {
+  async assertTagExists(name: string) {
     const safeName = this.validateTagName(name);
     try {
       await this.git.raw(['check-ref-format', `refs/tags/${safeName}`]);
@@ -1161,7 +1173,7 @@ export class GitService {
     return safeName;
   }
 
-  async deleteTag(name) {
+  async deleteTag(name: string) {
     const safeName = await this.assertTagExists(name);
     try {
       await this.git.raw(['tag', '-d', safeName]);
@@ -1171,7 +1183,7 @@ export class GitService {
     }
   }
 
-  async pushTags(remote) {
+  async pushTags(remote: string) {
     await this.assertRemote(remote);
     try {
       await this.git.push([remote, '--tags']);
@@ -1181,7 +1193,7 @@ export class GitService {
     }
   }
 
-  async deleteRemoteTag(remote, name) {
+  async deleteRemoteTag(remote: string, name: string) {
     await this.assertRemote(remote);
     const safeName = await this.assertTagExists(name);
     try {
@@ -1192,7 +1204,7 @@ export class GitService {
     }
   }
 
-  async getTagsAtCommit(commitHash) {
+  async getTagsAtCommit(commitHash: string) {
     this.assertSafeRef(commitHash);
     try {
       const result = await this.git.raw(['tag', '--points-at', commitHash]);
@@ -1202,7 +1214,7 @@ export class GitService {
     }
   }
 
-  async createTag(name, commitHash, message = '') {
+  async createTag(name: string, commitHash: string, message = '') {
     await this.assertNoPendingOperation();
     await this.assertCommitish(commitHash);
     const safeName = this.validateTagName(name);

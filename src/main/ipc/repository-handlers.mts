@@ -9,7 +9,7 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
-function validateCloneUrl(value) {
+function validateCloneUrl(value: unknown): string | null {
   if (typeof value !== 'string' || !value.trim() || value.length > 4096) return null;
   const url = value.trim();
   if (url.startsWith('-')) return null;
@@ -22,7 +22,7 @@ function validateCloneUrl(value) {
   return supported && !hasControlCharacters ? url : null;
 }
 
-async function cloneRepository(url, parentDirectory, repositoryWorkspace) {
+async function cloneRepository(url: string, parentDirectory: string, repositoryWorkspace: RepositoryWorkspace): Promise<{ path: string; name: string } | { error: string }> {
   const remoteUrl = validateCloneUrl(url);
   if (!remoteUrl) {
     return { error: 'Only remote repository URLs are supported (https, ssh or git@host:path)' };
@@ -85,7 +85,7 @@ export function registerScanHandlers({
     let lastProgressAt = 0;
     scanRepositories(authorizedRoot, {
       signal: controller.signal,
-      onProgress(progress) {
+      onProgress(progress: { scannedDirectories: number; repository?: { path: string; name: string; relativePath: string } }) {
         const now = Date.now();
         if (progress.repository || now - lastProgressAt >= 50) {
           lastProgressAt = now;
@@ -116,12 +116,16 @@ export function registerScanHandlers({
   });
 }
 
-async function addRepositories(repoPaths, createGitService, repositoryWorkspace) {
+async function addRepositories(
+  repoPaths: unknown,
+  createGitService: (repoPath: string) => unknown,
+  repositoryWorkspace: RepositoryWorkspace
+): Promise<{ added: unknown[]; existing?: unknown[]; failed: Array<{ path: string; error: string }>; activeRepo?: unknown; error?: string }> {
   if (!Array.isArray(repoPaths) || repoPaths.length > 10000) {
-    return { added: [], existing: [], failed: [], activeRepo: null, error: 'Invalid repository list' };
+    return { added: [] as unknown[], existing: [] as unknown[], failed: [] as Array<{ path: string; error: string }>, activeRepo: null as unknown, error: 'Invalid repository list' };
   }
-  const valid = [];
-  const failed = [];
+  const valid: string[] = [];
+  const failed: Array<{ path: string; error: string }> = [];
   for (const repoPath of repoPaths) {
     if (typeof repoPath !== 'string' || !path.isAbsolute(repoPath)) {
       failed.push({ path: String(repoPath || ''), error: 'Invalid repository path' });
@@ -132,7 +136,7 @@ async function addRepositories(repoPaths, createGitService, repositoryWorkspace)
       continue;
     }
     try {
-      const git = createGitService(repoPath);
+      const git = createGitService(repoPath) as { git: { checkIsRepo: () => Promise<void>; raw: (args: string[]) => Promise<string> } };
       await git.git.checkIsRepo();
       const inside = (await git.git.raw(['rev-parse', '--is-inside-work-tree'])).trim();
       if (inside !== 'true') throw new Error('Bare repositories are not supported');
@@ -168,7 +172,7 @@ export function registerRepositoryHandlers(dependencies: RepositoryHandlersBundl
   registerHandler('git:is-repo', repoPath => (
     repositoryWorkspace.canInspect(repoPath) && isWorkingTreeRepository(repoPath)
   ));
-  registerHandler('git:clone', (url, directory) => (
+  registerHandler('git:clone', (url: string, directory: string) => (
     cloneRepository(url, directory, repositoryWorkspace)
   ));
   registerHandler('repo:list', () => repositoryWorkspace.list());

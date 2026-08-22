@@ -146,7 +146,7 @@ export class ReflogView {
         if (event.key === 'Escape') finish(null);
       };
       document.body.appendChild(overlay);
-      overlay.addEventListener('mousedown', event => {
+      overlay.addEventListener('mousedown', (event: MouseEvent) => {
         if (event.target === overlay) finish(null);
       });
       overlay.querySelector<HTMLElement>('[data-action="cancel"]').onclick = () => finish(null);

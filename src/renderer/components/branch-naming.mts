@@ -24,7 +24,7 @@ export const BranchNaming = {
   detectPrefix(type: string, metadata: BranchMetadata = {}): string {
     const aliases: string[] = (this.aliases[type] ?? []);
     const counts = new Map<string, number>(aliases.map(alias => [alias, 0]));
-    this.branchNames(metadata).forEach(name => {
+    this.branchNames(metadata).forEach((name: string) => {
       const prefix = name.split('/')[0].toLowerCase();
       if (counts.has(prefix)) counts.set(prefix, (counts.get(prefix) ?? 0) + 1);
     });

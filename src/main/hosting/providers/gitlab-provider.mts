@@ -39,7 +39,7 @@ export class GitLabProviderAdapter {
       state: item.state,
       draft: Boolean(item.draft || /^draft:/i.test(item.title || '')),
       reviewStatus: (item.reviewers || []).some(
-        reviewer => reviewer.username === user?.login
+        (reviewer: ProviderPayload) => reviewer.username === user?.login
       ) ? 'requested' : 'none',
       ciStatus: item.head_pipeline?.status || 'unknown'
     };
@@ -71,7 +71,7 @@ export class GitLabProviderAdapter {
     const result = await this.api(repo, `/projects/${project}/merge_requests?${query}`);
     if (!Array.isArray(result.data)) throw new Error('Failed to load pull requests');
     return {
-      items: result.data.map(item => this.normalizeSummary(item, account.user)),
+      items: result.data.map((item: ProviderPayload) => this.normalizeSummary(item, account.user)),
       page,
       hasMore: Boolean(result.headers.get('x-next-page'))
     };
@@ -114,29 +114,29 @@ export class GitLabProviderAdapter {
         checkout: true
       },
       reviewers: [
-        ...(mergeRequest.data.reviewers || []).map(reviewer => ({
+        ...(mergeRequest.data.reviewers || []).map((reviewer: ProviderPayload) => ({
           login: reviewer.username,
           state: 'requested'
         })),
-        ...(approvals.data.approved_by || []).map(entry => ({
-          login: entry.user?.username || '',
+        ...(approvals.data.approved_by || []).map((entry: Record<string, unknown>) => ({
+          login: ((entry.user as ProviderPayload)?.username as string) || '',
           state: 'APPROVED'
         }))
       ],
-      checks: pipelines.data.map(pipeline => ({
-        id: pipeline.id,
-        name: `Pipeline #${pipeline.id}`,
-        status: pipeline.status,
-        conclusion: pipeline.status,
-        url: pipeline.web_url
+      checks: (pipelines.data as ProviderPayload[]).map((pipeline: Record<string, unknown>) => ({
+        id: pipeline.id as number,
+        name: `Pipeline #${pipeline.id as string | number}`,
+        status: pipeline.status as string,
+        conclusion: pipeline.status as string,
+        url: pipeline.web_url as string
       })),
-      files: (changes.data.changes || []).map(file => this.normalizeFile(file)),
-      threads: discussions.data.map(discussion => ({
+      files: ((changes.data.changes as ProviderPayload[] | undefined) || []).map((file: ProviderPayload) => this.normalizeFile(file)),
+      threads: ((discussions.data as ProviderPayload[]).map((discussion: ProviderPayload) => ({
         id: discussion.id,
-        resolved: (discussion.notes || []).every(note => (
+        resolved: ((discussion.notes as ProviderPayload[] | undefined) || []).every((note: ProviderPayload) => (
           note.resolvable ? note.resolved : true
         )),
-        notes: (discussion.notes || []).map(note => ({
+        notes: ((discussion.notes as ProviderPayload[] | undefined) || []).map((note: ProviderPayload) => ({
           id: note.id,
           author: note.author?.username || '',
           body: note.body || '',
@@ -144,7 +144,7 @@ export class GitLabProviderAdapter {
           resolvable: Boolean(note.resolvable),
           createdAt: note.created_at
         }))
-      })),
+      })) as unknown as PullRequestDetail['threads']),
       headSha: mergeRequest.data.diff_refs?.head_sha || mergeRequest.data.sha,
       mergeability: mergeRequest.data.detailed_merge_status
         || mergeRequest.data.merge_status
@@ -159,7 +159,7 @@ export class GitLabProviderAdapter {
       `/projects/${project}/merge_requests/${id}/changes`
     );
     return {
-      files: (result.data.changes || []).map(file => this.normalizeFile(file)),
+      files: ((result.data.changes as ProviderPayload[] | undefined) || []).map((file: ProviderPayload) => this.normalizeFile(file)),
       page: 1,
       hasMore: false
     };
@@ -205,7 +205,7 @@ export class GitLabProviderAdapter {
     }
     const project = encodeURIComponent(`${repo.ownerPath}/${repo.repository}`);
     const completed = new Set(draft.completedOperations);
-    const perform = async (operation, action) => {
+    const perform = async (operation: string, action: () => Promise<unknown>): Promise<void> => {
       if (completed.has(operation)) return;
       await action();
       completed.add(operation);
@@ -257,25 +257,25 @@ export class GitLabProviderAdapter {
   }
 
   async resolveUserIds(repo: HostedRepositoryRef, names: string[]): Promise<number[]> {
-    const ids = [];
+    const ids: number[] = [];
     for (const name of names) {
       const byUsername = await this.api(
         repo,
         `/users?username=${encodeURIComponent(name)}`
-      ).catch(() => ({ data: [] }));
-      let user = Array.isArray(byUsername.data) ? byUsername.data[0] : null;
+      ).catch(() => ({ data: [] as ProviderPayload[] }));
+      let user: ProviderPayload | null = Array.isArray(byUsername.data) ? byUsername.data[0] as ProviderPayload : null;
       if (!user) {
         const search = await this.api(
           repo,
           `/users?search=${encodeURIComponent(name)}&per_page=5`
         );
-        user = (search.data || []).find(item => (
-          item.username?.toLowerCase() === name.toLowerCase()
-          || item.name?.toLowerCase() === name.toLowerCase()
-        )) || search.data?.[0];
+        user = ((search.data as ProviderPayload[] || []).find((item: Record<string, unknown>) => (
+          (item.username as string | undefined)?.toLowerCase() === name.toLowerCase()
+          || (item.name as string | undefined)?.toLowerCase() === name.toLowerCase()
+        )) as ProviderPayload | undefined) || (search.data as ProviderPayload[])?.[0] as ProviderPayload | undefined || null;
       }
       if (!user?.id) throw new Error(`GitLab user not found: ${name}`);
-      ids.push(user.id);
+      ids.push(user.id as number);
     }
     return ids;
   }
@@ -296,21 +296,21 @@ export class GitLabProviderAdapter {
     { viewer }: { viewer: HostingAccount['user'] }
   ) {
     const project = encodeURIComponent(`${repo.ownerPath}/${repo.repository}`);
-    const warnings = [];
-    let reviewerIds = [];
-    let assigneeIds = [];
+    const warnings: string[] = [];
+    let reviewerIds: number[] = [];
+    let assigneeIds: number[] = [];
     if (options.reviewers.length) {
       try {
         reviewerIds = await this.resolveUserIds(repo, options.reviewers);
-      } catch (error) {
-        warnings.push(error.message);
+      } catch (error: unknown) {
+        warnings.push((error as Error).message);
       }
     }
     if (options.assignees.length) {
       try {
         assigneeIds = await this.resolveUserIds(repo, options.assignees);
-      } catch (error) {
-        warnings.push(error.message);
+      } catch (error: unknown) {
+        warnings.push((error as Error).message);
       }
     }
     const created = await this.api(repo, `/projects/${project}/merge_requests`, {
@@ -337,4 +337,3 @@ export class GitLabProviderAdapter {
     };
   }
 }
-

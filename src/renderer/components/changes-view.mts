@@ -199,7 +199,7 @@ export class ChangesView {
         }
         return snapshot;
       })
-      .catch((error: Error) => {
+      .catch((error: Error): null => {
         this.app.showToast(error.message, 'error');
         return null;
       })
@@ -349,7 +349,10 @@ export class ChangesView {
   }
 
   async aiLanguage(): Promise<string> {
-    const settings = await window.gitTree.getAiSettings().catch(() => null) as { language?: string } | null;
+    const settings = await window.gitTree.getAiSettings().then(
+      (value): { language?: string } | null => (value ?? null) as { language?: string } | null,
+      (): null => null
+    );
     if (settings?.language === 'en' || settings?.language === 'it') {
       return settings.language;
     }

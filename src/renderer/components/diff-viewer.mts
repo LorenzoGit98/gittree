@@ -629,7 +629,10 @@ export class DiffViewer {
   }
 
   async aiLanguage(): Promise<string> {
-    const settings = await window.gitTree.getAiSettings().catch(() => null) as { language?: string } | null;
+    const settings = await window.gitTree.getAiSettings().then(
+      (value): { language?: string } | null => (value ?? null) as { language?: string } | null,
+      (): null => null
+    );
     if (settings?.language === 'en' || settings?.language === 'it') {
       return settings.language;
     }
@@ -638,7 +641,7 @@ export class DiffViewer {
   }
 
   extractFileSummaries(diffText: string): Array<{ path: string; oldPath: string | null; status: string; additions: number; deletions: number }> {
-    const summaries = [];
+    const summaries: Array<{ path: string; oldPath: string | null; status: string; additions: number; deletions: number }> = [];
     let current: { path: string; oldPath: string | null; status: string; additions: number; deletions: number } | null = null;
     const finish = () => {
       if (current?.path) summaries.push(current);

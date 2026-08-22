@@ -73,7 +73,7 @@ export function generateWithOpencode({
   return new Promise((resolve, reject) => {
     let output = '';
     let settled = false;
-    let pty = null;
+    let pty: OpencodePty | null = null;
     const timer = setTimeout(() => {
       if (settled) return;
       settled = true;

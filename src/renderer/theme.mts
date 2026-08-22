@@ -49,7 +49,7 @@ export const Theme = {
 
   setTone(theme: string, toneId: string): void {
     const safeTheme = this.themes.includes(theme) ? theme : 'light';
-    if (!this.tones[safeTheme].some(tone => tone.id === toneId)) return;
+    if (!this.tones[safeTheme].some((tone: ToneOption) => tone.id === toneId)) return;
     const tones = this.readTones();
     tones[safeTheme] = toneId;
     localStorage.setItem(this.toneStorageKey, JSON.stringify(tones));
@@ -59,9 +59,9 @@ export const Theme = {
     }
   },
 
-  getTone(theme: string): string {
+  getTone(theme: 'light' | 'dark'): string {
     const toneId = this.readTones()[theme] || this.defaultTones[theme];
-    const valid = this.tones[theme]?.some(tone => tone.id === toneId);
+    const valid = this.tones[theme]?.some((tone: ToneOption) => tone.id === toneId);
     return valid ? toneId : this.defaultTones[theme];
   },
 

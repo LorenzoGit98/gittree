@@ -1,4 +1,5 @@
 import { AiSettingsStore, type AiSettings } from './ai-store.mts';
+import type { CommitCandidate } from './ai-output.mts';
 import {
   parseAiOutput,
   parseSearchOutput,
@@ -180,10 +181,10 @@ export class AiService {
     };
   }
 
-  async setSettings(input) {
+  async setSettings(input: Record<string, unknown>): Promise<Record<string, unknown>> {
     const settings = validateSettingsInput(input);
     this.settings = settings;
-    this.store.save({ settings });
+    this.store.save({ settings } as Parameters<typeof this.store.save>[0]);
     const account = await this.vault.getAccount('ai');
     this.agentEnvironment = environmentForAi({
       provider: settings.provider,
@@ -193,7 +194,7 @@ export class AiService {
     return this.getSettings();
   }
 
-  async setKey(key) {
+  async setKey(key: unknown): Promise<Record<string, unknown>> {
     const apiKey = validateKey(key);
     await this.vault.setAccount('ai', { apiKey });
     this.keyConfigured = true;
@@ -205,7 +206,7 @@ export class AiService {
     return { keyConfigured: true };
   }
 
-  async clearKey() {
+  async clearKey(): Promise<Record<string, unknown>> {
     await this.vault.removeAccount('ai');
     this.keyConfigured = false;
     this.agentEnvironment = environmentForAi({
@@ -225,7 +226,7 @@ export class AiService {
     return account?.apiKey || '';
   }
 
-  normalizeLanguage(value) {
+  normalizeLanguage(value: unknown): string {
     const language = String(value || '');
     if (language === 'it' || language === 'en') return language;
     if (this.settings.language === 'it' || this.settings.language === 'en') {
@@ -285,9 +286,9 @@ export class AiService {
     }
     const block = await this.getConflictBlock(repoPath, file, blockIndex);
     if (!block) throw new Error('Conflict block not found');
-    const language = this.normalizeLanguage(options.language);
+    const language: string = this.normalizeLanguage(String(options.language));
     const prompt = buildConflictPrompt({
-      file: block.file || file,
+      file: String(block.file || file),
       base: truncateDiff(block.base || ''),
       current: truncateDiff(block.current || ''),
       incoming: truncateDiff(block.incoming || ''),
@@ -373,10 +374,10 @@ export class AiService {
     const commits = (comparison?.commits || [])
       .map(commit => String(commit?.subject || commit?.message || '').split('\n')[0].trim())
       .filter(Boolean);
-    const language = this.normalizeLanguage(options.language);
+    const language = this.normalizeLanguage(String(options.language));
     const prompt = buildPrPrompt({
-      diff: truncateDiff(comparison?.diff || ''),
-      commits,
+      diff: truncateDiff(String(comparison?.diff || '')),
+      commits: commits.map(c => ({ message: String(c) } as unknown as CommitCandidate)),
       hint: String(options.hint || '').slice(0, 500),
       language
     });
@@ -389,7 +390,7 @@ export class AiService {
     return { ok: true, reply: String(raw).trim().slice(0, 120) };
   }
 
-  async runProvider(prompt) {
+  async runProvider(prompt: string): Promise<string> {
     if (this.settings.provider === 'opencode') {
       const executable = this.resolveExecutable('opencode');
       if (!executable) throw new Error('OpenCode CLI not found');

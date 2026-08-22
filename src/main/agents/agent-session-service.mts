@@ -1,3 +1,5 @@
+import type { SetupRecipe } from './setup-recipes.mts';
+import type { AgentStoreState } from './agent-session-store.mts';
 import * as fs from 'node:fs';
 import * as nodePath from 'node:path';
 import * as nodeCrypto from 'node:crypto';
@@ -31,7 +33,7 @@ export function slugify(value: unknown): string {
     .slice(0, 48) || 'task';
 }
 
-function publicTask(task) {
+function publicTask(task: AgentTask): Record<string, unknown> {
   const clean = { ...task };
   delete clean._prompt;
   delete clean._resume;
@@ -52,6 +54,15 @@ interface AgentTask extends Record<string, unknown> {
   worktreePath?: string;
   repositoryPath?: string;
   branch?: string;
+}
+
+interface PtyDataSubscription {
+  dispose?(): void;
+}
+
+interface IPtyLike {
+  onData(listener: (data: string) => void): PtyDataSubscription;
+  onExit(listener: (event: { exitCode?: number; signal?: number | undefined }) => void): unknown;
 }
 
 interface ActiveProcess {
@@ -180,7 +191,11 @@ export class AgentSessionService {
     this.store = new AgentSessionStore({ storagePath, fileSystem });
     const restored = this.store.load();
     this.settings = restored.settings;
-    this.tasks = new Map(restored.tasks.map(task => [task.id, task]));
+    this.tasks = new Map(
+      restored.tasks.map((task: Record<string, unknown>): [string, AgentTask] => [
+        String(task.id), task as AgentTask
+      ])
+    );
     this.queue = [];
     this.active = new Map();
     this.shuttingDown = false;
@@ -192,7 +207,7 @@ export class AgentSessionService {
     return { ...this.settings, enabledAdapters: [...this.settings.enabledAdapters] };
   }
 
-  setWorktreeRoot(root) {
+  setWorktreeRoot(root: unknown): Record<string, unknown> {
     if (typeof root !== 'string' || !this.path.isAbsolute(root) || !this.fs.existsSync(root)) {
       throw new Error('Worktree root must be an existing absolute directory');
     }
@@ -206,17 +221,18 @@ export class AgentSessionService {
     return this.getSettings();
   }
 
-  setConcurrency(value) {
-    if (!Number.isInteger(value) || value < 1 || value > 32) {
+  setConcurrency(value: unknown): Record<string, unknown> {
+    const concurrency = Number(value);
+    if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 32) {
       throw new Error('Agent concurrency must be an integer between 1 and 32');
     }
-    this.settings.maxConcurrent = value;
+    this.settings.maxConcurrent = concurrency;
     this._persist();
     this._drain();
     return this.getSettings();
   }
 
-  setAgentsEnabled(enabled) {
+  setAgentsEnabled(enabled: unknown): Record<string, unknown> {
     if (typeof enabled !== 'boolean') throw new Error('Agent sessions enabled state must be boolean');
     if (!enabled && this.getActiveCount() > 0) {
       throw new Error('Stop active or queued agents before disabling agent sessions');
@@ -226,7 +242,7 @@ export class AgentSessionService {
     return this.getSettings();
   }
 
-  setEnabledAdapters(adapterIds) {
+  setEnabledAdapters(adapterIds: unknown): Record<string, unknown> {
     if (!Array.isArray(adapterIds) || adapterIds.length > 3) throw new Error('Invalid agent adapter list');
     const unique = [...new Set(adapterIds.map(id => String(id)))];
     unique.forEach(id => getAdapter(id));
@@ -252,7 +268,7 @@ export class AgentSessionService {
     return result;
   }
 
-  listTasks(repositoryPath) {
+  listTasks(repositoryPath?: string): Array<Record<string, unknown>> {
     let repositoryKey = repositoryPath ? canonical(repositoryPath, this.path) : '';
     if (repositoryKey) {
       const linkedTask = [...this.tasks.values()].find(task => (
@@ -266,7 +282,7 @@ export class AgentSessionService {
     return tasks.map(publicTask);
   }
 
-  getTask(taskId) {
+  getTask(taskId: string): Record<string, unknown> {
     const task = this.tasks.get(taskId);
     if (!task) throw new Error('Unknown agent task');
     return publicTask(task);
@@ -276,10 +292,10 @@ export class AgentSessionService {
     return [...this.tasks.values()].filter(task => ACTIVE_STATUSES.has(task.status)).length;
   }
 
-  assertWorktreeRemovable(worktreePath) {
+  assertWorktreeRemovable(worktreePath: string): boolean {
     const target = canonical(worktreePath, this.path);
     const active = [...this.tasks.values()].find(task => (
-      ACTIVE_STATUSES.has(task.status) && canonical(task.worktreePath, this.path) === target
+      ACTIVE_STATUSES.has(String(task.status)) && canonical(String(task.worktreePath), this.path) === target
     ));
     if (active) throw new Error('Stop the active agent before removing this worktree');
     return true;
@@ -294,7 +310,7 @@ export class AgentSessionService {
     const shortId = id.replace(/-/g, '').slice(-6);
     const slug = slugify(input.title);
     const branch = input.branch || `agent/${slug}-${shortId}`;
-    this._validateBranch(branch);
+    this._validateBranch(String(branch));
     const repositoryDirectory = slugify(this.path.basename(repositoryPath));
     const authorizedDestination = typeof options.authorizedDestination === 'string'
       ? options.authorizedDestination
@@ -359,7 +375,7 @@ export class AgentSessionService {
       behind: 0,
       createdAt: timestamp,
       updatedAt: timestamp,
-      events: [],
+      events: [] as Array<Record<string, unknown>>,
       _prompt: input.prompt
     };
     this.tasks.set(task.id, task);
@@ -372,7 +388,7 @@ export class AgentSessionService {
     return publicTask(task);
   }
 
-  _validateTaskOptions(options) {
+  _validateTaskOptions(options: Record<string, unknown>): Record<string, unknown> {
     if (!options || typeof options !== 'object' || Array.isArray(options)) throw new Error('Invalid task options');
     const title = String(options.title || '').trim();
     const prompt = String(options.prompt || '');
@@ -392,13 +408,13 @@ export class AgentSessionService {
     };
   }
 
-  _validateRepository(repositoryPath) {
+  _validateRepository(repositoryPath: string): void {
     if (typeof repositoryPath !== 'string') throw new Error('Invalid repository');
     const known = this.repositoryWorkspace.list().some(item => canonical(item.path, this.path) === canonical(repositoryPath, this.path));
     if (!known) throw new Error('Repository is not registered');
   }
 
-  _validateBranch(branch) {
+  _validateBranch(branch: string): void {
     if (!branch || branch.length > 255 || /[\s~^:?*\\[\]]|\.\.|@\{|\/$|^\//.test(branch)) {
       throw new Error('Invalid branch name');
     }
@@ -425,7 +441,7 @@ export class AgentSessionService {
     this._emitQueue();
   }
 
-  async _start(task) {
+  async _start(task: AgentTask): Promise<void> {
     if (task.setupRecipeId) {
       const recipe = detectSetupRecipe(task.worktreePath, { fileSystem: this.fs });
       if (!recipe || recipe.id !== task.setupRecipeId) throw new Error('Requested setup recipe is not available');
@@ -434,11 +450,11 @@ export class AgentSessionService {
       this._emitTask(task);
       await this._runSetup(task, recipe);
     }
-    const adapter = getAdapter(task.adapterId);
-    const args = task._resume ? adapter.resumeArgs() : adapter.createArgs(task._prompt);
+    const adapter = getAdapter(String(task.adapterId));
+    const args = task._resume ? adapter.resumeArgs() : adapter.createArgs(String(task._prompt));
     const executable = this.resolveExecutable(adapter.command);
     if (!executable) throw new Error(`${adapter.label} CLI was not found on PATH`);
-    const pty = this.createPty(executable, args, this._ptyOptions(task.worktreePath));
+    const pty = this.createPty(executable, args, this._ptyOptions(String(task.worktreePath)));
     const active = this.active.get(task.id);
     if (!active) return;
     active.pty = pty;
@@ -450,9 +466,9 @@ export class AgentSessionService {
     this._emitTask(task);
   }
 
-  _runSetup(task, recipe) {
+  _runSetup(task: AgentTask, recipe: SetupRecipe): Promise<void> {
     return new Promise<void>((resolve, reject) => {
-      const pty = this.createPty(recipe.command, recipe.args, this._ptyOptions(task.worktreePath));
+      const pty = this.createPty(recipe.command as string, recipe.args as string[], this._ptyOptions(String(task.worktreePath)));
       const active = this.active.get(task.id);
       if (!active) return reject(new Error('Task was stopped'));
       active.pty = pty;
@@ -466,7 +482,7 @@ export class AgentSessionService {
     });
   }
 
-  _ptyOptions(cwd) {
+  _ptyOptions(cwd: string): Record<string, unknown> {
     return {
       cwd,
       cols: 100,
@@ -476,7 +492,7 @@ export class AgentSessionService {
     };
   }
 
-  _bindPty(task, pty) {
+  _bindPty(task: AgentTask, pty: IPtyLike): void {
     const dataSubscription = pty.onData(data => this._handleTerminalData(task, data));
     pty.onExit(({ exitCode, signal }) => {
       dataSubscription?.dispose?.();
@@ -495,7 +511,7 @@ export class AgentSessionService {
     });
   }
 
-  _handleTerminalData(task, data) {
+  _handleTerminalData(task: AgentTask, data: string): void {
     const value = String(data);
     this.emit('agent:terminal-data', { taskId: task.id, data: value });
     if (value.includes('\u0007') && !task.needsAttention) {
@@ -507,7 +523,7 @@ export class AgentSessionService {
     }
   }
 
-  _failStart(task, error) {
+  _failStart(task: AgentTask, error: Error): void {
     const active = this.active.get(task.id);
     if (!active) return;
     this.active.delete(task.id);
@@ -521,14 +537,14 @@ export class AgentSessionService {
     this._drain();
   }
 
-  writeTerminal(taskId, value) {
+  writeTerminal(taskId: string, value: unknown): void {
     if (typeof value !== 'string' || value.length > TERMINAL_INPUT_LIMIT) throw new Error('Terminal input is too large');
     const active = this.active.get(taskId);
     if (!active?.pty) throw new Error('Agent terminal is not active');
     (active.pty as PtyProcess).write?.(value);
   }
 
-  resizeTerminal(taskId, cols, rows) {
+  resizeTerminal(taskId: string, cols: number, rows: number): void {
     if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols < 20 || cols > 400 || rows < 5 || rows > 200) {
       throw new Error('Invalid terminal size');
     }
@@ -537,7 +553,7 @@ export class AgentSessionService {
     (active.pty as PtyProcess).resize?.(cols, rows);
   }
 
-  acknowledgeAttention(taskId) {
+  acknowledgeAttention(taskId: string): Record<string, unknown> {
     const task = this.tasks.get(taskId);
     if (!task) throw new Error('Unknown agent task');
     task.needsAttention = false;
@@ -547,7 +563,7 @@ export class AgentSessionService {
     return publicTask(task);
   }
 
-  async stopTask(taskId) {
+  async stopTask(taskId: string): Promise<Record<string, unknown>> {
     const task = this.tasks.get(taskId);
     if (!task) throw new Error('Unknown agent task');
     if (task.status === 'queued') {
@@ -569,7 +585,7 @@ export class AgentSessionService {
     return publicTask(task);
   }
 
-  resumeTask(taskId) {
+  resumeTask(taskId: string): Record<string, unknown> {
     this._assertAgentsEnabled();
     const task = this.tasks.get(taskId);
     if (!task) throw new Error('Unknown agent task');
@@ -586,7 +602,7 @@ export class AgentSessionService {
     return publicTask(task);
   }
 
-  archiveTask(taskId) {
+  archiveTask(taskId: string): Record<string, unknown> {
     const task = this.tasks.get(taskId);
     if (!task) throw new Error('Unknown agent task');
     if (ACTIVE_STATUSES.has(task.status)) throw new Error('Stop the agent task before archiving it');
@@ -619,7 +635,7 @@ export class AgentSessionService {
     }
   }
 
-  _record(task, type, detail = {}) {
+  _record(task: AgentTask & { events?: Array<Record<string, unknown>> }, type: string, detail: Record<string, unknown> = {}): void {
     task.updatedAt = this.now();
     task.events = [...(task.events || []), { type, timestamp: task.updatedAt, ...detail }].slice(-200);
   }
@@ -629,10 +645,14 @@ export class AgentSessionService {
   }
 
   _persist() {
-    this.store.save({ settings: this.settings, tasks: [...this.tasks.values()] });
+    this.store.save({
+      version: 1,
+      settings: this.settings as AgentStoreState['settings'],
+      tasks: [...this.tasks.values()] as AgentStoreState['tasks']
+    });
   }
 
-  _emitTask(task) {
+  _emitTask(task: AgentTask): void {
     this.emit('agent:task-changed', publicTask(task));
   }
 
