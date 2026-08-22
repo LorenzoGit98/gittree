@@ -98,9 +98,9 @@ export class WelcomeScreen {
       const dir = await window.gitTree.selectDirectory();
       if (!dir) return;
       const isRepo = await window.gitTree.checkIsGitRepo(dir);
-      if (!isRepo) { this.app.showToast(t('feedback.notRepo'), 'error'); return; }
-      await this.app.components.repoTabs.addRepo(dir as string);
-    } catch (e) { this.app.showToast('Error: ' + (e as Error).message, 'error'); }
+      if (!isRepo) { this.app!.showToast(t('feedback.notRepo'), 'error'); return; }
+      await this.app!.components.repoTabs!.addRepo(dir as string);
+    } catch (e) { this.app!.showToast('Error: ' + (e as Error).message, 'error'); }
   }
 
   openRepositoryPicker(): void {
@@ -138,40 +138,43 @@ export class WelcomeScreen {
       </section>`;
     document.body.appendChild(overlay);
     this.repositoryPicker = overlay;
-    overlay.querySelector<HTMLElement>('.repository-picker-close').onclick = () => this.closeRepositoryPicker();
+    overlay.querySelector<HTMLElement>('.repository-picker-close')!.onclick = () => this.closeRepositoryPicker();
     overlay.addEventListener('mousedown', (event: MouseEvent) => {
       if (event.target === overlay) this.closeRepositoryPicker();
     });
-    overlay.querySelector<HTMLElement>('[data-mode="single"]').onclick = async () => {
+    overlay.querySelector<HTMLElement>('[data-mode="single"]')!.onclick = async () => {
       this.closeRepositoryPicker();
       await this.openRepo();
     };
-    overlay.querySelector<HTMLElement>('[data-mode="clone"]').onclick = async () => {
+    overlay.querySelector<HTMLElement>('[data-mode="clone"]')!.onclick = async () => {
       this.closeRepositoryPicker();
       await this.cloneRepo();
     };
-    overlay.querySelector<HTMLElement>('[data-mode="scan"]').onclick = async () => {
+    overlay.querySelector<HTMLElement>('[data-mode="scan"]')!.onclick = async () => {
       const rootPath = await window.gitTree.selectDirectory() as string | null;
-      if (rootPath) await this.startRepositoryScan(rootPath);
+      const dir = await window.gitTree.selectDirectory() as string;
+      if (dir) await this.startRepositoryScan(dir);
     };
     this.repositoryPickerKeydown = event => {
       if (event.key === 'Escape') this.closeRepositoryPicker();
     };
     document.addEventListener('keydown', this.repositoryPickerKeydown);
-    overlay.querySelector<HTMLElement>('[data-mode="single"]').focus();
+    overlay.querySelector<HTMLElement>('[data-mode="single"]')!.focus();
   }
 
   async startRepositoryScan(rootPath: string): Promise<void> {
     if (!this.repositoryPicker) return;
     const repositories = await window.gitTree.getRepos() as Array<{ path?: string }> | undefined;
     this.knownRepositoryPaths = new Set(
-      (repositories || []).map(repo => this.pathKey(repo.path))
+      (repositories || []).map((repo: { path?: string }) => this.pathKey(String(repo.path ?? '')))
     );
     this.scanRepositories = [];
     this.scanSelection = new Set();
     this.scanQuery = '';
     this.scanFinished = false;
-    this.repositoryPicker!.querySelector('.repository-picker').innerHTML = `
+    const pickerEl = this.repositoryPicker!.querySelector('.repository-picker');
+    if (!pickerEl) return;
+    pickerEl.innerHTML = `
       <header class="repository-picker-header">
         <div>
           <span class="eyebrow">${t('discovery.scanningEyebrow')}</span>
@@ -210,10 +213,10 @@ export class WelcomeScreen {
       </footer>`;
 
     const picker = this.repositoryPicker;
-    picker.querySelector<HTMLElement>('.repository-picker-root').textContent = rootPath;
-    picker.querySelector<HTMLElement>('.repository-picker-close').onclick = () => this.closeRepositoryPicker();
-    picker.querySelector<HTMLElement>('[data-action="cancel"]').onclick = () => this.closeRepositoryPicker();
-    picker.querySelector<HTMLElement>('[data-action="all"]').onclick = () => {
+    picker.querySelector<HTMLElement>('.repository-picker-root')!.textContent = rootPath;
+    picker.querySelector<HTMLElement>('.repository-picker-close')!.onclick = () => this.closeRepositoryPicker();
+    picker.querySelector<HTMLElement>('[data-action="cancel"]')!.onclick = () => this.closeRepositoryPicker();
+    picker.querySelector<HTMLElement>('[data-action="all"]')!.onclick = () => {
       this.visibleScanRepositories().forEach(repo => {
         if (!this.knownRepositoryPaths.has(this.pathKey(repo.path))) {
           this.scanSelection.add(repo.path);
@@ -221,12 +224,12 @@ export class WelcomeScreen {
       });
       this.renderRepositoryScan();
     };
-    picker.querySelector<HTMLElement>('[data-action="none"]').onclick = () => {
+    picker.querySelector<HTMLElement>('[data-action="none"]')!.onclick = () => {
       this.visibleScanRepositories().forEach(repo => this.scanSelection.delete(repo.path));
       this.renderRepositoryScan();
     };
-    picker.querySelector<HTMLElement>('[data-action="import"]').onclick = () => this.importScannedRepositories();
-    picker.querySelector<HTMLInputElement>('input[type="search"]').oninput = event => {
+    picker.querySelector<HTMLElement>('[data-action="import"]')!.onclick = () => this.importScannedRepositories();
+    picker.querySelector<HTMLInputElement>('input[type="search"]')!.oninput = event => {
       this.scanQuery = (event.target as HTMLInputElement).value.trim().toLocaleLowerCase();
       this.scanList!.scrollTop = 0;
       this.renderRepositoryScan();
@@ -241,28 +244,32 @@ export class WelcomeScreen {
       });
     }, { passive: true });
 
-    this.unsubscribeScanProgress = window.gitTree.onRepositoryScanProgress((update: {
-      scanId?: string | number;
-      repository?: ScannedRepository;
-      scannedDirectories?: number;
-    }) => {
+    const scanUpdate = (payload: unknown) => {
+      const update = payload as {
+        scanId?: string | number;
+        repository?: ScannedRepository;
+        scannedDirectories?: number;
+      };
       if (update.scanId !== this.scanId) return;
       if (update.repository) this.appendScannedRepository(update.repository);
       this.updateScanStatus(update.scannedDirectories);
-    });
-    this.unsubscribeScanComplete = window.gitTree.onRepositoryScanComplete((result: {
-      scanId?: string | number;
-      repositories?: ScannedRepository[];
-      scannedDirectories?: number;
-      error?: unknown;
-      canceled?: boolean;
-    }) => {
+    };
+    const scanComplete = (payload: unknown) => {
+      const result = payload as {
+        scanId?: string | number;
+        repositories?: ScannedRepository[];
+        scannedDirectories?: number;
+        error?: unknown;
+        canceled?: boolean;
+      };
       if (result.scanId !== this.scanId) return;
       this.scanFinished = true;
       for (const repository of result.repositories || []) this.appendScannedRepository(repository);
       this.updateScanStatus(result.scannedDirectories, result);
       this.renderRepositoryScan();
-    });
+    };
+    this.unsubscribeScanProgress = window.gitTree.onRepositoryScanProgress(scanUpdate);
+    this.unsubscribeScanComplete = window.gitTree.onRepositoryScanComplete(scanComplete);
     const started = await window.gitTree.startRepositoryScan(rootPath) as { scanId: string | number };
     this.scanId = started.scanId;
   }
@@ -292,8 +299,8 @@ export class WelcomeScreen {
     const viewportRows = Math.ceil(this.scanList!.clientHeight / rowHeight);
     const start = Math.max(0, Math.floor(this.scanList!.scrollTop / rowHeight) - overscan);
     const end = Math.min(items.length, start + viewportRows + overscan * 2);
-    const spacer = this.scanList.querySelector<HTMLElement>('.repository-scan-spacer');
-    const rows = this.scanList.querySelector<HTMLElement>('.repository-scan-rows');
+    const spacer = this.scanList!.querySelector<HTMLElement>('.repository-scan-spacer')!;
+    const rows = this.scanList!.querySelector<HTMLElement>('.repository-scan-rows')!;
     spacer.style.height = `${items.length * rowHeight}px`;
     rows.style.transform = `translateY(${start * rowHeight}px)`;
     rows.innerHTML = '';
@@ -335,8 +342,8 @@ export class WelcomeScreen {
 
   updateScanStatus(scannedDirectories: number | undefined, result?: { error?: unknown; canceled?: boolean }): void {
     if (!this.repositoryPicker) return;
-    const status = this.repositoryPicker!.querySelector('[data-status]');
-    const spinner = this.repositoryPicker!.querySelector('.repository-scan-spinner');
+    const status = this.repositoryPicker!.querySelector<HTMLElement>('[data-status]')!;
+    const spinner = this.repositoryPicker!.querySelector<HTMLElement>('.repository-scan-spinner')!;
     if (result) {
       spinner.classList.add('is-hidden');
       status.textContent = result.error
@@ -356,20 +363,22 @@ export class WelcomeScreen {
     if (!this.repositoryPicker) return;
     const count = this.scanSelection.size;
     this.repositoryPicker!.querySelector('[data-summary]')!.textContent = t('discovery.selected', { count });
-    (this.repositoryPicker!.querySelector('[data-action="import"]') as HTMLButtonElement).disabled = count === 0;
+    const btn = this.repositoryPicker!.querySelector('[data-action="import"]') as HTMLButtonElement;
+    if (!btn) return;
+    btn.disabled = count === 0;
   }
 
   async importScannedRepositories(): Promise<void> {
     const button = this.repositoryPicker?.querySelector('[data-action="import"]') as HTMLButtonElement | null;
     if (!button || button.disabled) return;
     button.disabled = true;
-    const result = await this.app.components.repoTabs.addRepos([...this.scanSelection]);
+    const result = await this.app!.components.repoTabs!.addRepos([...this.scanSelection]);
     this.closeRepositoryPicker();
     await this.loadRecent();
     if (result?.failed?.length) {
-      this.app.showToast(t('discovery.partialFailure', { count: result.failed.length }), 'warning');
+      this.app!.showToast(t('discovery.partialFailure', { count: result.failed.length }), 'warning');
     } else {
-      this.app.showToast(t('discovery.imported', { count: result?.added?.length || 0 }), 'success');
+      this.app!.showToast(t('discovery.imported', { count: result?.added?.length || 0 }), 'success');
     }
   }
 
@@ -398,14 +407,14 @@ export class WelcomeScreen {
     if (!cloneUrl) return;
     const parentDirectory = await window.gitTree.selectDirectory();
     if (!parentDirectory) return;
-    this.app.showToast(t('feedback.cloning'), 'info');
+    this.app!.showToast(t('feedback.cloning'), 'info');
     try {
-      const result = await window.gitTree.cloneRepository(cloneUrl, parentDirectory) as { error?: string; path?: string } | undefined;
-      if (result?.error) { this.app.showToast(result.error, 'error'); return; }
-      this.app.showToast(t('feedback.cloneComplete'), 'success');
-      await this.app.components.repoTabs.addRepo(result.path);
+      const result = await window.gitTree.cloneRepository(cloneUrl, parentDirectory) as { error?: string; path: string };
+      if (result?.error) { this.app!.showToast(result.error, 'error'); return; }
+      this.app!.showToast(t('feedback.cloneComplete'), 'success');
+      await this.app!.components.repoTabs!.addRepo(result.path);
     } catch (e) {
-      this.app.showToast('Error: ' + (e as Error).message, 'error');
+      this.app!.showToast('Error: ' + (e as Error).message, 'error');
     }
   }
 
@@ -453,14 +462,14 @@ export class WelcomeScreen {
         finish(value);
       };
       document.body.appendChild(overlay);
-      overlay.querySelector<HTMLElement>('.repository-picker-close').onclick = () => finish(null);
+      overlay.querySelector<HTMLElement>('.repository-picker-close')!.onclick = () => finish(null);
       overlay.addEventListener('mousedown', (event: MouseEvent) => {
         if (event.target === overlay) finish(null);
       });
-      overlay.querySelector<HTMLElement>('[data-action="cancel"]').onclick = () => finish(null);
-      overlay.querySelector<HTMLElement>('[data-action="next"]').onclick = submit;
+      overlay.querySelector<HTMLElement>('[data-action="cancel"]')!.onclick = () => finish(null);
+      overlay.querySelector<HTMLElement>('[data-action="next"]')!.onclick = submit;
       document.addEventListener('keydown', keydown);
-      overlay.querySelector<HTMLElement>('.clone-url-input').focus();
+      overlay.querySelector<HTMLElement>('.clone-url-input')!.focus();
     });
   }
 
@@ -473,9 +482,9 @@ export class WelcomeScreen {
         const el = document.createElement('div');
         el.className = 'welcome-recent-item';
         el.style.setProperty('--item-index', String(index));
-        el.innerHTML = `<div class="recent-name">${this.esc(repo.name)}</div><div class="recent-path">${this.esc(repo.path)}</div>`;
+        el.innerHTML = `<div class="recent-name">${this.esc(repo.name ?? '')}</div><div class="recent-path">${this.esc(repo.path ?? '')}</div>`;
         el.addEventListener('click', () => {
-          this.app.components.repoTabs.addRepo(repo.path);
+          this.app!.components.repoTabs!.addRepo(repo.path!);
         });
         this.recentList.appendChild(el);
       });
