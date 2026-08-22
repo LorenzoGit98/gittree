@@ -24,7 +24,7 @@ interface ConflictFileState {
   snapshotId?: string;
 }
 
-interface OperationStateInfo {
+export interface OperationStateInfo {
   type?: string;
   conflicts?: string[];
   error?: unknown;
