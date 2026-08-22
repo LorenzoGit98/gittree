@@ -16,12 +16,12 @@ export interface RepositoryWorkspaceCallbacks {
 export interface RepositoryWorkspaceComponents {
   welcome: { hide: () => void; markStep?: (step: string) => void };
   graphView: { load: (repoPath: string) => Promise<void>; select: (hash: string) => void };
-  branchList: { load: (repoPath: string, loadSession: unknown) => Promise<void> };
+  branchList: { load: (...args: never[]) => Promise<void> };
   changes: { load: (repoPath: string) => Promise<void> };
-  pullRequests: { load: (repoPath: string, loadSession: unknown) => Promise<void> };
+  pullRequests: { load: (...args: never[]) => Promise<void> };
   diffViewer: { clear: () => void };
-  statusBar: { setBranch: (label: string) => void; setRepo: (name: string) => void };
-  conflict: { open: (operationState: unknown) => Promise<void> };
+  statusBar: { setBranch: (label: string) => void; setRepo: (name?: string) => void };
+  conflict: { open: (...args: never[]) => Promise<void> };
 }
 
 interface WorkspaceBridge {
@@ -37,11 +37,7 @@ export interface RepositoryWorkspaceDependencies {
   translate: (key: string, options?: Record<string, unknown>) => string;
   state: { repo: RepositoryEntry | null };
   components: RepositoryWorkspaceComponents;
-  createLoadSession: (bridge: WorkspaceBridge, repoPath: string) => {
-    branchMetadata(): Promise<unknown>;
-    status(): Promise<unknown>;
-    operationState(): Promise<{ type?: string }>;
-  };
+  createLoadSession: (bridge: WorkspaceBridge, repoPath: string) => unknown;
   callbacks: RepositoryWorkspaceCallbacks;
 }
 
@@ -81,7 +77,8 @@ export class RepositoryWorkspaceController {
       : normalized;
   }
 
-  isCurrentRepository(repoPath: string): boolean {
+  isCurrentRepository(repoPath?: string): boolean {
+    if (!repoPath) return false;
     const current = this.state.repo?.path;
     return Boolean(current) && this.pathKey(repoPath) === this.pathKey(current);
   }

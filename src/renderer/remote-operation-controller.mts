@@ -47,7 +47,7 @@ export interface RemoteOperationDependencies {
     setSyncBusy: (repoPath: string, busy: boolean) => void;
     refreshAllSync: () => Promise<void>;
   };
-  createLoadSession: (repoPath: string) => RemoteLoadSession;
+  createLoadSession: (repoPath: string) => unknown;
   views: {
     refreshGraph: (repoPath: string, options?: Record<string, unknown>) => Promise<void>;
     refreshBranches: (repoPath: string, loadSession: RemoteLoadSession, options?: Record<string, unknown>) => Promise<void>;
@@ -71,7 +71,7 @@ export class RemoteOperationController {
   getCurrentRepository: () => { path?: string } | null;
   isCurrentRepository: (repoPath?: string) => boolean;
   repoTabs: RemoteOperationDependencies['repoTabs'];
-  createLoadSession: (repoPath: string) => RemoteLoadSession;
+  createLoadSession: (repoPath: string) => unknown;
   views: RemoteOperationDependencies['views'];
   currentOperation: CurrentOperation | null;
   visualGeneration: number;
@@ -147,7 +147,7 @@ export class RemoteOperationController {
       await this.repoTabs.refreshAllSync();
       return;
     }
-    const loadSession = this.createLoadSession(repoPath);
+    const loadSession = this.createLoadSession(repoPath) as RemoteLoadSession;
     const tasks = [
       this.views.refreshGraph(repoPath, { preserveViewport: true }),
       this.views.refreshBranches(repoPath, loadSession, { background: true }),

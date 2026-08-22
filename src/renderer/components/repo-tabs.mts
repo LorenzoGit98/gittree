@@ -10,11 +10,8 @@ interface SyncState {
   behind?: number;
 }
 
-type RepoTabsApp = {
-  state: { activeRepoIndex: number };
-  showToast: (message: unknown, type?: string) => void;
-  emit: (event: string, data?: unknown) => void;
-};
+import type { GitTreeApp } from '../app.mts';
+type RepoTabsApp = GitTreeApp;
 
 export interface RepoTabsOptions {
   platform?: string | null;

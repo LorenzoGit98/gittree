@@ -9,9 +9,9 @@ export class StatusBar {
     this.infoEl = document.getElementById('status-info')! as HTMLElement;
   }
 
-  setRepo(name: string): void { this.repoEl.textContent = name || ''; }
-  setBranch(name: string): void { this.branchEl.textContent = name || ''; }
-  setInfo(text: string): void { this.infoEl.textContent = text || ''; }
+  setRepo(name: string | undefined): void { this.repoEl.textContent = name || ''; }
+  setBranch(name: string | undefined): void { this.branchEl.textContent = name || ''; }
+  setInfo(text: string | undefined): void { this.infoEl.textContent = text || ''; }
   clear(): void { this.repoEl.textContent = ''; this.branchEl.textContent = ''; this.infoEl.textContent = ''; }
 }
 
