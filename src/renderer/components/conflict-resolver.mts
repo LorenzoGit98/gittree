@@ -262,8 +262,8 @@ export class ConflictResolver {
       this.app.showToast(this.current.error, 'error');
       return;
     }
-    this.resultContent = this.current.result;
-    this.blocks = (this.current.blocks || []).map(block => ({ ...block }));
+    this.resultContent = this.current!.result;
+    this.blocks = (this.current!.blocks || []).map(block => ({ ...block }));
     this.activeBlockIndex = 0;
     this.aiExplanation = null;
     this.pendingBinaryStrategy = null;
@@ -271,7 +271,7 @@ export class ConflictResolver {
     this.dirty = false;
     this.undoStack = [];
     this.blockCounts.set(filePath, this.blocks.length);
-    if (this.current.binary) this.binaryMap.set(filePath, true);
+    if (this.current!.binary) this.binaryMap.set(filePath, true);
     this.refreshFileList();
     this.renderEditor();
   }
@@ -875,7 +875,7 @@ export class ConflictResolver {
 
   canMarkResolved(): boolean {
     if (!this.current) return false;
-    if (this.current.binary) return Boolean(this.pendingBinaryStrategy);
+    if (this.current!.binary) return Boolean(this.pendingBinaryStrategy);
     return (this.blocks.length === 0 || this.manualEdited) && !this.hasConflictMarkers();
   }
 
@@ -894,7 +894,7 @@ export class ConflictResolver {
       return;
     }
     if (!await this.confirm(t('conflicts.markResolved'), t('conflicts.markResolvedConfirm'))) return;
-    const strategy = this.current.binary ? this.pendingBinaryStrategy : 'manual';
+    const strategy = this.current!.binary ? this.pendingBinaryStrategy : 'manual';
     await this.resolve(strategy, this.resultContent);
   }
 
@@ -903,7 +903,7 @@ export class ConflictResolver {
     if (!repo || !this.currentPath) return;
     const result = await window.gitTree.resolveConflict(repo.path, this.currentPath, {
       strategy,
-      snapshotId: this.current.snapshotId,
+      snapshotId: this.current!.snapshotId,
       ...(strategy === 'manual' ? { content } : {})
     }) as { error?: string; state?: OperationStateInfo };
     if (result?.error) {

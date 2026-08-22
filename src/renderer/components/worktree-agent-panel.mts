@@ -104,7 +104,7 @@ export class WorktreeAgentPanel {
       window.gitTree.getWorktrees(repo.path),
       window.gitTree.listAgentTasks(repo.path)
     ]) as [WorktreeEntry[] | undefined, AgentTask[] | undefined];
-    if (!this.repo || this.app.pathKey(this.repo.path) !== this.app.pathKey(repo.path)) return;
+    if (!this.repo || this.app.pathKey(this.repo!.path) !== this.app.pathKey(repo.path)) return;
     this.worktrees = Array.isArray(worktrees) ? worktrees : [];
     this.tasks = Array.isArray(tasks) ? tasks : [];
     this.renderWorktrees();
@@ -169,7 +169,7 @@ export class WorktreeAgentPanel {
     }
     container.innerHTML = this.worktrees.map(worktree => {
       const task = this.associatedTask(worktree.path);
-      const main = this.repo && this.app.pathKey(worktree.path) === this.app.pathKey(this.repo.path);
+      const main = this.repo && this.app.pathKey(worktree.path) === this.app.pathKey(this.repo!.path);
       const dirty = Boolean(worktree.dirty) || Number(task?.wip) > 0;
       return `<div class="worktree-row" data-worktree-path="${this.esc(worktree.path)}">
         <span class="worktree-state-dot ${dirty ? 'is-dirty' : ''}" aria-hidden="true"></span>
@@ -212,15 +212,15 @@ export class WorktreeAgentPanel {
     if (action === 'agent') return this.openNewSession(worktree);
     if (action === 'terminal') return window.gitTree.openTerminal(worktree.path) as Promise<void>;
     if (action === 'open') {
-      const result = await window.gitTree.openWorktree(this.repo.path, worktree.path) as { error?: string };
+      const result = await window.gitTree.openWorktree(this.repo!.path, worktree.path) as { error?: string };
       if (result?.error) return this.app.showToast(result.error, 'error');
       await this.app.components.repoTabs.addRepo(worktree.path);
       return;
     }
     if (action === 'lock' || action === 'unlock') {
       const result = (action === 'lock'
-        ? await window.gitTree.lockWorktree(this.repo.path, worktree.path, 'Locked in GitTree')
-        : await window.gitTree.unlockWorktree(this.repo.path, worktree.path)) as { error?: string };
+        ? await window.gitTree.lockWorktree(this.repo!.path, worktree.path, 'Locked in GitTree')
+        : await window.gitTree.unlockWorktree(this.repo!.path, worktree.path)) as { error?: string };
       if (result?.error) this.app.showToast(result.error, 'error');
       else await this.load(this.repo);
       return;
@@ -231,7 +231,7 @@ export class WorktreeAgentPanel {
         t('agents.remove'), true
       );
       if (!confirmed) return;
-      const result = await window.gitTree.removeWorktree(this.repo.path, worktree.path) as { error?: string };
+      const result = await window.gitTree.removeWorktree(this.repo!.path, worktree.path) as { error?: string };
       if (result?.error) this.app.showToast(result.error, 'error');
       else await this.load(this.repo);
     }
@@ -257,7 +257,7 @@ export class WorktreeAgentPanel {
     }
     container.innerHTML = cards.map(({ worktree, task }) => {
       const status = task?.needsAttention ? 'attention' : (task?.status || 'available');
-      const main = this.repo && this.app.pathKey(worktree.path) === this.app.pathKey(this.repo.path);
+      const main = this.repo && this.app.pathKey(worktree.path) === this.app.pathKey(this.repo!.path);
       return `<article class="agent-card ${task?.needsAttention ? 'needs-attention' : ''}" role="listitem"
           tabindex="0" data-worktree-path="${this.esc(worktree.path)}" ${task ? `data-task-id="${this.esc(task.id)}"` : ''}>
         <div class="agent-card-head">
@@ -323,7 +323,7 @@ export class WorktreeAgentPanel {
         }
       }
     }
-    const isMain = worktree && this.app.pathKey(worktree.path) === this.app.pathKey(this.repo.path);
+    const isMain = worktree && this.app.pathKey(worktree.path) === this.app.pathKey(this.repo!.path);
     if (isMain) {
       const accepted = await this.app.confirmDialog(
         t('agents.mainWarningTitle'), t('agents.mainWarning'), t('common.continue')
@@ -373,8 +373,8 @@ export class WorktreeAgentPanel {
     }
     delete form.customPath;
     const result = worktree
-      ? await window.gitTree.createAgentTaskForWorktree(this.repo.path, worktree.path, form) as AgentTask & { error?: string }
-      : await window.gitTree.createAgentTask(this.repo.path, form) as AgentTask & { error?: string };
+      ? await window.gitTree.createAgentTaskForWorktree(this.repo!.path, worktree.path, form) as AgentTask & { error?: string }
+      : await window.gitTree.createAgentTask(this.repo!.path, form) as AgentTask & { error?: string };
     if (result?.error) return this.app.showToast(result.error, 'error');
     this.tasks = this.tasks.filter(task => task.id !== result.id).concat(result);
     await this.load(this.repo);
@@ -477,7 +477,7 @@ export class WorktreeAgentPanel {
   onTaskChanged(task: AgentTask): void {
     const index = this.tasks.findIndex(item => item.id === task.id);
     if (index >= 0) this.tasks.splice(index, 1, task);
-    else if (this.repo && this.app.pathKey(task.repositoryPath) === this.app.pathKey(this.repo.path)) this.tasks.push(task);
+    else if (this.repo && this.app.pathKey(task.repositoryPath) === this.app.pathKey(this.repo!.path)) this.tasks.push(task);
     this.renderWorktrees();
     this.renderAgents();
     if (task.id === this.selectedTaskId) this.renderDrawer(task);
