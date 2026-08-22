@@ -667,10 +667,10 @@ export class GraphView {
   }
 
   setupHistoryControls(): void {
-    this.filterQuery = document.getElementById('history-filter-query') as HTMLInputElement | null;
-    this.filterAuthor = document.getElementById('history-filter-author') as HTMLSelectElement | null;
-    this.filterRef = document.getElementById('history-filter-ref') as HTMLSelectElement | null;
-    this.sortSelect = document.getElementById('history-sort') as HTMLSelectElement | null;
+    this.filterQuery = document.getElementById('history-filter-query')! as HTMLInputElement | null;
+    this.filterAuthor = document.getElementById('history-filter-author')! as HTMLSelectElement | null;
+    this.filterRef = document.getElementById('history-filter-ref')! as HTMLSelectElement | null;
+    this.sortSelect = document.getElementById('history-sort')! as HTMLSelectElement | null;
     this.filterClear = document.getElementById('history-filter-clear')!;
     this.filterQuery?.addEventListener('input', () => {
       this.filters.query = this.filterQuery.value;

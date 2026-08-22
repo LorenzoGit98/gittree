@@ -18,12 +18,12 @@ interface InspectorPayload {
 }
 
 const bridge = window.gitTree;
-const body = document.getElementById('inspector-body') as HTMLElement;
-const title = document.getElementById('inspector-title') as HTMLElement;
-const meta = document.getElementById('inspector-meta') as HTMLElement;
-const eyebrow = document.getElementById('inspector-eyebrow') as HTMLElement;
-const mode = document.getElementById('inspector-mode') as HTMLElement;
-const word = document.getElementById('inspector-word') as HTMLElement;
+const body = document.getElementById('inspector-body')! as HTMLElement;
+const title = document.getElementById('inspector-title')! as HTMLElement;
+const meta = document.getElementById('inspector-meta')! as HTMLElement;
+const eyebrow = document.getElementById('inspector-eyebrow')! as HTMLElement;
+const mode = document.getElementById('inspector-mode')! as HTMLElement;
+const word = document.getElementById('inspector-word')! as HTMLElement;
 
 const fallbackStrings: Record<string, string> = {
   'details.graphBranch': 'Branch',

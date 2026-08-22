@@ -50,8 +50,8 @@ export class SettingsView {
 
   constructor(app: GitTreeApp) {
     this.app = app;
-    this.overlay = document.getElementById('modal-overlay') as HTMLElement;
-    this.dialog = document.getElementById('modal-dialog') as HTMLElement;
+    this.overlay = document.getElementById('modal-overlay')! as HTMLElement;
+    this.dialog = document.getElementById('modal-dialog')! as HTMLElement;
     this.autoFetchStorageKey = 'gittree.settings.autoFetch';
     this.profilesStorageKey = 'gittree.settings.gitProfiles';
     this.assignmentsStorageKey = 'gittree.settings.profileAssignments';
@@ -522,12 +522,12 @@ export class SettingsView {
   }
 
   async populateVersion(): Promise<void> {
-    const el = document.getElementById('about-version');
+    const el = document.getElementById('about-version')!;
     if (el && window.gitTree.getAppVersion) {
       const v = await window.gitTree.getAppVersion();
       el.textContent = v as string;
     }
-    const gitStatus = document.getElementById('about-git-version');
+    const gitStatus = document.getElementById('about-git-version')!;
     if (gitStatus && window.gitTree.getGitVersion) {
       const info = await window.gitTree.getGitVersion() as { supported?: boolean; version?: string; minimum?: string } | undefined;
       if (info && !info.supported) {

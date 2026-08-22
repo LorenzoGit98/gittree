@@ -106,7 +106,7 @@ export class ChangesView {
       explanationTitle: document.getElementById('ai-explanation-title')!,
       explanationBody: document.getElementById('ai-explanation-body')!,
       explanationClose: document.getElementById('btn-ai-explanation-close')!,
-      commitButton: document.getElementById('btn-commit')
+      commitButton: document.getElementById('btn-commit')!
     };
     this.bind();
   }

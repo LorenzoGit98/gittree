@@ -94,7 +94,7 @@ export class ShortcutController {
   handleKeydown(event: KeyboardEvent): void {
     const editable = (event.target as HTMLElement).closest?.('input, textarea, select, [contenteditable="true"]');
     const modalOpen = !this.document
-      .getElementById('modal-overlay')
+      .getElementById('modal-overlay')!
       .classList.contains('is-hidden');
     const primary = this.isPrimaryModifier(event);
     const key = event.key.toLowerCase();

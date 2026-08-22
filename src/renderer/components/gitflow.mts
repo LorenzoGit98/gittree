@@ -18,8 +18,8 @@ export class GitFlow {
 
   constructor(app: GitTreeApp) {
     this.app = app;
-    this.overlay = document.getElementById('modal-overlay') as HTMLElement;
-    this.dialog = document.getElementById('modal-dialog') as HTMLElement;
+    this.overlay = document.getElementById('modal-overlay')! as HTMLElement;
+    this.dialog = document.getElementById('modal-dialog')! as HTMLElement;
     this.mode = 'start';
     this.type = 'feature';
     this.localBranches = [];

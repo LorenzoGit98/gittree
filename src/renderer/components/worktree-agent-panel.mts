@@ -240,8 +240,8 @@ export class WorktreeAgentPanel {
   renderAgents(): void {
     const container = document.getElementById('agent-card-list')!;
     if (!container) return;
-    const statusFilter = (document.getElementById('agent-status-filter') as HTMLSelectElement | null)?.value || '';
-    const providerFilter = (document.getElementById('agent-provider-filter') as HTMLSelectElement | null)?.value || '';
+    const statusFilter = (document.getElementById('agent-status-filter')! as HTMLSelectElement | null)?.value || '';
+    const providerFilter = (document.getElementById('agent-provider-filter')! as HTMLSelectElement | null)?.value || '';
     const cards = this.worktrees.map(worktree => ({ worktree, task: this.associatedTask(worktree.path) }))
       .filter(({ task }) => !providerFilter || task?.adapterId === providerFilter)
       .filter(({ task }) => {
@@ -396,7 +396,7 @@ export class WorktreeAgentPanel {
   renderDrawer(task: AgentTask): void {
     document.getElementById('agent-drawer-name')!.textContent = task.title;
     document.getElementById('agent-drawer-meta')!.textContent = `${task.adapterId} · ${task.branch || this.basename(task.worktreePath)}`;
-    (document.getElementById('btn-stop-agent') as HTMLButtonElement).disabled = !['queued', 'preparing', 'running', 'stopping'].includes(task.status);
+    (document.getElementById('btn-stop-agent')! as HTMLButtonElement).disabled = !['queued', 'preparing', 'running', 'stopping'].includes(task.status);
     const activity = document.getElementById('agent-activity')!;
     activity.innerHTML = (task.events || []).slice().reverse().map(event => `<div class="agent-event">
       <span class="agent-event-icon"><i class="ph ph-${this.eventIcon(event.type)}"></i></span>

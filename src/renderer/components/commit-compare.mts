@@ -128,7 +128,7 @@ export class CommitCompare {
     if (element) element.classList.add('active');
     this.selectedFile = filePath;
 
-    const diffEl = document.getElementById('commit-compare-diff');
+    const diffEl = document.getElementById('commit-compare-diff')!;
     diffEl.innerHTML = `<div class="diff-placeholder"><i class="ph ph-circle-notch"></i>${t('common.loading')}</div>`;
 
     try {

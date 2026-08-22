@@ -285,14 +285,14 @@ export class MergeWorkspace {
     document.getElementById('merge-cancel-btn')!.onclick = () => this.hide();
     document.getElementById('merge-only-btn')!.onclick = () => this.executeMerge(false);
     document.getElementById('merge-push-btn')!.onclick = () => this.executeMerge(true);
-    const viewChangesButton = document.getElementById('merge-view-changes-btn');
+    const viewChangesButton = document.getElementById('merge-view-changes-btn')!;
     if (viewChangesButton) {
       viewChangesButton.onclick = () => {
         this.hide();
         this.app.setWorkspaceMode('changes');
       };
     }
-    const stashButton = document.getElementById('merge-stash-btn');
+    const stashButton = document.getElementById('merge-stash-btn')!;
     if (stashButton) stashButton.onclick = () => this.stashAndReload();
 
     document.querySelectorAll<HTMLElement>('.merge-strategy-option').forEach(button => {
@@ -426,7 +426,7 @@ export class MergeWorkspace {
     this.onKeydown = event => {
       if (event.key !== 'Escape') return;
       if (!this.container || this.container.classList.contains('is-hidden')) return;
-      const cancel = document.getElementById('merge-cancel-btn') as HTMLButtonElement | null;
+      const cancel = document.getElementById('merge-cancel-btn')! as HTMLButtonElement | null;
       if (!cancel || cancel.disabled) return;
       this.hide();
     };

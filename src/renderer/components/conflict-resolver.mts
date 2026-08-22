@@ -185,15 +185,15 @@ export class ConflictResolver {
         </div>
       </div>`;
 
-    (document.getElementById('conflict-abort') as HTMLElement).onclick = () => this.abort();
+    (document.getElementById('conflict-abort')! as HTMLElement).onclick = () => this.abort();
     document.getElementById('conflict-skip')?.addEventListener('click', () => this.skip());
-    (document.getElementById('conflict-continue') as HTMLElement).onclick = () => this.continue();
-    const filterInput = document.getElementById('conflict-file-filter') as HTMLInputElement | null;
+    (document.getElementById('conflict-continue')! as HTMLElement).onclick = () => this.continue();
+    const filterInput = document.getElementById('conflict-file-filter')! as HTMLInputElement | null;
     if (filterInput) {
       filterInput.value = this.fileFilter;
       filterInput.oninput = () => {
         this.fileFilter = filterInput.value;
-        const clearButton = document.getElementById('conflict-file-filter-clear');
+        const clearButton = document.getElementById('conflict-file-filter-clear')!;
         if (clearButton) clearButton.classList.toggle('is-hidden', !this.fileFilter);
         this.refreshFileList();
       };
@@ -205,7 +205,7 @@ export class ConflictResolver {
           this.refreshFileList();
         }
       };
-      (document.getElementById('conflict-file-filter-clear') as HTMLElement).onclick = () => {
+      (document.getElementById('conflict-file-filter-clear')! as HTMLElement).onclick = () => {
         filterInput.value = '';
         this.fileFilter = '';
         document.getElementById('conflict-file-filter-clear')!.classList.add('is-hidden');
@@ -242,7 +242,7 @@ export class ConflictResolver {
   }
 
   refreshFileList(): void {
-    const scroll = document.getElementById('conflict-file-scroll');
+    const scroll = document.getElementById('conflict-file-scroll')!;
     if (!scroll) return;
     scroll.innerHTML = this.renderFileList();
     scroll.querySelectorAll<HTMLElement>('[data-file]').forEach(button => {
@@ -278,7 +278,7 @@ export class ConflictResolver {
 
   renderEditor(): void {
     if (!this.current) return;
-    const editor = document.getElementById('conflict-editor');
+    const editor = document.getElementById('conflict-editor')!;
     if (!editor) return;
     const file = this.current;
     const blockCount = this.blocks.length;
@@ -333,7 +333,7 @@ export class ConflictResolver {
     editor.querySelectorAll<HTMLElement>('[data-whole]').forEach(button => {
       button.onclick = () => this.useWholeFile((button as HTMLElement).dataset.whole);
     });
-    const resolveAllButton = document.getElementById('conflict-resolve-all');
+    const resolveAllButton = document.getElementById('conflict-resolve-all')!;
     if (resolveAllButton) {
       resolveAllButton.onclick = event => {
         event.stopPropagation();
@@ -364,7 +364,7 @@ export class ConflictResolver {
     document.getElementById('conflict-mark-resolved')?.addEventListener('click', () => this.markResolved());
     document.getElementById('conflict-ai-explain')?.addEventListener('click', () => this.explainBlock());
     document.getElementById('conflict-ai-delegate')?.addEventListener('click', () => this.delegateToAgent());
-    const resultEditor = document.getElementById('conflict-result-editor') as HTMLTextAreaElement | null;
+    const resultEditor = document.getElementById('conflict-result-editor')! as HTMLTextAreaElement | null;
     if (resultEditor) resultEditor.value = this.resultContent;
     this.bindTextEditor();
     this.renderAiPanel();
@@ -400,7 +400,7 @@ export class ConflictResolver {
   }
 
   setBlockExplainBusy(busy: boolean): void {
-    const button = document.getElementById('conflict-ai-explain') as HTMLButtonElement | null;
+    const button = document.getElementById('conflict-ai-explain')! as HTMLButtonElement | null;
     if (!button) return;
     const icon = button.querySelector('i') as HTMLElement;
     const label = button.querySelector('span') as HTMLElement;
@@ -415,7 +415,7 @@ export class ConflictResolver {
   }
 
   renderAiPanel(): void {
-    const panel = document.getElementById('conflict-ai-panel');
+    const panel = document.getElementById('conflict-ai-panel')!;
     if (!panel) return;
     const matches = this.aiExplanation
       && this.aiExplanation.blockIndex === this.activeBlockIndex;
@@ -426,7 +426,7 @@ export class ConflictResolver {
     document.getElementById('conflict-ai-title')!.textContent = this.aiExplanation.summary;
     document.getElementById('conflict-ai-body')!.textContent = this.aiExplanation.body;
     panel.classList.remove('is-hidden');
-    (document.getElementById('conflict-ai-close') as HTMLElement).onclick = () => {
+    (document.getElementById('conflict-ai-close')! as HTMLElement).onclick = () => {
       panel.classList.add('is-hidden');
     };
   }
@@ -576,7 +576,7 @@ export class ConflictResolver {
   }
 
   buildResultLayer(): void {
-    const layer = document.getElementById('conflict-highlight-layer');
+    const layer = document.getElementById('conflict-highlight-layer')!;
     if (!layer) return;
     const rows = ConflictHighlight.buildHighlightLines(this.resultContent, this.blocks);
     layer.innerHTML = rows.map(row => {
@@ -586,7 +586,7 @@ export class ConflictResolver {
     }).join('');
     this.highlightRows = rows;
 
-    const textarea = document.getElementById('conflict-result-editor') as HTMLTextAreaElement | null;
+    const textarea = document.getElementById('conflict-result-editor')! as HTMLTextAreaElement | null;
     if (textarea) {
       this.refreshResultGutter(textarea, document.querySelector('.conflict-result-gutter'));
       this.syncHighlightScroll(textarea);
@@ -595,8 +595,8 @@ export class ConflictResolver {
   }
 
   positionActionBar(): void {
-    const bar = document.getElementById('conflict-action-bar');
-    const stack = document.getElementById('conflict-result-stack');
+    const bar = document.getElementById('conflict-action-bar')!;
+    const stack = document.getElementById('conflict-result-stack')!;
     if (!bar || !stack) return;
     const block = this.blocks[this.activeBlockIndex];
     if (!block || this.current?.binary) {
@@ -606,7 +606,7 @@ export class ConflictResolver {
     const rowIndex = Math.max(0, block.startLine - 1);
     const lineHeight = 21;
     const paddingTop = 8;
-    const top = paddingTop + rowIndex * lineHeight - ((document.getElementById('conflict-result-editor') as HTMLTextAreaElement | null)?.scrollTop || 0);
+    const top = paddingTop + rowIndex * lineHeight - ((document.getElementById('conflict-result-editor')! as HTMLTextAreaElement | null)?.scrollTop || 0);
     stack.style.setProperty('--action-bar-top', `${top}px`);
     bar.innerHTML = `
       <span class="conflict-action-bar-label"><i class="ph ph-warning-circle" aria-hidden="true"></i>${this.esc(t('conflicts.blockCount', {
@@ -625,10 +625,10 @@ export class ConflictResolver {
   }
 
   syncHighlightScroll(textarea: HTMLTextAreaElement): void {
-    const layer = document.getElementById('conflict-highlight-layer');
+    const layer = document.getElementById('conflict-highlight-layer')!;
     const gutter = document.querySelector('.conflict-result-gutter');
-    const stack = document.getElementById('conflict-result-stack');
-    const bar = document.getElementById('conflict-action-bar');
+    const stack = document.getElementById('conflict-result-stack')!;
+    const bar = document.getElementById('conflict-action-bar')!;
     if (layer) layer.scrollTop = textarea.scrollTop;
     if (gutter) gutter.scrollTop = textarea.scrollTop;
     if (stack) {
@@ -650,7 +650,7 @@ export class ConflictResolver {
   }
 
   bindResultEditor(): void {
-    const textarea = document.getElementById('conflict-result-editor') as HTMLTextAreaElement | null;
+    const textarea = document.getElementById('conflict-result-editor')! as HTMLTextAreaElement | null;
     if (!textarea) return;
     this.buildResultLayer();
     const active = this.blocks[this.activeBlockIndex];
@@ -817,7 +817,7 @@ export class ConflictResolver {
       activeBlockIndex: this.activeBlockIndex
     });
     if (this.undoStack.length > 30) this.undoStack.shift();
-    const undoButton = document.getElementById('conflict-undo') as HTMLButtonElement | null;
+    const undoButton = document.getElementById('conflict-undo')! as HTMLButtonElement | null;
     if (undoButton) undoButton.disabled = false;
   }
 
@@ -830,7 +830,7 @@ export class ConflictResolver {
     this.manualEdited = false;
     this.dirty = true;
     this.blockCounts.set(this.currentPath, this.blocks.length);
-    const undoButton = document.getElementById('conflict-undo') as HTMLButtonElement | null;
+    const undoButton = document.getElementById('conflict-undo')! as HTMLButtonElement | null;
     if (undoButton) undoButton.disabled = this.undoStack.length === 0;
     this.renderEditor();
   }
@@ -884,7 +884,7 @@ export class ConflictResolver {
   }
 
   updateMarkButton(): void {
-    const button = document.getElementById('conflict-mark-resolved') as HTMLButtonElement | null;
+    const button = document.getElementById('conflict-mark-resolved')! as HTMLButtonElement | null;
     if (button) button.disabled = !this.canMarkResolved();
   }
 
@@ -986,7 +986,7 @@ export class ConflictResolver {
     this.globalKeysHandler = event => {
       if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
         const target = event.target;
-        if (target === document.getElementById('conflict-result-editor')) return;
+        if (target === document.getElementById('conflict-result-editor')!) return;
         event.preventDefault();
         const direction = event.key === 'ArrowUp' ? -1 : 1;
         this.jumpToBlock(this.activeBlockIndex + direction);

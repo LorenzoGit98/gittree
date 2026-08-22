@@ -27,8 +27,8 @@ export class WelcomeScreen {
   scanQuery: string;
 
   constructor() {
-    this.screen = document.getElementById('welcome-screen') as HTMLElement;
-    this.recentList = document.getElementById('recent-repos') as HTMLElement;
+    this.screen = document.getElementById('welcome-screen')! as HTMLElement;
+    this.recentList = document.getElementById('recent-repos')! as HTMLElement;
     this.onboardingContainer = document.getElementById('welcome-onboarding')!;
     this.steps = ['open', 'branch', 'commit'];
     this.storageKey = 'gittree.onboarding';
@@ -49,9 +49,9 @@ export class WelcomeScreen {
 
   async init(app: GitTreeApp): Promise<void> {
     this.app = app;
-    const openButton = document.getElementById('btn-open-repo') as HTMLElement | null;
+    const openButton = document.getElementById('btn-open-repo')! as HTMLElement | null;
     if (openButton) openButton.onclick = () => this.openRepositoryPicker();
-    const cloneButton = document.getElementById('btn-clone-repo') as HTMLElement | null;
+    const cloneButton = document.getElementById('btn-clone-repo')! as HTMLElement | null;
     if (cloneButton) cloneButton.onclick = () => this.cloneRepo();
     await this.loadRecent();
     this.renderOnboarding();

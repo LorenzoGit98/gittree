@@ -104,7 +104,7 @@ export class GitTreeApp {
   bus = new EventBus();
   dialogs = new DialogService();
   toasts = new ToastService({
-    container: document.getElementById('toast') as HTMLElement,
+    container: document.getElementById('toast')! as HTMLElement,
     translate: key => window.I18n?.t(key) ?? key,
     encode: value => HtmlEncoder.encode(value)
   });
@@ -462,7 +462,7 @@ export class GitTreeApp {
       const list = await window.gitTree.getStashList(repoPath) as { all?: Array<{ message?: string }> } | undefined;
       if (!this.isCurrentRepo(repoPath)) return;
       this.state.stashes = list?.all || [];
-      this.renderStashes((document.getElementById('stash-search') as HTMLInputElement | null)?.value || '');
+      this.renderStashes((document.getElementById('stash-search')! as HTMLInputElement | null)?.value || '');
     } catch {
       this.state.stashes = [];
       container.innerHTML = '';

@@ -24,10 +24,10 @@ export class GlobalSearch {
 
   constructor(app: GitTreeApp) {
     this.app = app;
-    this.overlay = document.getElementById('search-overlay') as HTMLElement;
-    this.input = document.getElementById('search-input') as HTMLInputElement;
-    this.results = document.getElementById('search-results') as HTMLElement;
-    this.filters = document.getElementById('search-filters') as HTMLElement;
+    this.overlay = document.getElementById('search-overlay')! as HTMLElement;
+    this.input = document.getElementById('search-input')! as HTMLInputElement;
+    this.results = document.getElementById('search-results')! as HTMLElement;
+    this.filters = document.getElementById('search-filters')! as HTMLElement;
     this.aiButton = document.getElementById('search-ai-ask')!;
     this.allData = [];
     this.selectedIdx = -1;

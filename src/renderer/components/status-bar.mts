@@ -4,9 +4,9 @@ export class StatusBar {
   infoEl: HTMLElement;
 
   constructor() {
-    this.repoEl = document.getElementById('status-repo') as HTMLElement;
-    this.branchEl = document.getElementById('status-branch') as HTMLElement;
-    this.infoEl = document.getElementById('status-info') as HTMLElement;
+    this.repoEl = document.getElementById('status-repo')! as HTMLElement;
+    this.branchEl = document.getElementById('status-branch')! as HTMLElement;
+    this.infoEl = document.getElementById('status-info')! as HTMLElement;
   }
 
   setRepo(name: string): void { this.repoEl.textContent = name || ''; }

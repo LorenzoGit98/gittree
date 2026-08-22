@@ -15,7 +15,7 @@ export class ReflogView {
 
   constructor(app: GitTreeApp) {
     this.app = app;
-    this.container = document.getElementById('merge-workspace-overlay') as HTMLElement;
+    this.container = document.getElementById('merge-workspace-overlay')! as HTMLElement;
     this.entries = [];
   }
 

@@ -80,7 +80,7 @@ export class BranchListView {
     this.shouldReveal = false;
     this.rowStaggerIndex = 0;
     this.activeGhost = null;
-    this.searchInput = document.getElementById('branch-search') as HTMLInputElement | null;
+    this.searchInput = document.getElementById('branch-search')! as HTMLInputElement | null;
     if (this.searchInput) {
       this.searchInput.addEventListener('input', () => {
         this.filter = this.searchInput.value.toLowerCase();
