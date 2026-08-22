@@ -178,7 +178,7 @@ export function registerGitHandlers({
   const registerConflictOperation = (
     channel: string,
     method: GitMethod,
-    logMessage: (result: any, ...args: unknown[]) => string
+    logMessage: (result: unknown, ...args: unknown[]) => string
   ) => {
     registerManagedRepoHandler(channel, async (repoPath: string, ...args: unknown[]) => {
       const git = getGitService(repoPath);
