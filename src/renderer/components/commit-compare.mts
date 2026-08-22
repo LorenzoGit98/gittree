@@ -59,7 +59,7 @@ export class CommitCompare {
   }
 
   ensureContainer(): void {
-    this.container = document.getElementById('merge-workspace-overlay');
+    this.container = document.getElementById('merge-workspace-overlay')!;
   }
 
   showLoading(): void {

@@ -118,11 +118,11 @@ export class MergeWorkspace {
 
   ensureContainer(): void {
     if (this.container) return;
-    this.container = document.getElementById('merge-preview-overlay');
+    this.container = document.getElementById('merge-preview-overlay')!;
     if (!this.container) {
       this.container = document.createElement('div');
       this.container.id = 'merge-preview-overlay';
-      document.getElementById('app').appendChild(this.container);
+      document.getElementById('app')!.appendChild(this.container);
     }
     this.container.className = 'merge-workspace-shell is-hidden';
   }

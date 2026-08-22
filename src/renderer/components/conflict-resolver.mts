@@ -70,7 +70,7 @@ export class ConflictResolver {
 
   constructor(app: GitTreeApp) {
     this.app = app;
-    this.container = document.getElementById('merge-workspace-overlay');
+    this.container = document.getElementById('merge-workspace-overlay')!;
     this.state = null;
     this.allFiles = [];
     this.currentPath = null;
@@ -208,7 +208,7 @@ export class ConflictResolver {
       (document.getElementById('conflict-file-filter-clear') as HTMLElement).onclick = () => {
         filterInput.value = '';
         this.fileFilter = '';
-        document.getElementById('conflict-file-filter-clear').classList.add('is-hidden');
+        document.getElementById('conflict-file-filter-clear')!.classList.add('is-hidden');
         this.refreshFileList();
       };
     }
@@ -423,8 +423,8 @@ export class ConflictResolver {
       panel.classList.add('is-hidden');
       return;
     }
-    document.getElementById('conflict-ai-title').textContent = this.aiExplanation.summary;
-    document.getElementById('conflict-ai-body').textContent = this.aiExplanation.body;
+    document.getElementById('conflict-ai-title')!.textContent = this.aiExplanation.summary;
+    document.getElementById('conflict-ai-body')!.textContent = this.aiExplanation.body;
     panel.classList.remove('is-hidden');
     (document.getElementById('conflict-ai-close') as HTMLElement).onclick = () => {
       panel.classList.add('is-hidden');

@@ -28,7 +28,7 @@ export class GlobalSearch {
     this.input = document.getElementById('search-input') as HTMLInputElement;
     this.results = document.getElementById('search-results') as HTMLElement;
     this.filters = document.getElementById('search-filters') as HTMLElement;
-    this.aiButton = document.getElementById('search-ai-ask');
+    this.aiButton = document.getElementById('search-ai-ask')!;
     this.allData = [];
     this.selectedIdx = -1;
     this.visible = false;
@@ -50,8 +50,8 @@ export class GlobalSearch {
       }
     });
 
-    document.getElementById('global-search').addEventListener('click', () => this.show());
-    document.getElementById('global-search').addEventListener('focus', () => this.show());
+    document.getElementById('global-search')!.addEventListener('click', () => this.show());
+    document.getElementById('global-search')!.addEventListener('focus', () => this.show());
 
     this.input.addEventListener('input', () => this.search());
     this.input.addEventListener('keydown', e => this.handleKey(e));

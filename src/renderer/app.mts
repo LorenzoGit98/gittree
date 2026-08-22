@@ -158,12 +158,12 @@ export class GitTreeApp {
     );
     this.components.diffViewer = new DiffViewer(byId('detail-body'), this);
     this.components.inspectorWorkspace = new InspectorWorkspace({
-      container: document.getElementById('inspector-workspace'),
-      graphContainer: document.getElementById('inspector-graph-view'),
-      filesPanel: document.getElementById('inspector-files-panel'),
-      fileList: document.getElementById('inspector-file-list'),
-      filesToggle: document.getElementById('btn-toggle-inspector-files'),
-      diffContainer: document.getElementById('detail-body'),
+      container: document.getElementById('inspector-workspace')!,
+      graphContainer: document.getElementById('inspector-graph-view')!,
+      filesPanel: document.getElementById('inspector-files-panel')!,
+      fileList: document.getElementById('inspector-file-list')!,
+      filesToggle: document.getElementById('btn-toggle-inspector-files')!,
+      diffContainer: document.getElementById('detail-body')!,
       translate: t,
       storage: localStorage,
       onGraphSelect: hash => this.components.graphView.select(hash),
@@ -598,8 +598,8 @@ export class GitTreeApp {
   }
 
   updatePushPullCounts(ahead = 0, behind = 0): void {
-    const pullCount = document.getElementById('btn-pull-count');
-    const pushCount = document.getElementById('btn-push-count');
+    const pullCount = document.getElementById('btn-pull-count')!;
+    const pushCount = document.getElementById('btn-push-count')!;
     if (pullCount) {
       const show = behind > 0;
       pullCount.textContent = show ? String(behind) : '';
@@ -655,7 +655,7 @@ export class GitTreeApp {
   async onCommitSelected(hash: string): Promise<void> {
     if (!this.state.repo) return;
     await this.components.diffViewer.showDiffForCommit(this.state.repo.path, hash);
-    this.animateContentRefresh(document.getElementById('detail-body'));
+    this.animateContentRefresh(document.getElementById('detail-body')!);
     this.syncInspectorWorkspace();
   }
 

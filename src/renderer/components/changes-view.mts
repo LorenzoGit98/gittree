@@ -65,47 +65,47 @@ export class ChangesView {
     const ChangesFileListCtor = (window as unknown as { ChangesFileList: typeof ChangesFileList }).ChangesFileList;
     this.fileLists = {
       unstaged: new ChangesFileListCtor(
-        document.getElementById('unstaged-files'),
+        document.getElementById('unstaged-files')!,
         { rowHeight: this.rowHeight, overscan: this.overscan }
       ),
       staged: new ChangesFileListCtor(
-        document.getElementById('staged-files'),
+        document.getElementById('staged-files')!,
         { rowHeight: this.rowHeight, overscan: this.overscan }
       )
     };
     this.fileLists.unstaged.mount();
     this.fileLists.staged.mount();
     this.elements = {
-      unstaged: document.getElementById('unstaged-files'),
-      staged: document.getElementById('staged-files'),
-      unstagedCount: document.getElementById('unstaged-count'),
-      stagedCount: document.getElementById('staged-count'),
-      modeCount: document.getElementById('workspace-changes-count'),
-      stageAll: document.getElementById('btn-stage-all'),
-      unstageAll: document.getElementById('btn-unstage-all'),
-      discardAll: document.getElementById('btn-discard-all'),
-      submoduleBar: document.getElementById('submodule-bar'),
-      submodulesInit: document.getElementById('btn-submodules-init'),
-      submodulesUpdate: document.getElementById('btn-submodules-update'),
-      composer: document.getElementById('commit-composer'),
-      summary: document.getElementById('commit-summary'),
-      body: document.getElementById('commit-body'),
-      amend: document.getElementById('commit-amend'),
-      signoff: document.getElementById('commit-signoff'),
-      signing: document.getElementById('commit-signing'),
-      signingLabel: document.getElementById('commit-signing-label'),
-      authorToggle: document.getElementById('commit-author-toggle'),
-      authorFields: document.getElementById('commit-author-fields'),
-      authorName: document.getElementById('commit-author-name'),
-      authorEmail: document.getElementById('commit-author-email'),
-      identityStatus: document.getElementById('commit-identity-status'),
-      identityButton: document.getElementById('btn-commit-identity'),
-      aiCommit: document.getElementById('btn-ai-commit'),
-      aiExplain: document.getElementById('btn-ai-explain'),
-      explanation: document.getElementById('ai-explanation'),
-      explanationTitle: document.getElementById('ai-explanation-title'),
-      explanationBody: document.getElementById('ai-explanation-body'),
-      explanationClose: document.getElementById('btn-ai-explanation-close'),
+      unstaged: document.getElementById('unstaged-files')!,
+      staged: document.getElementById('staged-files')!,
+      unstagedCount: document.getElementById('unstaged-count')!,
+      stagedCount: document.getElementById('staged-count')!,
+      modeCount: document.getElementById('workspace-changes-count')!,
+      stageAll: document.getElementById('btn-stage-all')!,
+      unstageAll: document.getElementById('btn-unstage-all')!,
+      discardAll: document.getElementById('btn-discard-all')!,
+      submoduleBar: document.getElementById('submodule-bar')!,
+      submodulesInit: document.getElementById('btn-submodules-init')!,
+      submodulesUpdate: document.getElementById('btn-submodules-update')!,
+      composer: document.getElementById('commit-composer')!,
+      summary: document.getElementById('commit-summary')!,
+      body: document.getElementById('commit-body')!,
+      amend: document.getElementById('commit-amend')!,
+      signoff: document.getElementById('commit-signoff')!,
+      signing: document.getElementById('commit-signing')!,
+      signingLabel: document.getElementById('commit-signing-label')!,
+      authorToggle: document.getElementById('commit-author-toggle')!,
+      authorFields: document.getElementById('commit-author-fields')!,
+      authorName: document.getElementById('commit-author-name')!,
+      authorEmail: document.getElementById('commit-author-email')!,
+      identityStatus: document.getElementById('commit-identity-status')!,
+      identityButton: document.getElementById('btn-commit-identity')!,
+      aiCommit: document.getElementById('btn-ai-commit')!,
+      aiExplain: document.getElementById('btn-ai-explain')!,
+      explanation: document.getElementById('ai-explanation')!,
+      explanationTitle: document.getElementById('ai-explanation-title')!,
+      explanationBody: document.getElementById('ai-explanation-body')!,
+      explanationClose: document.getElementById('btn-ai-explanation-close')!,
       commitButton: document.getElementById('btn-commit')
     };
     this.bind();
@@ -507,10 +507,10 @@ export class ChangesView {
     this.selected = { path: file.path, staged };
     this.render();
     const request = ++this.diffRequest;
-    const title = document.getElementById('detail-title');
+    const title = document.getElementById('detail-title')!;
     title.textContent = file.path.split('/').pop();
     title.title = file.path;
-    const body = document.getElementById('detail-body');
+    const body = document.getElementById('detail-body')!;
     body.innerHTML = '';
     const loading = document.createElement('div');
     loading.className = 'diff-placeholder';
@@ -536,7 +536,7 @@ export class ChangesView {
     diff: { noDiff?: boolean; binary?: boolean; hunks?: Array<NumberableHunk & { header: string; id?: string }>; path?: string },
     staged: boolean
   ): void {
-    const body = document.getElementById('detail-body');
+    const body = document.getElementById('detail-body')!;
     body.innerHTML = '';
     if (diff.noDiff) {
       const empty = document.createElement('div');

@@ -50,11 +50,11 @@ function translate(key: string, options: Record<string, unknown> = {}): string {
 }
 
 const inspectorWorkspace = new InspectorWorkspace({
-  container: document.getElementById('inspector-workspace'),
-  graphContainer: document.getElementById('inspector-graph-view'),
-  filesPanel: document.getElementById('inspector-files-panel'),
-  fileList: document.getElementById('inspector-file-list'),
-  filesToggle: document.getElementById('btn-toggle-inspector-files'),
+  container: document.getElementById('inspector-workspace')!,
+  graphContainer: document.getElementById('inspector-graph-view')!,
+  filesPanel: document.getElementById('inspector-files-panel')!,
+  fileList: document.getElementById('inspector-file-list')!,
+  filesToggle: document.getElementById('btn-toggle-inspector-files')!,
   diffContainer: body,
   translate,
   storage: localStorage

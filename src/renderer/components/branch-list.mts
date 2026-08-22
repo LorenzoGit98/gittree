@@ -539,7 +539,7 @@ export class BranchListView {
   }
 
   updateBatchBar(): void {
-    const footer = document.getElementById('batch-operations-footer');
+    const footer = document.getElementById('batch-operations-footer')!;
     const countSpan = footer?.querySelector<HTMLElement>('.batch-selection-count');
     const namesContainer = footer?.querySelector<HTMLElement>('.batch-selected-names');
     const pullBtn = footer?.querySelector<HTMLButtonElement>('[data-batch-pull]');
@@ -700,7 +700,7 @@ export class BranchListView {
     if (!branches.length) return;
 
     // Aggiorna lo stato UI
-    const footer = document.getElementById('batch-operations-footer');
+    const footer = document.getElementById('batch-operations-footer')!;
     const infoSection = footer?.querySelector<HTMLElement>('.batch-selection-info');
     const namesContainer = footer?.querySelector<HTMLElement>('.batch-selected-names');
     if (infoSection) infoSection.classList.add('is-busy');
@@ -868,8 +868,8 @@ export class BranchListView {
   }
 
   quickBranchDialog(repoPath: string): Promise<Record<string, unknown> | null> {
-    const overlay = document.getElementById('modal-overlay');
-    const dialog = document.getElementById('modal-dialog');
+    const overlay = document.getElementById('modal-overlay')!;
+    const dialog = document.getElementById('modal-dialog')!;
     const prefixes: Record<string, string> = {
       feature: BranchNaming.detectPrefix('feature', this.metadata),
       bugfix: BranchNaming.detectPrefix('bugfix', this.metadata)

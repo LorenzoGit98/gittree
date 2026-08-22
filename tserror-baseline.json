@@ -1,5 +1,14 @@
 {
-  "count": 0,
-  "generatedAt": "2026-08-21T16:00:47.605Z",
-  "perDirectory": {}
+  "count": 599,
+  "generatedAt": "2026-08-22T13:09:21.186Z",
+  "perDirectory": {
+    "src/main/agents": 22,
+    "src/main/ai": 2,
+    "src/main": 25,
+    "src/main/git": 9,
+    "src/main/hosting/providers": 19,
+    "src/main/ipc": 53,
+    "src/renderer": 64,
+    "src/renderer/components": 405
+  }
 }

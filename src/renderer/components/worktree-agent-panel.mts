@@ -75,14 +75,14 @@ export class WorktreeAgentPanel {
     document.querySelectorAll<HTMLElement>('[data-sidebar-mode]').forEach(button => {
       button.onclick = () => this.setMode(button.dataset.sidebarMode);
     });
-    document.getElementById('btn-new-agent-session').onclick = () => this.openNewSession();
-    document.getElementById('agent-status-filter').onchange = () => this.renderAgents();
-    document.getElementById('agent-provider-filter').onchange = () => this.renderAgents();
+    document.getElementById('btn-new-agent-session')!.onclick = () => this.openNewSession();
+    document.getElementById('agent-status-filter')!.onchange = () => this.renderAgents();
+    document.getElementById('agent-provider-filter')!.onchange = () => this.renderAgents();
     document.querySelectorAll<HTMLElement>('[data-agent-drawer-tab]').forEach(button => {
       button.onclick = () => this.setDrawerTab(button.dataset.agentDrawerTab);
     });
-    document.getElementById('btn-close-agent-drawer').onclick = () => this.closeDrawer();
-    document.getElementById('btn-stop-agent').onclick = () => this.stopSelectedTask();
+    document.getElementById('btn-close-agent-drawer')!.onclick = () => this.closeDrawer();
+    document.getElementById('btn-stop-agent')!.onclick = () => this.stopSelectedTask();
     this.bindDrawerResize();
     if (window.gitTree.onAgentTaskChanged) {
       this.disposers.push(window.gitTree.onAgentTaskChanged((task: AgentTask) => this.onTaskChanged(task)));
@@ -94,7 +94,7 @@ export class WorktreeAgentPanel {
     this.disposers.push(() => window.removeEventListener('gittree:agent-settings-changed', this.settingsChanged as EventListener));
     this.syncEnabledState();
     const savedHeight = Number(localStorage.getItem('gittree.agentDrawer.height'));
-    if (savedHeight >= 180) document.getElementById('agent-drawer').style.height = `${savedHeight}px`;
+    if (savedHeight >= 180) document.getElementById('agent-drawer')!.style.height = `${savedHeight}px`;
   }
 
   async load(repo: { path?: string }): Promise<void> {
@@ -123,11 +123,11 @@ export class WorktreeAgentPanel {
       button.classList.toggle('active', active);
       button.setAttribute('aria-selected', String(active));
     });
-    document.getElementById('sidebar-branches-area').classList.toggle('is-hidden', agents);
+    document.getElementById('sidebar-branches-area')!.classList.toggle('is-hidden', agents);
     document.querySelector('.sidebar-pinned-bottom').classList.toggle('is-hidden', agents);
-    document.getElementById('agent-sidebar').classList.toggle('is-hidden', !agents);
-    document.querySelector('#sidebar .panel-heading h2').textContent = t(agents ? 'agents.agents' : 'sidebar.branches');
-    document.getElementById('btn-new-branch').classList.toggle('is-hidden', agents);
+    document.getElementById('agent-sidebar')!.classList.toggle('is-hidden', !agents);
+    document.querySelector('#sidebar .panel-heading h2')!.textContent = t(agents ? 'agents.agents' : 'sidebar.branches');
+    document.getElementById('btn-new-branch')!.classList.toggle('is-hidden', agents);
     if (agents) this.renderAgents();
   }
 
@@ -138,13 +138,13 @@ export class WorktreeAgentPanel {
 
   applyEnabledState(enabled: boolean): void {
     this.enabled = Boolean(enabled);
-    const modeSwitch = document.getElementById('sidebar-mode-switch');
+    const modeSwitch = document.getElementById('sidebar-mode-switch')!;
     modeSwitch?.classList.toggle('is-hidden', !this.enabled);
     modeSwitch?.setAttribute('aria-hidden', String(!this.enabled));
     const agentsButton = document.querySelector('[data-sidebar-mode="agents"]');
     agentsButton?.classList.toggle('is-hidden', !this.enabled);
     agentsButton?.setAttribute('aria-disabled', String(!this.enabled));
-    document.getElementById('btn-new-agent-session')?.toggleAttribute('disabled', !this.enabled);
+    document.getElementById('btn-new-agent-session')!?.toggleAttribute('disabled', !this.enabled);
     if (!this.enabled) {
       this.setMode('repository');
       this.closeDrawer();
@@ -161,8 +161,8 @@ export class WorktreeAgentPanel {
   }
 
   renderWorktrees(): void {
-    const container = document.getElementById('worktree-list');
-    document.getElementById('worktree-count').textContent = String(this.worktrees.length);
+    const container = document.getElementById('worktree-list')!;
+    document.getElementById('worktree-count')!.textContent = String(this.worktrees.length);
     if (!this.worktrees.length) {
       container.innerHTML = `<div class="agent-empty">${this.esc(t('agents.noWorktrees'))}</div>`;
       return;
@@ -238,7 +238,7 @@ export class WorktreeAgentPanel {
   }
 
   renderAgents(): void {
-    const container = document.getElementById('agent-card-list');
+    const container = document.getElementById('agent-card-list')!;
     if (!container) return;
     const statusFilter = (document.getElementById('agent-status-filter') as HTMLSelectElement | null)?.value || '';
     const providerFilter = (document.getElementById('agent-provider-filter') as HTMLSelectElement | null)?.value || '';
@@ -389,15 +389,15 @@ export class WorktreeAgentPanel {
     this.selectedTaskId = task.id;
     this.flushTerminalData();
     this.renderDrawer(task);
-    document.getElementById('agent-drawer').classList.remove('is-hidden');
+    document.getElementById('agent-drawer')!.classList.remove('is-hidden');
     if (task.needsAttention) window.gitTree.acknowledgeAgentAttention(task.id);
   }
 
   renderDrawer(task: AgentTask): void {
-    document.getElementById('agent-drawer-name').textContent = task.title;
-    document.getElementById('agent-drawer-meta').textContent = `${task.adapterId} · ${task.branch || this.basename(task.worktreePath)}`;
+    document.getElementById('agent-drawer-name')!.textContent = task.title;
+    document.getElementById('agent-drawer-meta')!.textContent = `${task.adapterId} · ${task.branch || this.basename(task.worktreePath)}`;
     (document.getElementById('btn-stop-agent') as HTMLButtonElement).disabled = !['queued', 'preparing', 'running', 'stopping'].includes(task.status);
-    const activity = document.getElementById('agent-activity');
+    const activity = document.getElementById('agent-activity')!;
     activity.innerHTML = (task.events || []).slice().reverse().map(event => `<div class="agent-event">
       <span class="agent-event-icon"><i class="ph ph-${this.eventIcon(event.type)}"></i></span>
       <div><strong>${this.esc(t(`agents.event.${event.type}`))}</strong><small>${this.esc(this.formatTime(event.timestamp))}</small></div>
@@ -411,8 +411,8 @@ export class WorktreeAgentPanel {
       button.classList.toggle('active', active);
       button.setAttribute('aria-selected', String(active));
     });
-    document.getElementById('agent-activity').classList.toggle('is-hidden', terminal);
-    document.getElementById('agent-terminal').classList.toggle('is-hidden', !terminal);
+    document.getElementById('agent-activity')!.classList.toggle('is-hidden', terminal);
+    document.getElementById('agent-terminal')!.classList.toggle('is-hidden', !terminal);
     if (terminal) this.ensureTerminal();
   }
 
@@ -432,7 +432,7 @@ export class WorktreeAgentPanel {
       this.fitAddon = new FitAddon.FitAddon();
       this.terminal.loadAddon(this.fitAddon);
     }
-    this.terminal.open(document.getElementById('agent-terminal'));
+    this.terminal.open(document.getElementById('agent-terminal')!);
     this.terminal.onData(data => {
       if (this.selectedTaskId) window.gitTree.writeAgentTerminal(this.selectedTaskId, data);
     });
@@ -490,12 +490,12 @@ export class WorktreeAgentPanel {
   }
 
   closeDrawer(): void {
-    document.getElementById('agent-drawer').classList.add('is-hidden');
+    document.getElementById('agent-drawer')!.classList.add('is-hidden');
   }
 
   bindDrawerResize(): void {
-    const handle = document.getElementById('agent-drawer-resize');
-    const drawer = document.getElementById('agent-drawer');
+    const handle = document.getElementById('agent-drawer-resize')!;
+    const drawer = document.getElementById('agent-drawer')!;
     let startY = 0;
     let startHeight = 0;
     const move = (event: PointerEvent) => {

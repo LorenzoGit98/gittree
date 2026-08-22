@@ -29,7 +29,7 @@ export class WelcomeScreen {
   constructor() {
     this.screen = document.getElementById('welcome-screen') as HTMLElement;
     this.recentList = document.getElementById('recent-repos') as HTMLElement;
-    this.onboardingContainer = document.getElementById('welcome-onboarding');
+    this.onboardingContainer = document.getElementById('welcome-onboarding')!;
     this.steps = ['open', 'branch', 'commit'];
     this.storageKey = 'gittree.onboarding';
     this.app = null;
@@ -355,7 +355,7 @@ export class WelcomeScreen {
   updateScanSummary(): void {
     if (!this.repositoryPicker) return;
     const count = this.scanSelection.size;
-    this.repositoryPicker.querySelector('[data-summary]').textContent = t('discovery.selected', { count });
+    this.repositoryPicker.querySelector('[data-summary]')!.textContent = t('discovery.selected', { count });
     (this.repositoryPicker.querySelector('[data-action="import"]') as HTMLButtonElement).disabled = count === 0;
   }
 
@@ -484,12 +484,12 @@ export class WelcomeScreen {
 
   show(): void {
     this.screen.classList.remove('is-hidden');
-    document.getElementById('workspace').classList.add('is-hidden');
+    document.getElementById('workspace')!.classList.add('is-hidden');
   }
 
   hide(): void {
     this.screen.classList.add('is-hidden');
-    document.getElementById('workspace').classList.remove('is-hidden');
+    document.getElementById('workspace')!.classList.remove('is-hidden');
   }
 
   esc(value: unknown): string { return HtmlEncoder.encode(value); }

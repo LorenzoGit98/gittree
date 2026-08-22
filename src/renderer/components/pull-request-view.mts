@@ -100,23 +100,23 @@ export class PullRequestView {
     this.availableProviders = null;
     this.status = null;
     this.elements = {
-      list: document.getElementById('pr-list'),
-      notice: document.getElementById('pr-notice'),
-      search: document.getElementById('pr-search'),
-      auth: document.getElementById('btn-pr-auth'),
-      create: document.getElementById('btn-pr-create'),
-      createAi: document.getElementById('btn-pr-create-ai')
+      list: document.getElementById('pr-list')!,
+      notice: document.getElementById('pr-notice')!,
+      search: document.getElementById('pr-search')!,
+      auth: document.getElementById('btn-pr-auth')!,
+      create: document.getElementById('btn-pr-create')!,
+      createAi: document.getElementById('btn-pr-create-ai')!
     };
     this.bind();
   }
 
   bind(): void {
     document.querySelectorAll<HTMLElement>('[data-pr-provider]').forEach(button => {
-      button.onclick = () => this.setProvider(button.dataset.prProvider);
+      button.onclick = () => this.setProvider(button.dataset.prProvider ?? '');
     });
     document.querySelectorAll<HTMLElement>('[data-pr-filter]').forEach(button => {
       button.onclick = () => {
-        this.filter = button.dataset.prFilter;
+        this.filter = button.dataset.prFilter ?? '';
         document.querySelectorAll('[data-pr-filter]').forEach(item => {
           item.classList.toggle('active', item === button);
         });
@@ -147,13 +147,14 @@ export class PullRequestView {
         if (this.elements.list.scrollTop / available >= 0.85) this.loadNextPage();
       });
     };
-    window.gitTree.onProviderState((state: { provider: string; phase: string; error?: string }) => {
-      if (state.provider !== this.provider) return;
-      if (state.phase === 'connected') {
+    window.gitTree.onProviderState(state => {
+      const { provider, phase, error } = state as { provider: string; phase: string; error?: string };
+      if (provider !== this.provider) return;
+      if (phase === 'connected') {
         this.showNotice(t('pullRequests.connected'), '');
         this.refreshStatus().then(() => this.reload());
       } else if (state.phase === 'error') {
-        this.showNotice(state.error, 'warning');
+        this.showNotice(String(error), 'warning');
       }
     });
   }
@@ -168,11 +169,11 @@ export class PullRequestView {
     } | undefined;
     this.availableProviders = new Set(
       (metadata?.remotes || [])
-        .map(remote => remote.provider)
+        .map(remote => String(remote?.provider ?? ''))
         .filter(remote => (
           remote?.host === 'github.com' || remote?.host === 'gitlab.com' || remote?.host === 'dev.azure.com'
         ))
-        .map(remote => remote.provider)
+        .map(remote => String(remote?.provider ?? ''))
     );
     if (!this.availableProviders.has(this.provider) && this.availableProviders.size) {
       this.provider = [...this.availableProviders][0];
@@ -220,13 +221,13 @@ export class PullRequestView {
       (this.elements.createAi as HTMLButtonElement).disabled = true;
       return;
     }
-    const label = this.elements.auth.querySelector('span') as HTMLElement;
-    const icon = this.elements.auth.querySelector('i') as HTMLElement;
-    if (this.status.connected) {
+    const label = this.elements.auth.querySelector('span') as HTMLElement | null;
+    const icon = this.elements.auth.querySelector('i') as HTMLElement | null;
+    if (this.status.connected && label && icon) {
       label.textContent = this.status.user?.login || t('pullRequests.disconnect');
       icon.className = 'ph ph-user-circle-check';
       this.elements.auth.title = t('pullRequests.disconnect');
-    } else {
+    } else if (label && icon) {
       label.textContent = t('pullRequests.connect');
       icon.className = 'ph ph-plugs-connected';
       this.elements.auth.title = '';
@@ -454,10 +455,10 @@ export class PullRequestView {
   async select(item: PRSummary): Promise<void> {
     this.selected = item;
     this.renderViewport(true);
-    const title = document.getElementById('detail-title');
+    const title = document.getElementById('detail-title')!;
     title.textContent = `#${item.number} ${item.title || ''}`;
     title.title = item.title || '';
-    const body = document.getElementById('detail-body');
+    const body = document.getElementById('detail-body')!;
     body.innerHTML = `<div class="diff-placeholder">${this.esc(t('common.loading'))}</div>`;
     try {
       const detail = await window.gitTree.getPullRequestDetail(
@@ -494,7 +495,7 @@ export class PullRequestView {
   }
 
   renderDetail(): void {
-    const body = document.getElementById('detail-body');
+    const body = document.getElementById('detail-body')!;
     body.innerHTML = '';
     const wrapper = document.createElement('div');
     wrapper.className = 'pr-detail';
@@ -1037,8 +1038,8 @@ export class PullRequestView {
         return;
       }
     }
-    const overlay = document.getElementById('modal-overlay');
-    const dialog = document.getElementById('modal-dialog');
+    const overlay = document.getElementById('modal-overlay')!;
+    const dialog = document.getElementById('modal-dialog')!;
     dialog.classList.add('pr-create-dialog');
     dialog.innerHTML = `
       <div class="modal-loading">
@@ -1160,8 +1161,8 @@ export class PullRequestView {
     body?: string;
     workItems?: string;
   }): Promise<Record<string, unknown> | null> {
-    const overlay = document.getElementById('modal-overlay');
-    const dialog = document.getElementById('modal-dialog');
+    const overlay = document.getElementById('modal-overlay')!;
+    const dialog = document.getElementById('modal-dialog')!;
     const options = branches.map(name => (
       `<option value="${this.esc(name)}">${this.esc(name)}</option>`
     )).join('');

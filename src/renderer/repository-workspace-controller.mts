@@ -134,26 +134,26 @@ export class RepositoryWorkspaceController {
   }
 
   setLoading(loading: boolean): void {
-    const workspace = this.document.getElementById('workspace');
+    const workspace = this.document.getElementById('workspace')!;
     workspace?.classList.toggle('is-project-loading', loading);
     workspace?.setAttribute('aria-busy', String(loading));
     if (workspace) workspace.dataset.loadState = loading ? 'loading' : 'settled';
     this.document
       .querySelectorAll('#branch-loading-indicator, #workspace-loading-indicator, #inspector-loading-indicator')
       .forEach(indicator => indicator.classList.toggle('is-hidden', !loading));
-    this.document.getElementById('sidebar')?.setAttribute('aria-busy', String(loading));
+    this.document.getElementById('sidebar')!?.setAttribute('aria-busy', String(loading));
     this.document.querySelector('.main')?.setAttribute('aria-busy', String(loading));
-    this.document.getElementById('detail-panel')?.setAttribute('aria-busy', String(loading));
+    this.document.getElementById('detail-panel')!?.setAttribute('aria-busy', String(loading));
   }
 
   setInteractive(): void {
-    const workspace = this.document.getElementById('workspace');
+    const workspace = this.document.getElementById('workspace')!;
     if (workspace) workspace.dataset.loadState = 'interactive';
     this.document
       .querySelectorAll('#workspace-loading-indicator, #inspector-loading-indicator')
       .forEach(indicator => indicator.classList.add('is-hidden'));
     this.document.querySelector('.main')?.setAttribute('aria-busy', 'false');
-    this.document.getElementById('detail-panel')?.setAttribute('aria-busy', 'false');
+    this.document.getElementById('detail-panel')!?.setAttribute('aria-busy', 'false');
   }
 
   destroy(): void {
