@@ -180,8 +180,8 @@ export class InspectorGraph {
     this.raf = requestAnimationFrame(() => {
       this.raf = 0;
       this.renderViewport();
-      const available = Math.max(1, this.container.scrollHeight - this.container.clientHeight);
-      if (this.container.scrollTop / available >= 0.85) this.onRequestMore?.();
+      const available = Math.max(1, this.container!.scrollHeight - this.container!.clientHeight);
+      if (this.container!.scrollTop / available >= 0.85) this.onRequestMore?.();
     });
   }
 
@@ -203,10 +203,10 @@ export class InspectorGraph {
 
     const start = Math.max(
       0,
-      Math.floor(this.container.scrollTop / this.rowHeight) - this.overscan
+      Math.floor(this.container!.scrollTop / this.rowHeight) - this.overscan
     );
     const visibleCount = Math.ceil(
-      Math.max(this.rowHeight, this.container.clientHeight) / this.rowHeight
+      Math.max(this.rowHeight, this.container!.clientHeight) / this.rowHeight
     );
     const end = Math.min(this.rows.length, start + visibleCount + (this.overscan * 2));
     if (!force && start === this.renderedRange[0] && end === this.renderedRange[1]) return;

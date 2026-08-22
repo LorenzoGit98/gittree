@@ -63,13 +63,13 @@ export class CommitCompare {
   }
 
   showLoading(): void {
-    this.container.classList.remove('is-hidden');
-    this.container.innerHTML = `<div class="empty-state"><i class="ph ph-circle-notch"></i>${t('commitCompare.loading')}</div>`;
+    this.container!.classList.remove('is-hidden');
+    this.container!.innerHTML = `<div class="empty-state"><i class="ph ph-circle-notch"></i>${t('commitCompare.loading')}</div>`;
   }
 
   hide(): void {
-    this.container.classList.add('is-hidden');
-    this.container.innerHTML = '';
+    this.container!.classList.add('is-hidden');
+    this.container!.innerHTML = '';
     this.data = null;
   }
 
@@ -77,7 +77,7 @@ export class CommitCompare {
     if (!this.data) return;
     const files = this.data.files || [];
 
-    this.container.innerHTML = `
+    this.container!.innerHTML = `
       <div class="commit-compare">
         <div class="commit-compare-header">
           <div class="commit-compare-direction">
@@ -103,10 +103,10 @@ export class CommitCompare {
         </div>
       </div>
     `;
-    this.container.classList.remove('is-hidden');
+    this.container!.classList.remove('is-hidden');
 
     document.getElementById('commit-compare-close')!.onclick = () => this.hide();
-    this.container.querySelectorAll<HTMLElement>('.commit-compare-file-item').forEach(item => {
+    this.container!.querySelectorAll<HTMLElement>('.commit-compare-file-item').forEach(item => {
       item.onclick = () => this.selectFile((item as HTMLElement).dataset.path, item as HTMLElement);
     });
   }
@@ -124,7 +124,7 @@ export class CommitCompare {
   }
 
   async selectFile(filePath: string, element?: HTMLElement): Promise<void> {
-    this.container.querySelectorAll('.commit-compare-file-item').forEach(el => el.classList.remove('active'));
+    this.container!.querySelectorAll('.commit-compare-file-item').forEach(el => el.classList.remove('active'));
     if (element) element.classList.add('active');
     this.selectedFile = filePath;
 

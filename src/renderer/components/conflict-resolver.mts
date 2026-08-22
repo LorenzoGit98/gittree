@@ -123,7 +123,7 @@ export class ConflictResolver {
     this.undoStack = [];
     this.fileFilter = '';
     this.render();
-    this.container.classList.remove('is-hidden');
+    this.container!.classList.remove('is-hidden');
     if (this.currentPath) await this.loadFile(this.currentPath);
   }
 
@@ -144,7 +144,7 @@ export class ConflictResolver {
     const resolved = this.allFiles.length - conflicts.length;
     const total = this.allFiles.length;
     const conflictsSum = this.unresolvedCount();
-    this.container.innerHTML = `
+    this.container!.innerHTML = `
       <div class="conflict-workspace">
         <header class="conflict-header">
           <div class="conflict-header-title">
@@ -479,8 +479,8 @@ export class ConflictResolver {
 
   renderTextEditor(): string {
     const active = this.blocks[this.activeBlockIndex] || null;
-    const currentRanges = this.blocks.map(block => this.locateLines(this.current.current, block.current));
-    const incomingRanges = this.blocks.map(block => this.locateLines(this.current.incoming, block.incoming));
+    const currentRanges = this.blocks.map(block => this.locateLines(this.current!.current, block.current));
+    const incomingRanges = this.blocks.map(block => this.locateLines(this.current!.incoming, block.incoming));
     return `
       <div class="conflict-block-toolbar">
         <div class="conflict-navigation">
@@ -531,8 +531,8 @@ export class ConflictResolver {
         ${this.codePane(this.current.base, 'base', false, null, [])}
       </details>
       <div class="conflict-merge-grid is-${this.layout}">
-        ${this.sourcePane(t('conflicts.incoming'), this.current.incoming, 'incoming', incomingRanges, this.activeBlockIndex)}
-        ${this.sourcePane(t('conflicts.current'), this.current.current, 'current', currentRanges, this.activeBlockIndex)}
+        ${this.sourcePane(t('conflicts.incoming'), this.current!.incoming, 'incoming', incomingRanges, this.activeBlockIndex)}
+        ${this.sourcePane(t('conflicts.current'), this.current!.current, 'current', currentRanges, this.activeBlockIndex)}
         <section class="conflict-pane conflict-result-pane">
           <div class="conflict-pane-header result">${this.esc(t('conflicts.result'))}</div>
           <div class="conflict-result-editor" id="conflict-result-stack">
@@ -725,8 +725,8 @@ export class ConflictResolver {
         row.addEventListener('click', () => {
           const line = Number(row.dataset.paneLine);
           const ranges = pane.dataset.pane === 'current'
-            ? this.blocks.map(block => this.locateLines(this.current.current, block.current))
-            : this.blocks.map(block => this.locateLines(this.current.incoming, block.incoming));
+            ? this.blocks.map(block => this.locateLines(this.current!.current, block.current))
+            : this.blocks.map(block => this.locateLines(this.current!.incoming, block.incoming));
           const index = ranges.findIndex(range => range && line >= range.start && line <= range.end);
           if (index !== -1) this.jumpToBlock(index);
         });
@@ -758,7 +758,7 @@ export class ConflictResolver {
     clearTimeout(this.reparseTimer);
     this.reparseTimer = setTimeout(async () => {
       const repo = this.app.state.repo;
-      if (!repo || !this.currentPath || this.container.classList.contains('is-hidden')) return;
+      if (!repo || !this.currentPath || this.container!.classList.contains('is-hidden')) return;
       const result = await window.gitTree.parseConflictBlocks(repo.path, this.resultContent) as { error?: string } | ConflictBlock[];
       if ((result as { error?: string })?.error) return;
       this.blocks = ((result as ConflictBlock[]) || []).map(block => ({ ...block }));
@@ -772,7 +772,7 @@ export class ConflictResolver {
 
   useWholeFile(kind: string): void {
     this.snapshot();
-    this.resultContent = kind === 'current' ? this.current.current : this.current.incoming;
+    this.resultContent = kind === 'current' ? this.current!.current : this.current!.incoming;
     this.blocks = [];
     this.activeBlockIndex = 0;
     this.manualEdited = false;
@@ -784,7 +784,7 @@ export class ConflictResolver {
   applyToAll(choice: string): void {
     if (!this.blocks.length) return;
     this.snapshot();
-    const eol = this.current.eol === 'crlf' ? '\r\n' : '\n';
+    const eol = this.current!.eol === 'crlf' ? '\r\n' : '\n';
     for (const block of [...this.blocks]) {
       let replacement;
       if (choice === 'current') replacement = block.current;
@@ -843,7 +843,7 @@ export class ConflictResolver {
       return;
     }
     this.snapshot();
-    const eol = this.current.eol === 'crlf' ? '\r\n' : '\n';
+    const eol = this.current!.eol === 'crlf' ? '\r\n' : '\n';
     let replacement;
     if (choice === 'current') replacement = block.current;
     else if (choice === 'incoming') replacement = block.incoming;
@@ -1018,8 +1018,8 @@ export class ConflictResolver {
   }
 
   hide(): void {
-    this.container.classList.add('is-hidden');
-    this.container.innerHTML = '';
+    this.container!.classList.add('is-hidden');
+    this.container!.innerHTML = '';
     this.state = null;
     this.current = null;
     this.dirty = false;

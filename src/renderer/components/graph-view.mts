@@ -257,7 +257,7 @@ export class GraphView {
   }
 
   captureViewportState(): ViewportState {
-    const viewportTop = Math.max(0, this.container.scrollTop - 36);
+    const viewportTop = Math.max(0, this.container!.scrollTop - 36);
     const index = this.visibleRows.length
       ? Math.min(
         this.visibleRows.length - 1,
@@ -267,7 +267,7 @@ export class GraphView {
     return {
       anchorHash: this.visibleRows[index]?.commit.hash || null,
       anchorOffset: viewportTop - (index * this.rowHeight),
-      scrollTop: this.container.scrollTop,
+      scrollTop: this.container!.scrollTop,
       selectedHash: this.selectedHash,
       selectedHashes: [...this.selectedHashes],
       selectionAnchor: this.selectionAnchor
@@ -288,7 +288,7 @@ export class GraphView {
     const anchorIndex = state.anchorHash
       ? this.visibleRows.findIndex(row => row.commit.hash === state.anchorHash)
       : -1;
-    this.container.scrollTop = state.scrollTop <= 36
+    this.container!.scrollTop = state.scrollTop <= 36
       ? state.scrollTop
       : anchorIndex >= 0
         ? Math.max(0, 36 + (anchorIndex * this.rowHeight) + state.anchorOffset)
@@ -318,7 +318,7 @@ export class GraphView {
       return true;
     });
     this.visibleRows = this.sortRows(rows);
-    const height = Math.max(this.visibleRows.length * this.rowHeight, this.container.clientHeight - 36);
+    const height = Math.max(this.visibleRows.length * this.rowHeight, this.container!.clientHeight - 36);
     this.body.style.height = `${height}px`;
   }
 
@@ -347,8 +347,8 @@ export class GraphView {
     this.raf = requestAnimationFrame(() => {
       this.raf = 0;
       this.renderViewport();
-      const available = Math.max(1, this.container.scrollHeight - this.container.clientHeight);
-      if (this.container.scrollTop / available >= 0.85) this.loadNextPage();
+      const available = Math.max(1, this.container!.scrollHeight - this.container!.clientHeight);
+      if (this.container!.scrollTop / available >= 0.85) this.loadNextPage();
     });
   }
 
@@ -360,9 +360,9 @@ export class GraphView {
       return;
     }
 
-    const viewportTop = Math.max(0, this.container.scrollTop - 36);
+    const viewportTop = Math.max(0, this.container!.scrollTop - 36);
     const start = Math.max(0, Math.floor(viewportTop / this.rowHeight) - this.overscan);
-    const count = Math.ceil(this.container.clientHeight / this.rowHeight) + this.overscan * 2;
+    const count = Math.ceil(this.container!.clientHeight / this.rowHeight) + this.overscan * 2;
     const end = Math.min(this.visibleRows.length, start + count);
     if (!force && start === this.renderedRange[0] && end === this.renderedRange[1]) return;
     this.renderedRange = [start, end];
@@ -538,7 +538,7 @@ export class GraphView {
 
   setupColumnResize(): void {
     this.columnHandles = [
-      ...this.container.querySelectorAll<HTMLElement>('.graph-column-resizer')
+      ...this.container!.querySelectorAll<HTMLElement>('.graph-column-resizer')
     ];
     for (const handle of this.columnHandles) {
       const column = handle.dataset.column;
@@ -673,19 +673,19 @@ export class GraphView {
     this.sortSelect = document.getElementById('history-sort')! as HTMLSelectElement | null;
     this.filterClear = document.getElementById('history-filter-clear')!;
     this.filterQuery?.addEventListener('input', () => {
-      this.filters.query = this.filterQuery.value;
+      this.filters.query = this.filterQuery!.value;
       this.commitHistoryState();
     });
     this.filterAuthor?.addEventListener('change', () => {
-      this.filters.author = this.filterAuthor.value;
+      this.filters.author = this.filterAuthor!.value;
       this.commitHistoryState();
     });
     this.filterRef?.addEventListener('change', () => {
-      this.filters.ref = this.filterRef.value;
+      this.filters.ref = this.filterRef!.value;
       this.commitHistoryState();
     });
     this.sortSelect?.addEventListener('change', () => {
-      this.sortMode = this.sortSelect.value;
+      this.sortMode = this.sortSelect!.value;
       this.commitHistoryState();
     });
     this.filterClear?.addEventListener('click', () => {
@@ -698,7 +698,7 @@ export class GraphView {
 
   commitHistoryState(): void {
     this.persistHistoryState();
-    this.container.scrollTop = 0;
+    this.container!.scrollTop = 0;
     this.applyFilter();
     this.renderViewport(true);
   }
@@ -724,7 +724,7 @@ export class GraphView {
         return option;
       });
     this.filterAuthor.replaceChildren(first, ...options);
-    this.filterAuthor.value = authors.has(selected) ? selected : '';
+    this.filterAuthor!.value = authors.has(selected) ? selected : '';
     if (selected && !authors.has(selected) && !this.hasMore) {
       this.filters.author = '';
       this.persistHistoryState();
@@ -767,10 +767,10 @@ export class GraphView {
   }
 
   syncHistoryControls(): void {
-    if (this.filterQuery) this.filterQuery.value = this.filters.query;
-    if (this.filterAuthor) this.filterAuthor.value = this.filters.author;
-    if (this.filterRef) this.filterRef.value = this.filters.ref;
-    if (this.sortSelect) this.sortSelect.value = this.sortMode;
+    if (this.filterQuery) this.filterQuery!.value = this.filters.query;
+    if (this.filterAuthor) this.filterAuthor!.value = this.filters.author;
+    if (this.filterRef) this.filterRef!.value = this.filters.ref;
+    if (this.sortSelect) this.sortSelect!.value = this.sortMode;
   }
 
   clampColumnWidth(width: number, definition: ColumnDefinition): number {

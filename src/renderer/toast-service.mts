@@ -74,22 +74,22 @@ export class ToastService {
     this.timers.clearTimeout(this.timer);
     this.container.className = `toast toast-${kind} show`;
     this.container.setAttribute('aria-live', kind === 'error' ? 'assertive' : 'polite');
-    this.container.innerHTML =
+    this.container!.innerHTML =
       `<span class="toast-badge" aria-hidden="true"><i class="ph ${TOAST_ICONS[kind]}"></i></span>` +
       `<span class="toast-message"></span>` +
       `<button type="button" class="toast-dismiss" aria-label="${this.encode(this.translate('common.close'))}"><i class="ph ph-x" aria-hidden="true"></i></button>` +
       `<span class="toast-progress" aria-hidden="true"></span>`;
-    const messageElement = this.container.querySelector('.toast-message');
+    const messageElement = this.container!.querySelector('.toast-message');
     if (messageElement) messageElement.textContent = message;
-    const progress = this.container.querySelector('.toast-progress') as HTMLElement | null;
+    const progress = this.container!.querySelector('.toast-progress') as HTMLElement | null;
     if (progress) progress.style.animationDuration = `${duration}ms`;
-    const dismissButton = this.container.querySelector('.toast-dismiss') as HTMLElement | null;
+    const dismissButton = this.container!.querySelector('.toast-dismiss') as HTMLElement | null;
     if (dismissButton) dismissButton.onclick = () => this.dismiss();
 
     this.remaining = duration;
     this.startedAt = Date.now();
     if (this.container.matches(':hover')) {
-      this.container.classList.add('paused');
+      this.container!.classList.add('paused');
     } else {
       this.timer = this.timers.setTimeout(() => this.dismiss(), duration);
     }
@@ -97,19 +97,19 @@ export class ToastService {
 
   dismiss(): void {
     this.timers.clearTimeout(this.timer);
-    this.container.classList.remove('show');
+    this.container!.classList.remove('show');
   }
 
   pause(): void {
-    if (!this.container.classList.contains('show') || this.container.classList.contains('paused')) return;
+    if (!this.container!.classList.contains('show') || this.container!.classList.contains('paused')) return;
     this.timers.clearTimeout(this.timer);
     this.remaining = Math.max((this.remaining || 0) - (Date.now() - this.startedAt), 0);
-    this.container.classList.add('paused');
+    this.container!.classList.add('paused');
   }
 
   resume(): void {
-    if (!this.container.classList.contains('show') || !this.container.classList.contains('paused')) return;
-    this.container.classList.remove('paused');
+    if (!this.container!.classList.contains('show') || !this.container!.classList.contains('paused')) return;
+    this.container!.classList.remove('paused');
     this.startedAt = Date.now();
     this.timer = this.timers.setTimeout(() => this.dismiss(), Math.max(this.remaining, 800));
   }

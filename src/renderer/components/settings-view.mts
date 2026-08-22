@@ -785,7 +785,7 @@ export class SettingsView {
         if (event.target === overlay) finish(null);
       });
       overlay.querySelector<HTMLElement>('[data-action="cancel"]').onclick = () => finish(null);
-      overlay.querySelector('form').onsubmit = event => {
+      overlay.querySelector('form')!.onsubmit = event => {
         event.preventDefault();
         const input = overlay.querySelector<HTMLInputElement>('input');
         const resultValue = input.value.trim();

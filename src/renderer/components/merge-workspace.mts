@@ -99,8 +99,8 @@ export class MergeWorkspace {
   showLoading(): void {
     this.ensureContainer();
     this.bindEscape();
-    this.container.classList.remove('is-hidden');
-    this.container.innerHTML = `
+    this.container!.classList.remove('is-hidden');
+    this.container!.innerHTML = `
       <div class="merge-modal-card">
       <header class="merge-header">
         <div class="merge-heading">
@@ -141,7 +141,7 @@ export class MergeWorkspace {
     const blockingSummary = this.blockingSummary(d.status, changedFiles);
     const conflictList = conflictFiles.slice(0, 6).join(', ');
 
-    this.container.innerHTML = `
+    this.container!.innerHTML = `
       <div class="merge-modal-card">
       <header class="merge-header">
         <div class="merge-heading">
@@ -304,7 +304,7 @@ export class MergeWorkspace {
       };
     });
 
-    this.container.classList.remove('is-hidden');
+    this.container!.classList.remove('is-hidden');
   }
 
   renderDiff(diffText: string): string {
@@ -396,10 +396,10 @@ export class MergeWorkspace {
 
   setPushing(pushing: boolean): void {
     if (!this.container) return;
-    this.container.querySelectorAll('.merge-confirm, #merge-cancel-btn').forEach(button => {
+    this.container!.querySelectorAll('.merge-confirm, #merge-cancel-btn').forEach(button => {
       (button as HTMLButtonElement).disabled = pushing;
     });
-    const pushButton = this.container.querySelector('#merge-push-btn');
+    const pushButton = this.container!.querySelector('#merge-push-btn');
     if (pushButton && pushing) {
       pushButton.innerHTML = `<i class="ph ph-circle-notch merge-pushing-spinner" aria-hidden="true"></i> ${this.esc(t('mergeWorkspace.pushing'))}`;
     }
@@ -425,7 +425,7 @@ export class MergeWorkspace {
     if (this.onKeydown) return;
     this.onKeydown = event => {
       if (event.key !== 'Escape') return;
-      if (!this.container || this.container.classList.contains('is-hidden')) return;
+      if (!this.container || this.container!.classList.contains('is-hidden')) return;
       const cancel = document.getElementById('merge-cancel-btn')! as HTMLButtonElement | null;
       if (!cancel || cancel.disabled) return;
       this.hide();
@@ -438,7 +438,7 @@ export class MergeWorkspace {
       document.removeEventListener('keydown', this.onKeydown);
       this.onKeydown = null;
     }
-    if (this.container) this.container.classList.add('is-hidden');
+    if (this.container) this.container!.classList.add('is-hidden');
   }
 
   hasPendingChanges(status: MergeStatus | null | undefined = {}): boolean {

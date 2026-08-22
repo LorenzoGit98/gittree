@@ -83,7 +83,7 @@ export class BranchListView {
     this.searchInput = document.getElementById('branch-search')! as HTMLInputElement | null;
     if (this.searchInput) {
       this.searchInput.addEventListener('input', () => {
-        this.filter = this.searchInput.value.toLowerCase();
+        this.filter = this.searchInput!.value.toLowerCase();
         this.render();
       });
     }
@@ -157,7 +157,7 @@ export class BranchListView {
         this.status = null;
         this.operationState = null;
         this.branchMetadataByKey = new Map();
-        this.container.innerHTML = '';
+        this.container!.innerHTML = '';
         return;
       }
       this.data = result;
@@ -171,7 +171,7 @@ export class BranchListView {
       this.status = status?.error ? null : status;
       this.operationState = operationState?.error ? null : operationState;
       if (!background) {
-        if (this.searchInput) this.searchInput.value = '';
+        if (this.searchInput) this.searchInput!.value = '';
         this.filter = '';
         this.selectedBranchKey = null;
         this.selectedBranchElement = null;
@@ -186,17 +186,17 @@ export class BranchListView {
       this.status = null;
       this.operationState = null;
       this.branchMetadataByKey = new Map();
-      this.container.innerHTML = '';
+      this.container!.innerHTML = '';
     }
     finally { this.setLoading(false); }
   }
 
   setLoading(loading: boolean, { preserveContent = false }: { preserveContent?: boolean } = {}): void {
     this.loading = loading;
-    this.container.classList.toggle('is-project-loading', loading);
+    this.container!.classList.toggle('is-project-loading', loading);
     this.container.setAttribute('aria-busy', String(loading));
     if (loading && !preserveContent) {
-      this.container.innerHTML = `<div class="project-loading-inline" role="status" aria-live="polite">
+      this.container!.innerHTML = `<div class="project-loading-inline" role="status" aria-live="polite">
         <i class="ph ph-circle-notch" aria-hidden="true"></i>
         <span>${t('common.loading')}</span>
       </div>`;
@@ -205,19 +205,19 @@ export class BranchListView {
 
   setCurrentBranch(branchName: string): void {
     if (!branchName) return;
-    const oldRow = this.container.querySelector<HTMLElement>('.branch-item.active');
-    const newRow = this.container.querySelector<HTMLElement>(
+    const oldRow = this.container!.querySelector<HTMLElement>('.branch-item.active');
+    const newRow = this.container!.querySelector<HTMLElement>(
       `.branch-item[data-remote="false"][data-branch-name="${CSS.escape(branchName)}"]`
     );
     if (this.data) this.data.current = branchName;
     if (this.status) this.status.current = branchName;
-    if (this.metadata) this.metadata.current = branchName;
+    if (this.metadata) this.metadata?.current = branchName;
     for (const branch of this.metadata?.branches || []) {
       if (branch.kind === 'local') branch.current = branch.name === branchName;
     }
     const willSlide = Boolean(oldRow && newRow && oldRow !== newRow);
     if (willSlide) newRow.classList.add('active-bg-animating');
-    this.container.querySelectorAll<HTMLElement>('.branch-item[data-remote="false"]').forEach(row => {
+    this.container!.querySelectorAll<HTMLElement>('.branch-item[data-remote="false"]').forEach(row => {
       row.classList.toggle('active', row.dataset.branchName === branchName);
     });
     if (willSlide) this.slideActiveBackground(oldRow, newRow);
@@ -228,7 +228,7 @@ export class BranchListView {
       this.activeGhost.animation.cancel();
       this.activeGhost.ghost.remove();
       this.activeGhost.newRow.classList.remove('active-bg-animating');
-      this.container.classList.remove('is-sliding-active');
+      this.container!.classList.remove('is-sliding-active');
       this.activeGhost = null;
     }
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -285,7 +285,7 @@ export class BranchListView {
   }
 
   render(): void {
-    this.container.innerHTML = '';
+    this.container!.innerHTML = '';
     this.selectedBranchElement = null;
     this.rowStaggerIndex = 0;
     if (!this.data) return;
@@ -309,13 +309,13 @@ export class BranchListView {
     }
 
     if (!locals.length && !remotes.length) {
-      this.container.innerHTML = `<div class="branch-empty">${f ? t('sidebar.noMatch') : t('sidebar.noBranches')}</div>`;
+      this.container!.innerHTML = `<div class="branch-empty">${f ? t('sidebar.noMatch') : t('sidebar.noBranches')}</div>`;
       return;
     }
 
     const reveal = this.shouldReveal;
     this.shouldReveal = false;
-    this.container.classList.toggle('is-revealing', reveal);
+    this.container!.classList.toggle('is-revealing', reveal);
 
     const frag = document.createDocumentFragment();
 
@@ -404,7 +404,7 @@ export class BranchListView {
     this.persistSet('gittree.sidebar.branchGroups', this.collapsedGroups);
     const collapsed = this.collapsedGroups.has(groupId);
     header.querySelector('.branch-group-arrow')?.classList.toggle('collapsed', collapsed);
-    this.container.querySelector(`[data-group-body="${CSS.escape(groupId)}"]`)
+    this.container!.querySelector(`[data-group-body="${CSS.escape(groupId)}"]`)
       ?.classList.toggle('is-collapsed', collapsed);
   }
 
@@ -414,7 +414,7 @@ export class BranchListView {
     this.persistSet('gittree.sidebar.branchFolders', this.collapsedFolders);
     const collapsed = this.collapsedFolders.has(folderKey);
     header.querySelector('.branch-folder-arrow')?.classList.toggle('collapsed', collapsed);
-    this.container.querySelectorAll<HTMLElement>(
+    this.container!.querySelectorAll<HTMLElement>(
       `.branch-item[data-folder-key="${CSS.escape(folderKey)}"]`
     ).forEach(row => row.classList.toggle('is-folder-collapsed', collapsed));
   }
@@ -503,7 +503,7 @@ export class BranchListView {
     const shift = event && event.shiftKey;
 
     if (shift && this.selectionAnchorKey) {
-      const allRows = [...this.container.querySelectorAll<HTMLElement>('.branch-item')];
+      const allRows = [...this.container!.querySelectorAll<HTMLElement>('.branch-item')];
       const keys = allRows.map(r => r.dataset.selectionKey);
       const startIdx = keys.indexOf(this.selectionAnchorKey);
       const endIdx = keys.indexOf(key);
@@ -528,12 +528,12 @@ export class BranchListView {
   }
 
   updateVisibleSelection(): void {
-    this.container.querySelectorAll<HTMLElement>('.branch-item').forEach(row => {
+    this.container!.querySelectorAll<HTMLElement>('.branch-item').forEach(row => {
       const isSelected = this.selectedBranchKeys.has(row.dataset.selectionKey);
       row.classList.toggle('selected', isSelected);
       row.classList.toggle('multi-selected', isSelected && this.selectedBranchKeys.size > 1);
     });
-    this.selectedBranchElement = this.container.querySelector<HTMLElement>(
+    this.selectedBranchElement = this.container!.querySelector<HTMLElement>(
       `.branch-item[data-selection-key="${CSS.escape(this.selectedBranchKey || '')}"]`
     );
   }
@@ -793,7 +793,7 @@ export class BranchListView {
   }
 
   detectSwitchDirection(row: HTMLElement): string | null {
-    const activeRow = this.container.querySelector<HTMLElement>('.branch-item.active');
+    const activeRow = this.container!.querySelector<HTMLElement>('.branch-item.active');
     if (!activeRow || activeRow === row) return null;
     return row.getBoundingClientRect().top > activeRow.getBoundingClientRect().top
       ? 'top'
@@ -817,7 +817,7 @@ export class BranchListView {
   async checkout(name: string, row: HTMLElement | null = null): Promise<void> {
     const repo = this.app.state.repo;
     if (!repo || this.checkoutBusy) return;
-    row = row || this.container.querySelector<HTMLElement>(
+    row = row || this.container!.querySelector<HTMLElement>(
       `.branch-item[data-branch-kind="local"][data-branch-name="${CSS.escape(name)}"]`
     );
     this.checkoutBusy = true;
@@ -837,7 +837,7 @@ export class BranchListView {
   async checkoutRemote(localName: string, remoteName: string, row: HTMLElement | null = null): Promise<void> {
     const repo = this.app.state.repo;
     if (!repo || this.checkoutBusy) return;
-    row = row || this.container.querySelector<HTMLElement>(
+    row = row || this.container!.querySelector<HTMLElement>(
       `.branch-item[data-branch-kind="remote"][data-branch-name="${CSS.escape(remoteName)}"]`
     );
     this.checkoutBusy = true;

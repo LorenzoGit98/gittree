@@ -446,7 +446,7 @@ export class ChangesView {
     if (!confirmed) return;
     const result = await window.gitTree.discardPaths(
       this.repoPath,
-      this.snapshot.snapshotId,
+      this.snapshot!.snapshotId,
       paths
     ) as { error?: string; snapshot?: WorkingTreeSnapshot };
     if (result?.error) {
@@ -457,7 +457,7 @@ export class ChangesView {
     this.snapshot = result.snapshot;
     this.render();
     if (this.selected) {
-      const file = this.snapshot.files.find(item => item.path === this.selected.path);
+      const file = this.snapshot!.files.find(item => item.path === this.selected?.path);
       if (file) await this.selectFile({ path: file.path }, Boolean(file.staged));
       else this.app.components.diffViewer.clear();
     }
@@ -486,7 +486,7 @@ export class ChangesView {
     const api = unstage ? window.gitTree.unstagePaths : window.gitTree.stagePaths;
     const result = await api(
       this.repoPath,
-      this.snapshot.snapshotId,
+      this.snapshot!.snapshotId,
       files.map(file => file.path)
     ) as { error?: string; snapshot?: WorkingTreeSnapshot };
     if (result?.error) {
@@ -497,7 +497,7 @@ export class ChangesView {
     this.snapshot = result.snapshot;
     this.render();
     if (this.selected) {
-      const file = this.snapshot.files.find(item => item.path === this.selected.path);
+      const file = this.snapshot!.files.find(item => item.path === this.selected?.path);
       if (file) await this.selectFile({ path: file.path }, Boolean(file.staged));
       else this.app.components.diffViewer.clear();
     }
@@ -609,7 +609,7 @@ export class ChangesView {
     const api = staged ? window.gitTree.unstageHunks : window.gitTree.stageHunks;
     const result = await api(
       this.repoPath,
-      this.snapshot.snapshotId,
+      this.snapshot!.snapshotId,
       filePath,
       [hunkId]
     ) as { error?: string; snapshot?: WorkingTreeSnapshot };
@@ -621,7 +621,7 @@ export class ChangesView {
     this.snapshot = result.snapshot;
     this.render();
     const targetStaged = !staged;
-    const file = this.snapshot.files.find(item => item.path === filePath);
+    const file = this.snapshot!.files.find(item => item.path === filePath);
     if (file && (targetStaged ? file.staged : file.unstaged)) {
       await this.selectFile(file, targetStaged);
     } else {

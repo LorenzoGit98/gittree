@@ -110,14 +110,14 @@ export class BranchContextMenu {
 
   render(): void {
     const b = this.branch as BranchRef;
-    const current = this.metadata.current || this.app.state.currentBranch;
+    const current = this.metadata?.current || this.app.state.currentBranch;
     const pending = Boolean(this.operationState?.type);
     const dirty = this.status && this.status.isClean === false;
     const isLocal = b.kind === 'local';
     const isCurrent = isLocal && b.current;
     const remoteParts = b.kind === 'remote' ? this.splitRemote(b.name) : null;
     const upstreamParts = b.upstream ? this.splitRemote(b.upstream) : null;
-    const currentMetadata = (this.metadata.branches || []).find(item => item.current);
+    const currentMetadata = (this.metadata?.branches || []).find(item => item.current);
     const pullUpstream = isLocal
       ? (isCurrent ? b.upstream : '')
       : (currentMetadata?.upstream === b.name ? b.name : '');
@@ -133,8 +133,8 @@ export class BranchContextMenu {
     const cleanReason = dirty
       ? `${t('branchMenu.cleanRequired')}${blockingFiles.length ? `: ${blockingFiles.slice(0, 3).join(', ')}${blockingFiles.length > 3 ? '…' : ''}` : ''}`
       : mutationReason;
-    const remotes = this.metadata.remotes || [];
-    const remoteBranches = (this.metadata.branches || []).filter(item => item.kind === 'remote');
+    const remotes = this.metadata?.remotes || [];
+    const remoteBranches = (this.metadata?.branches || []).filter(item => item.kind === 'remote');
 
     const isMulti = this.selectedBranches.length > 1;
 
@@ -279,7 +279,7 @@ export class BranchContextMenu {
       } else if (action === 'merge') {
         this.app.components.merge.open(
           b.name,
-          this.metadata.current || this.app.state.currentBranch
+          this.metadata?.current || this.app.state.currentBranch
         );
         return;
       } else if (action === 'rebase') {
@@ -300,7 +300,7 @@ export class BranchContextMenu {
       } else if (action === 'stash') {
         result = await window.gitTree.stash(repo.path, `GitTree: before branch operation on ${b.name}`) as typeof result;
       } else if (action === 'diff') {
-        await this.app.components.compare.compare(b.name, this.metadata.current);
+        await this.app.components.compare.compare(b.name, this.metadata?.current);
         return;
       } else if (action === 'rename') {
         const nextName = await this.promptText(t('branchMenu.renameTitle'), b.name);
@@ -329,7 +329,7 @@ export class BranchContextMenu {
         return;
       }
       if (action === 'push-tags') {
-        const defaultRemote = this.metadata.remotes?.[0]?.name;
+        const defaultRemote = this.metadata?.remotes?.[0]?.name;
         if (!defaultRemote) return;
         const remote = await this.promptRemote(defaultRemote);
         if (!remote) return;
@@ -378,7 +378,7 @@ export class BranchContextMenu {
   }
 
   async openPullRequest(repoPath: string, branch: BranchRef): Promise<void> {
-    const supported = (this.metadata.remotes || []).filter(remote => remote.provider?.provider);
+    const supported = (this.metadata?.remotes || []).filter(remote => remote.provider?.provider);
     if (!supported.length) return;
     const upstream = branch.upstream ? this.splitRemote(branch.upstream) : null;
     const defaultRemote = supported.find(remote => remote.name === upstream?.remote) || supported[0];
@@ -414,7 +414,7 @@ export class BranchContextMenu {
   pullRequestDialog(remote: string, target: string): Promise<unknown> {
     return this.formDialog(t('branchMenu.prTitle'), `
       <label>${this.esc(t('branchMenu.remoteLabel'))}
-        <select name="remote">${(this.metadata.remotes || []).filter(item => item.provider?.provider)
+        <select name="remote">${(this.metadata?.remotes || []).filter(item => item.provider?.provider)
           .map(item => `<option value="${this.esc(item.name)}"${item.name === remote ? ' selected' : ''}>${this.esc(item.name)}</option>`)
           .join('')}</select>
       </label>
@@ -433,7 +433,7 @@ export class BranchContextMenu {
   }
 
   promptRemote(defaultRemote: string): Promise<unknown> {
-    const remotes = this.metadata.remotes || [];
+    const remotes = this.metadata?.remotes || [];
     return this.formDialog(t('branchMenu.pushTags'), `
       <label>${this.esc(t('branchMenu.remoteLabel'))}
         <select name="remote">${remotes
@@ -540,7 +540,7 @@ export class BranchContextMenu {
   }
 
   hasSupportedProvider(): boolean {
-    return (this.metadata.remotes || []).some(remote => remote.provider?.provider);
+    return (this.metadata?.remotes || []).some(remote => remote.provider?.provider);
   }
 
   esc(value: unknown): string {

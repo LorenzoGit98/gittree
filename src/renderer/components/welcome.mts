@@ -171,7 +171,7 @@ export class WelcomeScreen {
     this.scanSelection = new Set();
     this.scanQuery = '';
     this.scanFinished = false;
-    this.repositoryPicker.querySelector('.repository-picker').innerHTML = `
+    this.repositoryPicker!.querySelector('.repository-picker').innerHTML = `
       <header class="repository-picker-header">
         <div>
           <span class="eyebrow">${t('discovery.scanningEyebrow')}</span>
@@ -228,12 +228,12 @@ export class WelcomeScreen {
     picker.querySelector<HTMLElement>('[data-action="import"]').onclick = () => this.importScannedRepositories();
     picker.querySelector<HTMLInputElement>('input[type="search"]').oninput = event => {
       this.scanQuery = (event.target as HTMLInputElement).value.trim().toLocaleLowerCase();
-      this.scanList.scrollTop = 0;
+      this.scanList!.scrollTop = 0;
       this.renderRepositoryScan();
     };
     this.app?.setupClearableSearches?.(picker);
     this.scanList = picker.querySelector('.repository-scan-list');
-    this.scanList.addEventListener('scroll', () => {
+    this.scanList!.addEventListener('scroll', () => {
       if (this.scanRenderFrame) return;
       this.scanRenderFrame = requestAnimationFrame(() => {
         this.scanRenderFrame = null;
@@ -289,8 +289,8 @@ export class WelcomeScreen {
     const items = this.visibleScanRepositories();
     const rowHeight = 54;
     const overscan = 12;
-    const viewportRows = Math.ceil(this.scanList.clientHeight / rowHeight);
-    const start = Math.max(0, Math.floor(this.scanList.scrollTop / rowHeight) - overscan);
+    const viewportRows = Math.ceil(this.scanList!.clientHeight / rowHeight);
+    const start = Math.max(0, Math.floor(this.scanList!.scrollTop / rowHeight) - overscan);
     const end = Math.min(items.length, start + viewportRows + overscan * 2);
     const spacer = this.scanList.querySelector<HTMLElement>('.repository-scan-spacer');
     const rows = this.scanList.querySelector<HTMLElement>('.repository-scan-rows');
@@ -335,8 +335,8 @@ export class WelcomeScreen {
 
   updateScanStatus(scannedDirectories: number | undefined, result?: { error?: unknown; canceled?: boolean }): void {
     if (!this.repositoryPicker) return;
-    const status = this.repositoryPicker.querySelector('[data-status]');
-    const spinner = this.repositoryPicker.querySelector('.repository-scan-spinner');
+    const status = this.repositoryPicker!.querySelector('[data-status]');
+    const spinner = this.repositoryPicker!.querySelector('.repository-scan-spinner');
     if (result) {
       spinner.classList.add('is-hidden');
       status.textContent = result.error
@@ -355,8 +355,8 @@ export class WelcomeScreen {
   updateScanSummary(): void {
     if (!this.repositoryPicker) return;
     const count = this.scanSelection.size;
-    this.repositoryPicker.querySelector('[data-summary]')!.textContent = t('discovery.selected', { count });
-    (this.repositoryPicker.querySelector('[data-action="import"]') as HTMLButtonElement).disabled = count === 0;
+    this.repositoryPicker!.querySelector('[data-summary]')!.textContent = t('discovery.selected', { count });
+    (this.repositoryPicker!.querySelector('[data-action="import"]') as HTMLButtonElement).disabled = count === 0;
   }
 
   async importScannedRepositories(): Promise<void> {

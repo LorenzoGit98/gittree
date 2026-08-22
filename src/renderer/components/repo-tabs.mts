@@ -126,7 +126,7 @@ export class RepoTabs {
 
   render(): void {
     this.container.replaceChildren();
-    this.container.classList.toggle('has-pinned', this.pinnedKeys.size > 0);
+    this.container!.classList.toggle('has-pinned', this.pinnedKeys.size > 0);
     this.repos.forEach((repo, i) => {
       const el = document.createElement('div');
       el.className = 'repo-tab';
@@ -290,7 +290,7 @@ export class RepoTabs {
     const offset = event.key === 'ArrowLeft' ? -1 : 1;
     const moved = this.moveRepoByOffset(index, offset);
     if (moved) {
-      const element = this.container.querySelector<HTMLElement>(
+      const element = this.container!.querySelector<HTMLElement>(
         `[data-path="${CSS.escape(this.repos[index + offset].path)}"]`
       );
       element?.focus();
@@ -345,7 +345,7 @@ export class RepoTabs {
     const rect = target.getBoundingClientRect();
     this.dragOverAfter = event.clientX >= rect.left + (rect.width / 2);
     this.dragOverKey = this.repoKey(target.dataset.path);
-    this.container.querySelectorAll<HTMLElement>('.repo-tab').forEach(element => {
+    this.container!.querySelectorAll<HTMLElement>('.repo-tab').forEach(element => {
       element.classList.toggle(
         'is-drag-over-before',
         this.repoKey(element.dataset.path) === this.dragOverKey && !this.dragOverAfter
@@ -372,7 +372,7 @@ export class RepoTabs {
   }
 
   clearDragState(): void {
-    this.container.querySelectorAll<HTMLElement>('.repo-tab').forEach(element => {
+    this.container!.querySelectorAll<HTMLElement>('.repo-tab').forEach(element => {
       element.classList.remove('is-dragging', 'is-drag-over-before', 'is-drag-over-after');
     });
     this.draggedKey = null;

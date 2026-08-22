@@ -35,12 +35,12 @@ export class ReflogView {
   }
 
   showLoading(): void {
-    this.container.classList.remove('is-hidden');
-    this.container.innerHTML = `<div class="empty-state">${this.esc(t('common.loading'))}</div>`;
+    this.container!.classList.remove('is-hidden');
+    this.container!.innerHTML = `<div class="empty-state">${this.esc(t('common.loading'))}</div>`;
   }
 
   render(): void {
-    this.container.innerHTML = `
+    this.container!.innerHTML = `
       <div class="reflog-view">
         <header class="reflog-header">
           <div class="reflog-heading">
@@ -59,7 +59,7 @@ export class ReflogView {
         </div>
       </div>`;
     document.getElementById('reflog-close')!.onclick = () => this.hide();
-    this.container.querySelectorAll('[data-reflog-entry]').forEach(row => {
+    this.container!.querySelectorAll('[data-reflog-entry]').forEach(row => {
       row.querySelectorAll<HTMLElement>('[data-action]').forEach(button => {
         button.onclick = () => this.runAction(button.dataset.action, Number((row as HTMLElement).dataset.reflogEntry));
       });
@@ -150,7 +150,7 @@ export class ReflogView {
         if (event.target === overlay) finish(null);
       });
       overlay.querySelector<HTMLElement>('[data-action="cancel"]').onclick = () => finish(null);
-      overlay.querySelector('form').onsubmit = event => {
+      overlay.querySelector('form')!.onsubmit = event => {
         event.preventDefault();
         const input = overlay.querySelector<HTMLInputElement>('input');
         const value = input.value.trim();
@@ -163,8 +163,8 @@ export class ReflogView {
   }
 
   hide(): void {
-    this.container.classList.add('is-hidden');
-    this.container.innerHTML = '';
+    this.container!.classList.add('is-hidden');
+    this.container!.innerHTML = '';
   }
 
   esc(value: unknown): string {
